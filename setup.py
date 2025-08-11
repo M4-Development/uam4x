@@ -1,9 +1,9 @@
 from setuptools import setup
 
 setup(
-    name='nasa_uam',
+    name='uam4x',
     version='0.1.0',
-    packages=['nasa_uam'],
+    packages=['uam4x'],
     author='M4 Engineering',
     author_email='tnascenzi@m4-engineering.com',
     url='http://www.m4-engineering.com',
