@@ -1,5 +1,5 @@
-from nasa_uam.plugins.ndarc_plugin import NdarcPlugin
-from nasa_uam.study import Study
+from uam4x.ndarc_plugin import NdarcPlugin
+from uam4x.study import Study
 
 import unittest
 import os, shutil
@@ -70,7 +70,7 @@ class Test_NdarcPlugin(unittest.TestCase):
         # test inputs
         # inputs: (self, plugin_options:dict=None, tracked_outputs:list=None)
 
-        # there should be more than 
+        # there should be more than
         with self.assertRaises(TypeError):
             setup_out = nc_test.setup_plugin(plugin_options,tracked_outputs,"extra input")
 
@@ -83,7 +83,7 @@ class Test_NdarcPlugin(unittest.TestCase):
         setup_out = nc_test.setup_plugin(plugin_options)
         setup_out = nc_test.setup_plugin()
 
-        # check outputs 
+        # check outputs
 
         # check plugin_options output
         check_filename = 'test_info'
@@ -92,7 +92,7 @@ class Test_NdarcPlugin(unittest.TestCase):
         self.assertEqual(nc_test._new_filename,check_new_filename)
 
         # check tracked_outputs outplut
-        self.assertEqual(nc_test._tracked_outputs, tracked_outputs) 
+        self.assertEqual(nc_test._tracked_outputs, tracked_outputs)
 
     def test_run_plugin(self):
 
@@ -105,7 +105,7 @@ class Test_NdarcPlugin(unittest.TestCase):
         nc_test._filename = os.path.join(nc_test._currentdir,"examples","uam_quad", "UAM-N-quad-5-turbo-xshaft-coll-flap-550.njob")
         self._analysis_name = 'design'
 
-        # check inputs 
+        # check inputs
         # inputs: (self, links:list)
 
         # needs one input tha is a list
@@ -153,9 +153,9 @@ class Test_NdarcPlugin(unittest.TestCase):
         rco_out = nc_test.use_rcotools(update_dict,False)
 
         # check output type
-        self.assertTrue(type(rco_out),'nasa_uam.plugins.rcotools_ndarc.rcotools.ndarc.ndarc_core.NdarcSolution')
+        self.assertTrue(type(rco_out),'uam4x.rcotools_ndarc.rcotools.ndarc.ndarc_core.NdarcSolution')
 
-        
+
 
 
 

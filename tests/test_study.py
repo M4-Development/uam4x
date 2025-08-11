@@ -1,9 +1,9 @@
-from nasa_uam.components import AttributeCollector
-from nasa_uam.study import Study
-from nasa_uam.study import Solution
-from nasa_uam.components import DataType
-from nasa_uam.study import Vehicles
-from nasa_uam.study import Control
+from uam4x.components import AttributeCollector
+from uam4x.study import Study
+from uam4x.study import Solution
+from uam4x.components import DataType
+from uam4x.study import Vehicles
+from uam4x.study import Control
 
 import unittest
 import os, shutil
@@ -150,7 +150,7 @@ class Test_Study(unittest.TestCase):
         self.assertEqual(study._solution.links,[])
         self.assertEqual(study.get_value("Vehicles.Vehicle_1.wing.baseline.root_chord"),7)
         self.assertEqual(study.get_value("Vehicles.Vehicle_1.wing.baseline.span"),30)
-    
+
 
 
 if __name__ == '__main__':

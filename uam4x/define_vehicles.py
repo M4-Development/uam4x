@@ -1,4 +1,4 @@
-import nasa_uam.components
+import uam4x.components
 import os
 import sys
 import importlib
@@ -93,8 +93,8 @@ class Vehicle:
         component_names = self.get_component_names()
         if component_name not in component_names:
             if type(component_type) is str:
-                if hasattr(nasa_uam.components, component_type):
-                    new_component = getattr(nasa_uam.components, component_type)(self.study, name=component_name)
+                if hasattr(uam4x.components, component_type):
+                    new_component = getattr(uam4x.components, component_type)(self.study, name=component_name)
                 else:
                     work_dir = os.getcwd()
                     script_path = os.path.abspath(sys.argv[0])

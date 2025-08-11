@@ -2,8 +2,8 @@ import json
 import os
 import sys
 import importlib
-import nasa_uam.components
-from nasa_uam.define_vehicles import Vehicle
+import uam4x.components
+from uam4x.define_vehicles import Vehicle
 import copy
 
 class _Overwrite():
@@ -515,16 +515,16 @@ class Vehicles:
             component_name = k
             component_mode_name = component["mode_name"]
             component_type = component["type"]
-            component_attributes_collector = nasa_uam.components.AttributeCollector(self.study)
+            component_attributes_collector = uam4x.components.AttributeCollector(self.study)
             component_attributes_collector.load_attributes_collector(component["attributes_collector"])
             component_modes = component["modes"]
-            if hasattr(nasa_uam.components, component_type):
-                new_component = getattr(nasa_uam.components, component_type)(self.study, name=component_name, mode_name=component_mode_name, parent_attributes=component_attributes_collector)
+            if hasattr(uam4x.components, component_type):
+                new_component = getattr(uam4x.components, component_type)(self.study, name=component_name, mode_name=component_mode_name, parent_attributes=component_attributes_collector)
             else:
                 new_component = self.load_custom_component(component_type=component_type, name=component_name, mode_name=component_mode_name, parent_attributes=component_attributes_collector)
             for mode_k in component_modes:
                 mode_name = mode_k
-                mode_attributes_collector = nasa_uam.components.AttributeCollector(self.study)
+                mode_attributes_collector = uam4x.components.AttributeCollector(self.study)
                 mode_attributes_collector.load_attributes_collector(component_modes[mode_k])
                 new_component.new_mode(mode_name=mode_name)
                 new_component.get_mode(mode_name).attributes_collector = mode_attributes_collector

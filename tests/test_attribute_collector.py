@@ -1,6 +1,6 @@
-from nasa_uam.components import AttributeCollector
-from nasa_uam.study import Study
-from nasa_uam.components import DataType
+from uam4x.components import AttributeCollector
+from uam4x.study import Study
+from uam4x.components import DataType
 
 import unittest
 import os, shutil
@@ -78,13 +78,13 @@ class Test_AttributeCollector(unittest.TestCase):
 
         # check inputs (name, value, parent)
         with self.assertRaises(TypeError):
-           check = ac.check_data_type('span') 
+           check = ac.check_data_type('span')
 
         with self.assertRaises(TypeError):
-           check = ac.check_data_type('span', 30, None, 'Extra input') 
+           check = ac.check_data_type('span', 30, None, 'Extra input')
 
         with self.assertRaises(TypeError):
-           check = ac.check_data_type(['should be string, not list'], 30, None) 
+           check = ac.check_data_type(['should be string, not list'], 30, None)
 
         # check outputs
         check = ac.check_data_type('span',30,None)
@@ -114,7 +114,7 @@ class Test_AttributeCollector(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             ac.load_attributes_collector(attribute_dict,'Extra String')
-        
+
         # test outputs
         ac.load_attributes_collector(attribute_dict)
         self.assertEqual(ac._attributes,attribute_dict)

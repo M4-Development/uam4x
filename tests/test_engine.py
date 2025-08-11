@@ -1,5 +1,5 @@
-from nasa_uam.execution_engine import Engine
-from nasa_uam.study import Study
+from uam4x.execution_engine import Engine
+from uam4x.study import Study
 import unittest
 import os, shutil
 import json
@@ -17,7 +17,7 @@ class Test_Engine(unittest.TestCase):
         """
         This function is called once before testing starts
         """
-        
+
     def setUp(self):
         """
         This function is called immediatly before calling every test
@@ -107,7 +107,7 @@ class Test_Engine(unittest.TestCase):
     def test_export_results(self):
        # intialize tests
         test_study, sol = self.initialize_engine()
-        eng = Engine(test_study) 
+        eng = Engine(test_study)
         filename = 'test.json'
         filepath = os.path.join(TEST_WORK_DIR,filename)
         eng.run()
@@ -117,10 +117,10 @@ class Test_Engine(unittest.TestCase):
         # should have only one input that is a string
         with self.assertRaises(TypeError):
             eng.export_results()
-        
+
         with self.assertRaises(TypeError):
             eng.export_results(filename,'extra input')
-        
+
         # with self.assertRaises(TypeError):
         #     eng.export_results(float(1.27)) ## Ask Thomas (permission error)
 
@@ -147,10 +147,10 @@ class Test_Engine(unittest.TestCase):
             eng.run('standard_analysis','extra string')
 
         with self.assertRaises(AttributeError): # ask thomas if okay
-            eng.run(1.2) 
+            eng.run(1.2)
 
-        
-        # check and run other active study that does not exist 
+
+        # check and run other active study that does not exist
         eng.run('false_analysis')
         self.assertEqual(eng.study_results,{})
 
@@ -169,9 +169,9 @@ class Test_Engine(unittest.TestCase):
 
         # ask joe
 
-        check = {'Vehicles.Vehicle_1.wing.baseline.span': [21, 24, 27], 
-                 'Vehicles.Vehicle_1.wing.baseline.root_chord': [5, 6, 7], 
-                 'step1.CompGeom.Total_Wet_Area': [465.2329275138641, 532.6799906495105, 611.3023384175077], 
+        check = {'Vehicles.Vehicle_1.wing.baseline.span': [21, 24, 27],
+                 'Vehicles.Vehicle_1.wing.baseline.root_chord': [5, 6, 7],
+                 'step1.CompGeom.Total_Wet_Area': [465.2329275138641, 532.6799906495105, 611.3023384175077],
                  'step1.CompGeom.Total_Wet_Vol': [234.6127946317888, 255.46944857292036, 284.4033286306588]
                  }
         eng.study_results['trade_study1']['Vehicles.Vehicle_1.wing.baseline.span'].sort()
@@ -182,11 +182,11 @@ class Test_Engine(unittest.TestCase):
         self.assertEqual(check['Vehicles.Vehicle_1.wing.baseline.root_chord'],eng.study_results['trade_study1']['Vehicles.Vehicle_1.wing.baseline.root_chord'])
         self.assertEqual(check['step1.CompGeom.Total_Wet_Area'],eng.study_results['trade_study1']['step1.CompGeom.Total_Wet_Area'])
         self.assertEqual(check['step1.CompGeom.Total_Wet_Vol'],eng.study_results['trade_study1']['step1.CompGeom.Total_Wet_Vol'])
-        
 
-    
 
-    
+
+
+
     def test_standard_analysis(self): # returns values
         # initalize test
         test_out, sol = self.initialize_engine()
@@ -202,7 +202,7 @@ class Test_Engine(unittest.TestCase):
         # should have inputs (self, step_name:str, step_info:dict, outputs:dict)
         with self.assertRaises(TypeError):
             stand_out = eng.standard_analysis()
-        
+
         with self.assertRaises(TypeError):
             stand_out = eng.standard_analysis(step_name,step_info,out_dict,'Extra Input')
 
@@ -211,17 +211,17 @@ class Test_Engine(unittest.TestCase):
 
         stand_out = eng.standard_analysis('step1', step_info, out_dict) # Permission error?
         self.assertEqual(stand_out,{'step1.CompGeom.Total_Wet_Area': 653.6958359311172, 'step1.CompGeom.Total_Wet_Vol': 295.3398259787079})
-    
 
-        
+
+
     def test_trade_study(self): # returns values
         study, sol  = self.initialize_engine()
         study.control.create_trade_study("trade_study1", ["Vehicles.Vehicle_1.wing.baseline.span", "Vehicles.Vehicle_1.wing.baseline.root_chord"], [[21, 24, 27, 30, 33], [5, 6, 7]])
         eng = Engine(study)
         trade_study = {'parameter_sweep': {'Vehicles.Vehicle_1.wing.baseline.span': [21, 24, 27, 30, 33], 'Vehicles.Vehicle_1.wing.baseline.root_chord': [5, 6, 7]}}
         step_name = 'step1'
-        step_info = {'plugin_type': 'OpenvspPlugin', 
-                     'plugin_options': {'analysis': 'CompGeom'}, 
+        step_info = {'plugin_type': 'OpenvspPlugin',
+                     'plugin_options': {'analysis': 'CompGeom'},
                      'tracked_outputs': ['Total_Wet_Area', 'Total_Wet_Vol']}
         outputs = {}
         step_num = 1
@@ -241,14 +241,14 @@ class Test_Engine(unittest.TestCase):
             out = eng.trade_study('String but should be dict',step_name, step_info, outputs, step_num)
 
         # this should not raise errors
-        out = eng.trade_study(trade_study, step_name, step_info, outputs, step_num) 
-        check = {'Vehicles.Vehicle_1.wing.baseline.span': [21, 24, 27], 
-                 'Vehicles.Vehicle_1.wing.baseline.root_chord': [5, 6, 7], 
-                 'step1.CompGeom.Total_Wet_Area': [465.2329275138641, 532.6799906495105, 611.3023384175077], 
+        out = eng.trade_study(trade_study, step_name, step_info, outputs, step_num)
+        check = {'Vehicles.Vehicle_1.wing.baseline.span': [21, 24, 27],
+                 'Vehicles.Vehicle_1.wing.baseline.root_chord': [5, 6, 7],
+                 'step1.CompGeom.Total_Wet_Area': [465.2329275138641, 532.6799906495105, 611.3023384175077],
                  'step1.CompGeom.Total_Wet_Vol': [234.6127946317888, 255.46944857292036, 284.4033286306588]
                  }
-        
-       
+
+
         out['Vehicles.Vehicle_1.wing.baseline.span'].sort()
         out['Vehicles.Vehicle_1.wing.baseline.root_chord'].sort()
         out['step1.CompGeom.Total_Wet_Area'].sort()
@@ -257,9 +257,9 @@ class Test_Engine(unittest.TestCase):
         self.assertEqual(check['Vehicles.Vehicle_1.wing.baseline.root_chord'],out['Vehicles.Vehicle_1.wing.baseline.root_chord'])
         self.assertEqual(check['step1.CompGeom.Total_Wet_Area'],out['step1.CompGeom.Total_Wet_Area'])
         self.assertEqual(check['step1.CompGeom.Total_Wet_Vol'],out['step1.CompGeom.Total_Wet_Vol'])
-        
 
-        
+
+
     def test_parm_sweep(self): # return
         study, sol  = self.initialize_engine()
         study.control.create_trade_study("trade_study1", ["Vehicles.Vehicle_1.wing.baseline.span", "Vehicles.Vehicle_1.wing.baseline.root_chord"], [[21, 24, 27, 30, 33], [5, 6, 7]])
@@ -267,8 +267,8 @@ class Test_Engine(unittest.TestCase):
         trade_study = {'parameter_sweep': {'Vehicles.Vehicle_1.wing.baseline.span': [21, 24, 27, 30, 33], 'Vehicles.Vehicle_1.wing.baseline.root_chord': [5, 6, 7]}}
         value = trade_study['parameter_sweep']
         step_name = 'step1'
-        step_info = {'plugin_type': 'OpenvspPlugin', 
-                     'plugin_options': {'analysis': 'CompGeom'}, 
+        step_info = {'plugin_type': 'OpenvspPlugin',
+                     'plugin_options': {'analysis': 'CompGeom'},
                      'tracked_outputs': ['Total_Wet_Area', 'Total_Wet_Vol']}
         outputs = {}
         step_num = 1
@@ -284,12 +284,12 @@ class Test_Engine(unittest.TestCase):
             out = eng.parm_sweep('This should be a dictionary', step_name, step_info, outputs, step_num, original_values)
 
         out = eng.parm_sweep(value, step_name, step_info, outputs, step_num, original_values)
-        check = {'Vehicles.Vehicle_1.wing.baseline.span': [21, 24, 27], 
-                 'Vehicles.Vehicle_1.wing.baseline.root_chord': [5, 6, 7], 
-                 'step1.CompGeom.Total_Wet_Area': [465.2329275138641, 532.6799906495105, 611.3023384175077], 
+        check = {'Vehicles.Vehicle_1.wing.baseline.span': [21, 24, 27],
+                 'Vehicles.Vehicle_1.wing.baseline.root_chord': [5, 6, 7],
+                 'step1.CompGeom.Total_Wet_Area': [465.2329275138641, 532.6799906495105, 611.3023384175077],
                  'step1.CompGeom.Total_Wet_Vol': [234.6127946317888, 255.46944857292036, 284.4033286306588]
                  }
-        
+
         print('.')
         out['Vehicles.Vehicle_1.wing.baseline.span'].sort()
         out['Vehicles.Vehicle_1.wing.baseline.root_chord'].sort()
@@ -299,18 +299,18 @@ class Test_Engine(unittest.TestCase):
         self.assertEqual(check['Vehicles.Vehicle_1.wing.baseline.root_chord'],out['Vehicles.Vehicle_1.wing.baseline.root_chord'])
         self.assertEqual(check['step1.CompGeom.Total_Wet_Area'],out['step1.CompGeom.Total_Wet_Area'])
         self.assertEqual(check['step1.CompGeom.Total_Wet_Vol'],out['step1.CompGeom.Total_Wet_Vol'])
-        
 
 
-    def test_run_sweep_combo(self): 
+
+    def test_run_sweep_combo(self):
         pass
 
     def test_multi_parm_sweep(self): # return
         study, sol  = self.initialize_engine()
-        eng = Engine(study)  
+        eng = Engine(study)
         sol.add_step(plugin_name="OpenvspPlugin", step_name="step2", plugin_options={"analysis": "CompGeom"}, tracked_outputs=["Total_Wet_Area", "Total_Wet_Vol"])
-        
-        
+
+
         pass
 
 
@@ -334,30 +334,30 @@ class Test_Engine(unittest.TestCase):
             out = eng.sort_links(step_name)
 
         with self.assertRaises(TypeError):
-            out = eng.sort_links(step_name,outputs, None, 'Extra String')      
+            out = eng.sort_links(step_name,outputs, None, 'Extra String')
 
         # with self.assertRaises(TypeError):
-        #     sortlink_out = eng.sort_links(step_name,'Should be a dictionary', None)    
+        #     sortlink_out = eng.sort_links(step_name,'Should be a dictionary', None)
 
-        # should not cause an error     
-        out = eng.sort_links(step_name,outputs, None)  
-        check  = [['wing.WING.WingGeom.TotalSpan', 30], ['wing.WING.WingGeom.TotalChord', 7], ['fuselage.FUSELAGE.Design.Length', 35], ['fuselage.FUSELAGE.XSec.Ellipse_Width', 3], ['fuselage.FUSELAGE.XSec.Ellipse_Height', 3], ['hstab.WING.WingGeom.TotalSpan', 10], ['hstab.WING.WingGeom.TotalChord', 2]]  
+        # should not cause an error
+        out = eng.sort_links(step_name,outputs, None)
+        check  = [['wing.WING.WingGeom.TotalSpan', 30], ['wing.WING.WingGeom.TotalChord', 7], ['fuselage.FUSELAGE.Design.Length', 35], ['fuselage.FUSELAGE.XSec.Ellipse_Width', 3], ['fuselage.FUSELAGE.XSec.Ellipse_Height', 3], ['hstab.WING.WingGeom.TotalSpan', 10], ['hstab.WING.WingGeom.TotalChord', 2]]
         self.assertEqual(out,check)
 
         outputs  = {'step1.CompGeom.Total_Wet_Area': 653.6958359311172, 'step1.CompGeom.Total_Wet_Vol': 295.3398259787079}
 
         out = eng.sort_links(step_name,outputs, None)
 
-        
+
     def test_solution_sequence(self): # return
         study, sol  = self.initialize_engine()
-        eng = Engine(study)       
+        eng = Engine(study)
         step_name = 'step1'
-        step_info = {'plugin_type': 'OpenvspPlugin', 
-                     'plugin_options': {'analysis': 'CompGeom'}, 
+        step_info = {'plugin_type': 'OpenvspPlugin',
+                     'plugin_options': {'analysis': 'CompGeom'},
                      'tracked_outputs': ['Total_Wet_Area', 'Total_Wet_Vol']}
         sorted_links = [['wing.WING.WingGeom.TotalSpan', 30], ['wing.WING.WingGeom.TotalChord', 7], ['fuselage.FUSELAGE.Design.Length', 35], ['fuselage.FUSELAGE.XSec.Ellipse_Width', 3], ['fuselage.FUSELAGE.XSec.Ellipse_Height', 3], ['hstab.WING.WingGeom.TotalSpan', 10], ['hstab.WING.WingGeom.TotalChord', 2]]
-        
+
         # should raise errors
         # solution_sequence(self, sorted_links:list, step_name:str, step_info:dict, study:Study, sweep_num:int=None)
 
@@ -374,42 +374,15 @@ class Test_Engine(unittest.TestCase):
         out = eng.solution_sequence(sorted_links,step_name,step_info)
         check = {'step1.CompGeom.Total_Wet_Area': 653.6958359311172, 'step1.CompGeom.Total_Wet_Vol': 295.3398259787079}
         self.assertEqual(check,out)
-        
 
-    def test_load_plugin(self): # return 
+    def test_parse_results(self): # return
         study, sol  = self.initialize_engine()
-        eng = Engine(study)   
-        eng.run()
-        step_name = 'step1'
-        plugin_name = 'OpenvspPlugin'
-
-        # should raise errors
-        # inputs should look like the following (self, plugin_name, step_name, study)
-
-        with self.assertRaises(TypeError):
-            out = eng.load_plugin()
-
-        with self.assertRaises(TypeError):
-            out = eng.load_plugin(plugin_name,step_name,'Extra String')
-
-        with self.assertRaises(TypeError):
-            out = eng.load_plugin(1,step_name)
-
-
-        out = eng.load_plugin(plugin_name,step_name) 
-        self.assertEqual(step_name,out.step_name)
-        self.assertEqual('CompGeom',out.analysis_name)
-        self.assertTrue(isinstance(out.tracked_outputs,list))
-        self.assertTrue(isinstance(out.geom_names,dict))
-
-    def test_parse_results(self): # return 
-        study, sol  = self.initialize_engine()
-        eng = Engine(study)   
+        eng = Engine(study)
         results  = {'step1.CompGeom.Total_Wet_Area': 10, 'step1.CompGeom.Total_Wet_Vol': 5}
         link = ['step1.CompGeom.Total_Wet_Area', 'step1.wing.WING.WingGeom.Total_Wet_Area']
         # should raise errors
         # inputs should look like the following: (self, results:dict, link:list, sweep_num:int=None)
-        
+
         with self.assertRaises(TypeError):
             out = eng.parse_results()
 
@@ -423,7 +396,7 @@ class Test_Engine(unittest.TestCase):
         self.assertEqual(['wing.WING.WingGeom.Total_Wet_Area', 10],out)
 
 
-        results  = {'step1.CompGeom.Total_Wet_Area': {1:10}, 
+        results  = {'step1.CompGeom.Total_Wet_Area': {1:10},
                         'step1.CompGeom.Total_Wet_Vol': {1:5}}
         out = eng.parse_results(results,link,1)
         self.assertEqual(['wing.WING.WingGeom.Total_Wet_Area', 10],out)
@@ -449,14 +422,14 @@ class Test_Engine(unittest.TestCase):
     # def test_setup_sweep(self):
     #     pass
 
-    # def test_execute_sweep(self): # return 
+    # def test_execute_sweep(self): # return
     #     pass
 
     # def change_parm(self):
     #     pass
 
-    
-        
+
+
 
 
 if __name__ == '__main__':

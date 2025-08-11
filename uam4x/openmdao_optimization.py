@@ -1,5 +1,5 @@
 import openmdao.api as om
-from nasa_uam.study import Study
+from uam4x.study import Study
 import os
 import shutil
 

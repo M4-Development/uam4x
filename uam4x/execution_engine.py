@@ -1,10 +1,7 @@
-from nasa_uam.study import Study
+from uam4x.study import Study
 import os
-import sys
-import importlib
-import json
-import concurrent.futures
-from nasa_uam.openmdao_optimization import Optimization
+from uam4x.openmdao_optimization import Optimization
+from uam4x.plugin import get_new_plugin_instance
 
 class Engine:
 
@@ -19,7 +16,7 @@ class Engine:
 
     def are_plugins_threadsafe(self):
         for step_name, step_info in self.study.solution.steps.items():
-            plugin = self.load_plugin(plugin_name=step_info["plugin_type"], step_name=step_name)
+            plugin = get_new_plugin_instance(step_info["plugin_type"])
             plugin.setup_plugin(step_info["plugin_options"])
             if not plugin.is_threadsafe:
                 return False
@@ -29,7 +26,7 @@ class Engine:
         plugins = {}
         thread_safe = False
         for step_name, step_info in self.study.solution.steps.items():
-            plugins[step_name] = self.load_plugin(plugin_name=step_info["plugin_type"], step_name=step_name)
+            plugins[step_name] = get_new_plugin_instance(step_info["plugin_type"])
             plugins[step_name].setup_plugin(step_info["plugin_options"])
         return plugins
 
@@ -42,7 +39,7 @@ class Engine:
         if not plugins:
             plugins = {}
             for step_name, step_info in self.study.solution.steps.items():
-                plugin = self.load_plugin(plugin_name=step_info["plugin_type"], step_name=step_name)
+                plugin = self.get_new_plugin_instance(step_info["plugin_type"])
                 plugin.setup_plugin(step_info["plugin_options"])
                 plugins[step_name] = plugin
 
@@ -53,8 +50,12 @@ class Engine:
             self.run_single_point(state, plugins, out_dir)
 
     def run_optimization(self, state, plugins, out_dir):
+        cwd = os.getcwd()
+        os.chdir(out_dir)
         opt = Optimization(self.study, state, plugins, out_dir)
         opt.run_problem()
+
+        os.chdir(cwd)
 
     def run_single_point(self, state, plugins, out_dir):
         for step_name, step_info in self.study.solution.steps.items():
@@ -88,30 +89,6 @@ class Engine:
             self.run_solution(state, plugins, i)
         self.study.save()
 
-    def load_plugin(self, plugin_name, step_name):
-        python_files = []
-        working_dir = os.getcwd()
-        plugins_dir = os.path.join(os.path.dirname(__file__), 'plugins')
-        if plugins_dir not in sys.path:
-            sys.path.append(plugins_dir)
-        plugins_dir_relative_path = os.path.relpath(plugins_dir, working_dir)
-        script_path = os.path.abspath(sys.argv[0])
-        script_dir = os.path.dirname(script_path)
-        if script_dir not in sys.path:
-            sys.path.append(script_dir)
-        script_dir_relative_path = os.path.relpath(script_dir, working_dir)
-        directories = [plugins_dir_relative_path, script_dir_relative_path]
-        for dir in directories:
-            python_files = []
-            for f in os.listdir(dir):
-                if f.endswith(".py") and f != "__init__.py":
-                    python_files.append(f)
-            for f in python_files:
-                file_name = f[:-3]
-                imported = importlib.import_module(file_name)
-                if hasattr(imported, plugin_name):
-                    plugin = getattr(imported, plugin_name)()
-                    return plugin
 
     def sort_steps(self):
         step_names = self.study.solution.get_step_names()

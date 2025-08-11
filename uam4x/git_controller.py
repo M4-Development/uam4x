@@ -1,6 +1,6 @@
 import pygit2
 import os
-# from nasa_uam.framework import Study
+# from uam4x.framework import Study
 
 AUTHOR = pygit2.Signature("DEFAULT AUTHOR", 'fake@email')
 COMMITTER = pygit2.Signature("DEFAULT COMMITTER", 'fake@email')

@@ -1,8 +1,8 @@
-from nasa_uam.components import Component
-from nasa_uam.components import ComponentMode
-from nasa_uam.components import AttributeCollector
-from nasa_uam.components import DataType
-from nasa_uam.study import Study
+from uam4x.components import Component
+from uam4x.components import ComponentMode
+from uam4x.components import AttributeCollector
+from uam4x.components import DataType
+from uam4x.study import Study
 import unittest
 import os, shutil
 
@@ -81,7 +81,7 @@ class Test_Componets(unittest.TestCase):
         self.assertEqual(wing.mode_name,'baseline')
         ac = AttributeCollector(wing.study)
         self.assertEqual(wing._attributes_collector.study, ac.study)
-    
+
     def test_get_mode(self):
 
         # intialize test
@@ -95,7 +95,7 @@ class Test_Componets(unittest.TestCase):
         with self.assertRaises(TypeError):
             out = wing.get_mode()
 
-        # with self.assertRaises(TypeError): # should be raising an error but is not 
+        # with self.assertRaises(TypeError): # should be raising an error but is not
         #     out = wing.get_mode(['this should be a string not a list','item2'])
 
         # test outputs
@@ -107,7 +107,7 @@ class Test_Componets(unittest.TestCase):
         out = wing.get_mode('other_mode')
         self.assertTrue('other_mode',out)
 
-        
+
 
     def test_get_mode_names(self):
         # intialize test
@@ -157,7 +157,7 @@ class Test_Componets(unittest.TestCase):
             out = wing.get_attribute('span','extra string')
 
         # test outputs
-        
+
         out = wing.get_attribute('span')
         self.assertEqual(out,30)
         out = wing_takeoff_mode.get_attribute("root_chord")
@@ -167,7 +167,7 @@ class Test_Componets(unittest.TestCase):
     def test_set_attribute(self):
         # intialize test
         study,wing,wing_takeoff_mode,v1 = self.initialize()
-        
+
 
         # test inputs: (self, name, value)
         with self.assertRaises(TypeError):
@@ -176,7 +176,7 @@ class Test_Componets(unittest.TestCase):
         with self.assertRaises(TypeError):
             out = wing.set_attribute('span',10,'Extra String')
 
-        # with self.assertRaises(ValueError): # should be raising an error but is not 
+        # with self.assertRaises(ValueError): # should be raising an error but is not
         #     out = wing.set_attribute('span','should be a float')
 
         # test outputs
@@ -211,7 +211,7 @@ class Test_Componets(unittest.TestCase):
         out = wing.link_components(name,relations)
         self.assertEqual(wing._attributes_collector.attributes['area'][1],210)
         self.assertEqual(wing._attributes_collector.attributes['aspect_ratio'][1],4.285714285714286)
-       
+
 
     def test_new_mode(self):
 
@@ -253,7 +253,7 @@ class Test_Componets(unittest.TestCase):
         self.assertEqual(['span', 'root_chord', 'area', 'aspect_ratio', 'taper', 'twist', 'dihedral', 'sweep', 'volume', 'thickness', 'nrotor', 'type_rotor', 'loc_x', 'loc_y', 'loc_z'],list(out['attributes_collector'].keys()))
         self.assertEqual({'takeoff': {'span': ['FLOAT', 20], 'area': ['FLOAT', 20]}},out['modes'])
 
-        
+
 
 
 if __name__ == '__main__':

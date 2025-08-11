@@ -1,5 +1,5 @@
-from nasa_uam.plugins.openvsp_plugin import OpenvspPlugin
-from nasa_uam.study import Study
+from uam4x.openvsp_plugin import OpenvspPlugin
+from uam4x.study import Study
 
 import unittest
 import os, shutil
@@ -64,7 +64,7 @@ class Test_OpenvspPlugin(unittest.TestCase):
         # test inputs
         # inputs: (self, plugin_options:dict=None, tracked_outputs:list=None)
 
-        # there should be more than 
+        # there should be more than
         with self.assertRaises(TypeError):
             setup_out = vsp_test.setup_plugin(plugin_options,tracked_outputs,"extra input")
 
@@ -77,7 +77,7 @@ class Test_OpenvspPlugin(unittest.TestCase):
         setup_out = vsp_test.setup_plugin(plugin_options)
         setup_out = vsp_test.setup_plugin()
 
-        # check outputs 
+        # check outputs
 
         # check plugin_options output
         check_filename = 'test_info'
@@ -86,8 +86,8 @@ class Test_OpenvspPlugin(unittest.TestCase):
         self.assertEqual(vsp_test._new_filename,check_new_filename)
 
         # check tracked_outputs outplut
-        self.assertEqual(vsp_test._tracked_outputs, tracked_outputs) 
-    
+        self.assertEqual(vsp_test._tracked_outputs, tracked_outputs)
+
     def test_run_plugin(self):
 
         # initalize parameters
@@ -109,7 +109,7 @@ class Test_OpenvspPlugin(unittest.TestCase):
         hstab.set_attribute("span", 10)
         hstab.set_attribute("root_chord", 2)
 
-        # check inputs 
+        # check inputs
         # inputs: (self, links:list)
 
         with self.assertRaises(TypeError):
@@ -127,8 +127,8 @@ class Test_OpenvspPlugin(unittest.TestCase):
         # test results
         check_results = {'.CompGeom.Total_Wet_Area': 653.6958359311172, '.CompGeom.Total_Wet_Vol': 295.3398259787079}
         self.assertEqual(check_results,run_out)
-        
-        
+
+
 
 if __name__ == '__main__':
     unittest.main()

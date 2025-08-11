@@ -1,8 +1,8 @@
 
 import os
-from nasa_uam.study import Study
-from nasa_uam.git_controller import GitController
-from nasa_uam.execution_engine import Engine
+from uam4x.study import Study
+from uam4x.git_controller import GitController
+from uam4x.execution_engine import Engine
 class Framework():
     def __init__(self, directory) -> None:
         self.dir = directory
