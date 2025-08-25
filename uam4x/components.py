@@ -1,377 +1,545 @@
+# Component/Mode/Parameter system with inheritance
+# Classic class-based implementation (no dataclasses)
+from uam4x.units import (
+    UnitType, LengthUnit, AngleUnit, MassUnit, TimeUnit, ForceUnit, TemperatureUnit, PressureUnit, EnergyUnit, PowerUnit, VolumeUnit, AreaUnit, SpeedUnit, AccelerationUnit
+)
 from enum import Enum
-class DataType(Enum):
-    FLOAT = float
-    INT = int
-    BOOL = bool
-    STR = str
 
-class AttributeCollector:
-    def __init__(self, study) -> None:
-        self.study = study
-        self._attributes = {}
+_type_map = {
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool
+}
+
+_component_registry = {}
+
+
+
+class Parameter:
+    """
+    Represents a parameter with type, value, units, and description.
+
+    Parameters
+    ----------
+    name : str
+        Name of the parameter.
+    default_value : Any
+        Default value for the parameter.
+    dtype : type
+        Python type for the parameter (e.g., float, int).
+    unit_type : UnitType, optional
+        The type of unit (e.g., LENGTH, MASS).
+    unit : Enum or str, optional
+        The unit (e.g., METER, KG).
+    description : str, optional
+        Description of the parameter.
+    """
+
+    def __init__(self, name: str, default_value, dtype, unit_type: UnitType = None, unit: Enum = None, description: str = ""):
+        from uam4x.units import UnitType
+        self.name = name
+        self.dtype = dtype
+        if not isinstance(default_value, dtype):
+            raise TypeError(f"Parameter '{name}' must be of type {dtype.__name__}, got {type(default_value).__name__}")
+        self._value = default_value
+        self.unit_type = unit_type if unit_type is not None else UnitType.NONE
+        self.unit = unit if unit is not None else ""
+        self.description = description
+
+    def __str__(self):
+        """
+        Returns a string representation of the parameter.
+
+        Returns
+        -------
+        str
+        """
+        unit_display = self.unit if self.unit else "—"
+        return f"{self.name}: {self.value} [{self.unit_type}, {unit_display}] ({self.description})"
+
+    def __repr__(self):
+        """
+        Returns a string representation of the parameter (same as __str__).
+
+        Returns
+        -------
+        str
+        """
+        return self.__str__()
+    @property
+    def value(self):
+        """
+        Get or set the value of the parameter.
+
+        Returns
+        -------
+        Any
+        """
+        return self._value
+    @value.setter
+    def value(self, v):
+        """
+        Set the value of the parameter, enforcing type.
+
+        Parameters
+        ----------
+        v : Any
+            Value to set. Must match dtype.
+        """
+        if not isinstance(v, self.dtype):
+            raise TypeError(f"Value for parameter '{self.name}' must be of type {self.dtype.__name__}, got {type(v).__name__}")
+        self._value = v
+
+    def check_type(self):
+        """
+        Check if the value matches the dtype.
+
+        Returns
+        -------
+        bool
+        """
+        return isinstance(self.value, self.dtype)
+
+    def _to_dict(self) -> dict:
+        """
+        Serialize the parameter to a JSON-serializable dictionary.
+
+        Returns
+        -------
+        dict
+        """
+        # Only include JSON-serializable fields, never include .dtype or any type/class
+        # Ensure unit_type and unit are always serializable (string or None)
+        unit_type = self.unit_type
+        if hasattr(unit_type, '__name__'):
+            unit_type = unit_type.__name__
+        elif not isinstance(unit_type, str):
+            unit_type = str(unit_type) if unit_type is not None else None
+
+        unit = self.unit
+        if hasattr(unit, 'value'):
+            unit = unit.value
+        elif hasattr(unit, '__name__'):
+            unit = unit.__name__
+        elif not isinstance(unit, str):
+            unit = str(unit) if unit is not None else None
+
+        return {
+            "name": self.name,
+            "value": self.value,
+            "dtype": self.dtype.__name__,
+            "unit_type": unit_type,
+            "unit": unit,
+            "description": self.description
+        }
+    @classmethod
+    def _from_dict(cls, data: dict) -> 'Parameter':
+        """
+        Deserialize a parameter from a dictionary.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary representation of the parameter.
+
+        Returns
+        -------
+        Parameter
+        """
+        dtype = _type_map[data["dtype"]]
+        value = dtype(data["value"])
+        return cls(
+            name=data["name"],
+            default_value=value,
+            dtype=dtype,
+            unit_type=data["unit_type"],
+            unit=data["unit"],
+            description=data["description"]
+        )
+
+class Mode:
+    """
+    Represents a mode for a component, allowing parameter overrides.
+
+    Parameters
+    ----------
+    name : str
+        Name of the mode.
+    component : Component, optional
+        The parent component.
+    """
+
+    def __init__(self, name: str, component: "Component"):
+        self.name = name
+        self._overrides = {}
+        self.component = component  # Reference to parent component for inheritance
+
+    def __getattr__(self, item):
+        """
+        Get an attribute or parameter override from the mode or parent component.
+
+        Parameters
+        ----------
+        item : str
+            Attribute or parameter name.
+
+        Returns
+        -------
+        Any
+        """
+        # Only called if attribute not found in normal places
+        if item in self._overrides:
+            return self._overrides[item]
+        if self.component and hasattr(self.component, item):
+            return getattr(self.component, item)
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
+
+    def __setattr__(self, key, value):
+        """
+        Set a parameter override or attribute.
+
+        Parameters
+        ----------
+        key : str
+            Attribute or parameter name.
+        value : Any
+            Value to set.
+        """
+
+        if key in ("name", "_overrides", "component"):
+            object.__setattr__(self, key, value)
+        elif key in self.component._parameters:
+            if not isinstance(value, self.component._parameters[key].dtype):
+                raise TypeError(f"Parameter '{key}' in mode '{self.name}' must be of type {self.component._parameters[key].dtype.__name__}, got {type(value).__name__}")
+            self._overrides[key] = value
+        else:
+            raise AttributeError(f"'{self.__class__.__name__}' object has no parameter '{key}' to override")
 
     @property
-    def attributes(self):
-        return self._attributes
+    def parameters(self):
+        """
+        Get all effective parameters for this mode (overrides + inherited).
 
-    @attributes.setter
-    def attributes(self, attributes):
-        self._attributes = attributes
+        Returns
+        -------
+        dict
+            Mapping of parameter names to Parameter objects.
+        """
+        # Return a dict of all effective Parameter objects: overridden in mode, else from component
+        params = {}
+        for pname, param in self.component._parameters.items():
+            if pname in self._overrides:
+                override_value = self._overrides[pname]
+                dtype = param.dtype
+                if dtype is not None and not isinstance(override_value, dtype):
+                    raise TypeError(f"Override for parameter '{pname}' in mode '{self.name}' must be of type {dtype.__name__}, got {type(override_value).__name__}")
+                overridden_param = Parameter(
+                    param.name,
+                    override_value,
+                    dtype,
+                    unit_type=param.unit_type,
+                    unit=param.unit,
+                    description=param.description
+                )
+                params[pname] = overridden_param
+            else:
+                params[pname] = param
+        # Add any extra overrides not in component
+        for pname, value in self._overrides.items():
+            if pname not in params:
+                raise AttributeError(f"Parameter '{pname}' does not exist in component '{self.component.name}' for mode '{self.name}'")
+        return params
 
-    def check_data_type(self, name, value, parent):
-        # checks if the data type entered is acceptable
-        attribute_type = self._attributes[name][0]
-        if value is None and parent is not None:
-            self._attributes[name][1] = value
-            return True
-        elif attribute_type == DataType.FLOAT and type(value) == int and value >= 0:
-            self._attributes[name][1] = value
-            return True
-        elif attribute_type.value == type(value) and value >= 0:
-            self._attributes[name][1] = value
-            return True
-        else:
-            print("Invalid value! Please input a positive " + str(attribute_type.value.__name__))
-            return False
+    def __str__(self):
+        """
+        Returns a string representation of the mode and its overrides.
 
-    def load_attributes_collector(self, attributes_dict):
-        for key, value in attributes_dict.items():
-            for datatype in DataType:
-                if datatype.name == value[0]:
-                    attributes_dict[key][0] = datatype
-        self._attributes = attributes_dict
-
-    def save_attributes_collector(self):
-        attributes_dict = {}
-        for name, values in self._attributes.items():
-            attributes_dict[name] = [values[0].name, values[1]]
-        return attributes_dict
+        Returns
+        -------
+        str
+        """
+        if not self._overrides:
+            return f"Mode('{self.name}') (no parameter overrides)"
+        param_strs = [f"{k}: {v}" for k, v in self._overrides.items()]
+        params = ", ".join(param_strs)
+        return f"Mode('{self.name}') overrides: {params}"
 
 class Component:
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        self._name = name
-        self.study = study
-        self._mode_name = mode_name
-        if not new_mode:
-            self._modes = []
-            self._parent = None
-            if parent_attributes is None:
-                parent_attributes = AttributeCollector(self.study)
-                self._attributes_collector = parent_attributes
-                if hasattr(self, "setup"):
-                    self.setup()
-            else:
-                self._attributes_collector = parent_attributes
+    """
+    Base class for all components. Supports parameters, modes, and dynamic properties.
+
+    Parameters
+    ----------
+    name : str
+        Name of the component.
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+        self._parameters = {}
+        self._modes = {}
+        self._is_setup = True
+        self.setup()
+        self._is_setup = False
+        setattr(self, 'baseline', self)
+
+    def setup(self):
+        """
+        Override in subclasses to add parameters using add_parameter().
+        """
+        pass
+
+    def add_parameter(self, name: str, default_value, dtype, unit_type=None, unit=None, description=""):
+        """
+        Add a parameter to the component (only allowed in setup()).
+
+        Parameters
+        ----------
+        name : str
+            Name of the parameter.
+        default_value : Any
+            Default value.
+        dtype : type
+            Python type (e.g., float, int).
+        unit_type : UnitType, optional
+            Unit type (e.g., LENGTH, MASS).
+        unit : Enum or str, optional
+            Unit (e.g., METER, KG).
+        description : str, optional
+            Description.
+        """
+        if not self._is_setup:
+            raise RuntimeError("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
+        self._parameters[name] = Parameter(name, default_value, dtype, unit_type=unit_type, unit=unit, description=description)
+        # Dynamically add property to the instance for this parameter
+        def getter(self):
+            return self._parameters[name].value
+        def setter(self, v):
+            self.set_parameter(name, v)
+        prop = property(getter, setter)
+        setattr(self.__class__, name, prop)
+
+    def set_parameter(self, name: str, value: float, unit=None):
+        """
+        Set the value (and optionally unit) of a parameter.
+
+        Parameters
+        ----------
+        name : str
+            Parameter name.
+        value : Any
+            Value to set.
+        unit : Enum or str, optional
+            Unit to set.
+        """
+        from uam4x.units import UNIT_TYPE_TO_UNIT_CLASS
+        if name in self._parameters:
+            param = self._parameters[name]
+            param.value = value
+            if unit is not None:
+                unit_type = param.unit_type
+                if unit_type and unit_type in UNIT_TYPE_TO_UNIT_CLASS:
+                    unit_class = UNIT_TYPE_TO_UNIT_CLASS[unit_type]
+                    # Accept both class attribute and value
+                    if unit not in unit_class.__dict__.values():
+                        raise ValueError(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
+                param.unit = unit
         else:
-            self._attributes_collector = AttributeCollector(self.study)
+            raise AttributeError(f"Parameter '{name}' not defined for {self.__class__.__name__}.")
 
-    @property
-    def name(self):
-        return self._name
+    def add_mode(self, mode_name: str):
+        """
+        Add a mode to the component.
 
-    @property
-    def mode_name(self):
-        return self._mode_name
+        Parameters
+        ----------
+        mode_name : str
+            Name of the mode.
 
-    @mode_name.setter
-    def mode_name(self, name):
-        self._mode_name = name
+        Returns
+        -------
+        Mode
+        """
+        # Only accept a string (mode name), auto-create a Mode
+        if not isinstance(mode_name, str):
+            raise TypeError("add_mode only accepts a string as the mode name.")
+        mode = Mode(mode_name, self)
+        self._modes[mode.name] = mode
+        setattr(self, mode.name, mode)
+        return mode
 
-    @property
-    def modes(self):
-        return self._modes
+    def get_parameter(self, param_name: str):
+        """
+        Get the value of a parameter by name.
 
-    @property
-    def parent(self):
-        return self._parent
+        Parameters
+        ----------
+        param_name : str
+            Name of the parameter.
 
-    @property
-    def attributes_collector(self):
-        return self._attributes_collector
+        Returns
+        -------
+        Any or None
+            The value of the parameter, or None if not found.
+        """
+        if param_name not in self._parameters:
+            raise AttributeError(f"Parameter '{param_name}' not defined for {self.__class__.__name__}.")
+        return self._parameters[param_name].value
 
-    @attributes_collector.setter
-    def attributes_collector(self, attributes_collector):
-        self._attributes_collector = attributes_collector
+    def check_all_parameter_types(self):
+        """
+        Check types of all parameters and mode overrides.
 
-    def get_mode(self, name: str):
-        if name == self._mode_name:
-            return self
-        for mode in self._modes:
-            if mode.mode_name == name:
-                return mode
+        Returns
+        -------
+        dict
+            {'main': ..., mode_name: ...} for all parameters and all modes.
+        """
+        result = {'main': {name: param.check_type() for name, param in self._parameters.items()}}
+        for mode_name, mode in self._modes.items():
+            mode_result = {}
+            for pname, override_value in mode._overrides.items():
+                if pname not in self._parameters:
+                    raise AttributeError(f"Parameter '{pname}' does not exist in component '{self.name}' for mode '{mode_name}'")
+                dtype = self._parameters[pname].dtype
+                mode_result[pname] = isinstance(override_value, dtype)
+            result[mode_name] = mode_result
+        return result
+    def __str__(self):
+        """
+        Returns a string representation of the component and its parameters.
 
-    def get_mode_names(self):
-        mode_names = [self._mode_name]
-        for mode in self._modes:
-            mode_names.append(mode.mode_name)
-        return mode_names
+        Returns
+        -------
+        str
+        """
+        param_strs = [str(param) for param in self._parameters.values()]
+        params = "\n    ".join(param_strs)
+        return f"{self.__class__.__name__}('{self.name}')\n    {params}"
+    def _to_dict(self) -> dict:
+        """
+        Serialize the component to a JSON-serializable dictionary.
 
-    def create_attribute(self, name, attribute_type:DataType, default_value):
-        self._attributes_collector.attributes[name] = [attribute_type, default_value]
+        Returns
+        -------
+        dict
+        """
+        return {
+            "name": self.name,
+            "component_type": type(self).__name__,
+            "parameters": {k: v._to_dict() for k, v in self._parameters.items()},
+            "modes": {k: {"overrides": dict(mode._overrides)} for k, mode in self._modes.items()}
+        }
+    @classmethod
+    def _from_dict(cls, data: dict) -> 'Component':
+        """
+        Deserialize a component from a dictionary.
 
-    def get_attribute(self, name:str):
-        if name in self._attributes_collector.attributes:
-            return self._attributes_collector.attributes[name][1]
-        elif self._parent is not None and name in self._parent.attributes_collector.attributes:
-            return self._parent.attributes_collector.attributes[name][1]
-        else:
-            return None
+        Parameters
+        ----------
+        data : dict
+            Dictionary representation of the component.
 
-    def set_attribute(self, name, value):
-        #TODO: add some logic if some variables are linked to other variables (aspect ratio, chord, span, etc.)
-        if name in self._attributes_collector.attributes:
+        Returns
+        -------
+        Component
+        """
+        # Parameters
+        comp_type = data["component_type"]
+        comp_class = get_commponent_class(comp_type)
+        comp = comp_class(data["name"])
+        for k, v in data["parameters"].items():
+             comp._parameters[k] = Parameter._from_dict(v)
 
-            change = self._attributes_collector.check_data_type(name=name, value=value, parent=self._parent)
+        # Modes
+        for mode_name, mode_data in data["modes"].items():
+            mode = comp.add_mode(mode_name)
+            for pname, value in mode_data["overrides"].items():
+                mode._overrides[pname] = value
+        return comp
 
-        elif name in self._parent.attributes_collector.attributes:
-            attribute_type = self._parent.attributes_collector.attributes[name][0]
-            parent_value = self._parent.get_attribute(name)
-            self.create_attribute(name, attribute_type=attribute_type, default_value=parent_value)
-            change = self._attributes_collector.check_data_type(name=name, value=value, parent=self._parent)
-            if not change:
-                self._attributes_collector.attributes.pop(name)
-        else:
-            change = False
+    def get_param_dict(self) -> dict:
+        """
+        Get a dictionary of all parameters and their values.
 
-        keys = ['span', 'aspect_ratio', 'area', 'taper', 'volume', 'thickness', 'root_chord'] # list of quantites with relationships
-        if name in keys and change:
-            self.link_components(name=name, keys=keys)
-
-    def link_components(self, name, keys):
-
-        values = []
-        for item in keys:
-            values.append(self.get_attribute(item))
-
-        span,aspect_ratio,area,taper,volume,thickness,root_chord = values # unpack for simplicity when writing equations
-
-        relations_dict = {"span":[area,aspect_ratio, taper, root_chord],
-                 "taper":[area,aspect_ratio, span, root_chord],
-                 "root_chord": [area,aspect_ratio,span,taper],
-                 'area': [span,aspect_ratio,taper,root_chord],
-                 'aspect_ratio': [span,area, taper, root_chord],
-                 'thickness':[volume,area],
-                 'volume':[thickness,area]}
-
-        params = relations_dict[name]
+        Returns
+        -------
+        dict
+            Mapping of parameter names to their values.
+        """
+        return {name: param.value for name, param in self._parameters.items()}
 
 
-        # make sure change is tracked only when changing attribute, not during initial defintition
-        if 0 not in params:
+def register_component(cls):
+    _component_registry[cls.__name__] = cls
+    return cls
 
-            # change area and aspect ratio based on change on span, taper, pr root chord
-            if name =='span' or name == 'taper' or name == 'root_chord':
-                self._attributes_collector.attributes['area'][1] = span/2 *(1+taper)*root_chord
-                self._attributes_collector.attributes['aspect_ratio'][1] = span**2/self.get_attribute('area')
+# Wing component with only span, chord, and sweep
+@register_component
+class Wing(Component):
+    def setup(self):
+        self.add_parameter("area", 0., float, unit_type=UnitType.AREA, description="Wing area")
+        self.add_parameter("span", 0., float, unit_type=UnitType.LENGTH, description="Wing span")
+        self.add_parameter("chord", 0., float, unit_type=UnitType.LENGTH, description="Wing chord")
+        self.add_parameter("sweep", 0., float, unit_type=UnitType.ANGLE, description="Wing sweep angle")
+        self.add_parameter("aspect_ratio", 1., float, unit_type=UnitType.ANGLE, description="Wing sweep angle")
 
-            # change span and aspect ratio if area changes
-            elif name == 'area':
-                self._attributes_collector.attributes['span'][1] = area*2 / (1+taper) / root_chord
-                self._attributes_collector.attributes['aspect_ratio'][1] = self.get_attribute('span')**2/area
+@register_component
+class Rotor(Component):
+    def setup(self):
+        self.add_parameter("vtip", 550., float, unit_type=UnitType.SPEED, description="Rotor tip speed")
+        self.add_parameter("tilt", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor tilt")
+        self.add_parameter("radius", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor radius")
+        self.add_parameter("nblade", 2, int, description="Number of blades")
+        self.add_parameter("rpm", 1000.0, float, unit_type=UnitType.FREQUENCY if hasattr(UnitType, 'FREQUENCY') else None, description="Rotor RPM")
+        self.add_parameter("blade_chord", 0.1, float, unit_type=UnitType.LENGTH, description="Blade chord length")
+        self.add_parameter("collective_pitch", 0.0, float, unit_type=UnitType.ANGLE, description="Collective pitch angle (deg)")
 
-            # change area and span if aspect ratio changes
-            elif name == 'aspect_ratio':
-                self._attributes_collector.attributes['span'][1] = aspect_ratio*(1+taper)*root_chord/2
-                self._attributes_collector.attributes['area'][1] = self.get_attribute('span')**2/aspect_ratio
-
-            # change volume if thickness changes
-            elif name == 'thickness':
-                self._attributes_collector.attributes['volume'][1] = area*thickness
-
-            # change thickness if volume changes
-            elif name == 'volume':
-                self._attributes_collector.attributes['thickness'][1] = volume/area
-
-    def new_mode(self, mode_name):
-        mode_names = self.get_mode_names()
-        if mode_name not in mode_names:
-            mode = ComponentMode(study=self.study, parent=self, name=self._name, mode_name=mode_name)
-            self._modes.append(mode)
-            return mode
-        else:
-            return self.get_mode(mode_name)
-
-    def save_component(self):
-        component_dict = {}
-        component_dict["mode_name"] = self._mode_name
-        component_dict["type"] = type(self).__name__
-        component_dict["attributes_collector"] = self._attributes_collector.save_attributes_collector()
-        modes_dict = {}
-        for i in range(0, len(self._modes)):
-            mode = self._modes[i]
-            attributes_collector_dict = {}
-            for name, values in mode.attributes_collector.attributes.items():
-                attributes_collector_dict[name] = [values[0].name, values[1]]
-            modes_dict[mode.mode_name] = attributes_collector_dict
-        component_dict["modes"] = modes_dict
-        return component_dict
-
-class ComponentMode(Component):
-    def __init__(self, study, parent, name, mode_name) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, new_mode=True)
-        self._parent = parent
-
-class LiftingSurface(Component):
-
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, parent_attributes=parent_attributes, new_mode=new_mode)
-        if parent_attributes is None:
-            # geometry - can be wing or tail
-            self.create_attribute("span", DataType.FLOAT, 0)
-            self.create_attribute("root_chord", DataType.FLOAT, 0)
-            # self.create_attribute("nPanel", DataType.INT, 0) # number of pannels on lifting surface
-            self.create_attribute("area", DataType.FLOAT, 0)
-            self.create_attribute("aspect_ratio", DataType.FLOAT, 0)
-            self.create_attribute("taper", DataType.FLOAT, 0)
-            self.create_attribute("twist", DataType.FLOAT, 0)
-            self.create_attribute("dihedral", DataType.FLOAT, 0)
-            self.create_attribute("sweep", DataType.FLOAT, 0)
-            self.create_attribute("volume", DataType.FLOAT, 0)
-            self.create_attribute("thickness", DataType.FLOAT, 0) # thickness to chord ratio
-
-            self.create_attribute("nrotor", DataType.FLOAT, 0) # number of rotors on wing
-            self.create_attribute("type_rotor", DataType.INT, 0) # rotor numbers on wing (change to ist or np array?)
-
-            # locations of aerodyanmic center
-            self.create_attribute("loc_x", DataType.FLOAT, 0)
-            self.create_attribute("loc_y", DataType.FLOAT, 0)
-            self.create_attribute("loc_z", DataType.FLOAT, 0)
-
-class Fuselage(Component):
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, parent_attributes=parent_attributes, new_mode=new_mode)
-        if parent_attributes is None:
-            self.create_attribute("length", DataType.FLOAT, 0)
-            self.create_attribute("width", DataType.FLOAT, 0)
-            self.create_attribute("height", DataType.FLOAT, 0)
-            self.create_attribute("wetted_area", DataType.FLOAT, 0)
-            self.create_attribute("projected_area", DataType.FLOAT, 0)
-            self.create_attribute("projected_area", DataType.FLOAT, 0) # fuselage SL location relative nose - (fraction fuselage length)
-            self.create_attribute("aft_length", DataType.FLOAT, 0)
-            self.create_attribute("nose_length", DataType.FLOAT, 0)
-
-            # location
-            self.create_attribute("loc_x", DataType.FLOAT, 0)
-            self.create_attribute("loc_y", DataType.FLOAT, 0)
-            self.create_attribute("loc_z", DataType.FLOAT, 0)
-
-class Propulsion(Component):
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, parent_attributes=parent_attributes, new_mode=new_mode)
-        if parent_attributes is None:
-            # geometry
-            # self.create_attribute("nengines", DataType.INT, 0)
-            self.create_attribute("length", DataType.FLOAT, 0) # drive shaft length
-
-            #  weight
-            self.create_attribute("length_multicopter", DataType.FLOAT, 0) # arm length as a fraction of radius
-            self.create_attribute("length_multicopter", DataType.FLOAT, 0) # arm length as a fraction of radius
-            self.create_attribute("length_multicopter", DataType.FLOAT, 0) # arm length as a fraction of radius
-
-class LandingGear(Component):
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, parent_attributes=parent_attributes, new_mode=new_mode)
-        if parent_attributes is None:
-            # geometry
-            # self.create_attribute("nlanding_gear", DataType.INT, 0)
-
-            # location
-            self.create_attribute("loc_x", DataType.FLOAT, 0)
-            self.create_attribute("loc_y", DataType.FLOAT, 0)
-            self.create_attribute("loc_z", DataType.FLOAT, 0)
-
-            # weight
-            self.create_attribute('wlg', DataType.FLOAT, 0) # weight landing gear (fraction of max take off weight in NDARC)
-
-class Rotors(Component):
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, parent_attributes=parent_attributes, new_mode=new_mode)
-        if parent_attributes is None:
-            # geometry
-            self.create_attribute("radius", DataType.FLOAT, 0)
-            self.create_attribute("chord", DataType.FLOAT, 0)
-            self.create_attribute("twist", DataType.FLOAT, 0)
-            self.create_attribute("taper_ratio", DataType.FLOAT, 0)
-            self.create_attribute("thickness", DataType.FLOAT, 0) #thickness to chord ratio
-            self.create_attribute("nblade", DataType.INT, 0)
-            # self.create_attribute("nrotor", DataType.INT, 0)
-            self.create_attribute("incid_hub", DataType.INT, 0) # orientation of the rotor shaft incidence angle
-            self.create_attribute("cant_hub", DataType.INT, 0) # orientation of the rotor shaft cant angle
-            self.create_attribute("direction_rotation", DataType.INT, 1) # 1ccw, -1 cw
-            self.create_attribute("angle_multicopter", DataType.FLOAT, 0) # angle clockwise from forard
-            self.create_attribute("length_multicopter", DataType.FLOAT, 0) # arm length as a fraction of radius
-            self.create_attribute("tilt", DataType.FLOAT, 0) # nacelle tilt
-
-            # location
-            self.create_attribute("loc_x", DataType.INT, 0) # x coordinate hub
-            self.create_attribute("loc_y", DataType.INT, 0) # y coordinate hub
-            self.create_attribute("loc_z", DataType.INT, 0) # z coordinate hub
-
-            # weight
-
-class Engines(Component):
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, parent_attributes=parent_attributes, new_mode=new_mode)
-        if parent_attributes is None:
-            self.create_attribute("wetted_area", DataType.FLOAT, 0)
-
-            # location
-            self.create_attribute("loc_x", DataType.FLOAT, 0)
-            self.create_attribute("loc_y", DataType.FLOAT, 0)
-            self.create_attribute("loc_z", DataType.FLOAT, 0)
-
+@register_component
 class Aircraft(Component):
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, parent_attributes=parent_attributes, new_mode=new_mode)
-        if parent_attributes is None:
-            self.create_attribute("nwing", DataType.INT, 0) # number of wings
-            self.create_attribute("nrotor", DataType.INT, 0) # number of rotors
-            self.create_attribute("ntail", DataType.INT, 0) # number of tails
-            self.create_attribute("nprop", DataType.INT, 0) # number of propulsion groups
-            self.create_attribute("nengine_group", DataType.INT, 0) # number of engine groups
-            self.create_attribute("nengine_model", DataType.INT, 0) # number of engine models
-            self.create_attribute("ncontrol", DataType.INT, 0) # number of controls systems
-            self.create_attribute("ntank", DataType.INT, 0) # number of fuel tank systems
-            self.create_attribute("nmotor_model", DataType.INT, 0) # number of motor models
-            self.create_attribute("ncontrol", DataType.INT, 0) # number of controls systems
+    def setup(self):
+        self.add_parameter("npass", 4, int, description="Number of passengers")
+        self.add_parameter("wpass", 200.0, float, unit_type=UnitType.MASS, description="Mass per passenger")
 
-            # cg location
-            self.create_attribute("loc_x", DataType.FLOAT, 0)
-            self.create_attribute("loc_y", DataType.FLOAT, 0)
-            self.create_attribute("loc_z", DataType.FLOAT, 0)
+def get_commponent_class(component_name):
+    if not component_name in _component_registry:
+        msg = f"Component '{component_name}' was not registered. Please check the following:\n"
+        msg += f"\t1. Does the Component exist / did you spell the name correctly?\n"
+        msg += f"\t2. Did you import the file containing the Component?\n"
+        msg += f"\t3. Does the Component definition have the @register_component decorator?\n"
+        raise ImportError(msg)
+    return _component_registry[component_name]
 
-            # weights
-            self.create_attribute('dgw', DataType.FLOAT, 0) # design gross weight
-            self.create_attribute('sdgw', DataType.FLOAT, 0) # structural design gross weight
-            self.create_attribute('wmto', DataType.FLOAT, 0) # max takeoff weight
-            self.create_attribute('kx', DataType.FLOAT, 0) # moment of inertia based on design gross weight
-            self.create_attribute('ky', DataType.FLOAT, 0) # moment of inertia based on design gross weight
-            self.create_attribute('kz', DataType.FLOAT, 0) # moment of inertia based on design gross weight
-            self.create_attribute('npass', DataType.INT, 0) # number of passangers
-            self.create_attribute('wpass', DataType.FLOAT, 0) # weight per passanger
-            self.create_attribute('wcrew', DataType.FLOAT, 0) # weight of crew
-            self.create_attribute('wtrap', DataType.FLOAT, 0) # weight of trapped fluids and oil
-            self.create_attribute('wcont', DataType.FLOAT, 0) # contingency weight
-            self.create_attribute('wauto_fc', DataType.FLOAT, 0) # weight automated flight control
-            self.create_attribute('wrot_fc', DataType.FLOAT, 0) # weight rotary wing flight control
-            self.create_attribute('winstrument', DataType.FLOAT, 0) # weight systems and equipment
-            self.create_attribute('wavionics', DataType.FLOAT, 0) # weight avionics
-            self.create_attribute('welectrical', DataType.FLOAT, 0) # weight electrical systems
-            self.create_attribute('wfurnish', DataType.FLOAT, 0) # weight furnishing
-            self.create_attribute('wice', DataType.FLOAT, 0) # weight anti icing
 
-class Tanks(Component):
-    def __init__(self, study, name, mode_name="baseline", parent_attributes=None, new_mode=False) -> None:
-        super().__init__(study=study, name=name, mode_name=mode_name, parent_attributes=parent_attributes, new_mode=new_mode)
-        if parent_attributes is None:
-            # locations
-            self.create_attribute("loc_x", DataType.FLOAT, 0)
-            self.create_attribute("loc_y", DataType.FLOAT, 0)
-            self.create_attribute("loc_z", DataType.FLOAT, 0)
+# --- Test script ---
+if __name__ == "__main__":
+    # Example: create, write, read, and print a Wing
+    wing = Wing("wing1")
+    wing.span = 10.0
+    print(wing.baseline.span)  # Should print 10.0
+    wing.set_parameter("chord", 2.0)
+    wing.sweep = 25.0
 
-            # weight
-            # add plumbing weight factors?
-            self.create_attribute("wfuel_cap", DataType.FLOAT, 0) # fuel capacity
-            self.create_attribute("wfuel_density", DataType.FLOAT, 0) # fuel density
-            self.create_attribute("loc_z", DataType.FLOAT, 0)
-            self.create_attribute("loc_z", DataType.FLOAT, 0)
+    wing.set_parameter("span", 10.0, unit=LengthUnit.METER)
+
+    # Add a mode where sweep is set to 0 (e.g., "unswept")
+    wing.add_mode("unswept")
+    wing.unswept.sweep = 0.
+
+    print(f"Wing parameters (default):")
+    for pname, param in wing._parameters.items():
+        ut = param.unit_type
+        u = param.unit
+        print(param)
+
+    # Show all effective parameters for the unswept mode (overrides + inherited)
+    print(f"\nWing parameters (unswept mode, all effective):")
+    for pname, param in wing.unswept._parameters.items():
+        ut = param.unit_type
+        u = param.unit
+        print(param)
+
+    import json
+    with open('temp.json', 'w') as f:
+        json.dump(wing._to_dict(), f, indent=2)

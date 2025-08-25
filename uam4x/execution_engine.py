@@ -1,34 +1,33 @@
 from uam4x.study import Study
 import os
 from uam4x.openmdao_optimization import Optimization
-from uam4x.plugin import get_new_plugin_instance
 
 class Engine:
 
-    def __init__(self, study:Study, num_processes=1) -> None:
+    def __init__(self, study:Study, work_dir, num_processes=1) -> None:
         self.study = study
         self.num_processes = num_processes
         self.study_results = {} # change once there is a better way to store outputs
         self.sweep_combos = {}
         self.current_sweep_values = {}
-        self.work_dir = os.path.join(os.path.dirname(self.study.json_path), "work")
+        self.work_dir = work_dir
         os.makedirs(self.work_dir, exist_ok=True)
 
-    def are_plugins_threadsafe(self):
-        for step_name, step_info in self.study.solution.steps.items():
-            plugin = get_new_plugin_instance(step_info["plugin_type"])
-            plugin.setup_plugin(step_info["plugin_options"])
-            if not plugin.is_threadsafe:
-                return False
-        return True
+    # def are_plugins_threadsafe(self):
+    #     for step_name, step_info in self.study.solution.steps.items():
+    #         plugin = get_new_plugin_instance(step_info["plugin_type"])
+    #         plugin.setup_plugin(step_info["plugin_options"])
+    #         if not plugin.is_threadsafe:
+    #             return False
+    #     return True
 
-    def init_plugins(self):
-        plugins = {}
-        thread_safe = False
-        for step_name, step_info in self.study.solution.steps.items():
-            plugins[step_name] = get_new_plugin_instance(step_info["plugin_type"])
-            plugins[step_name].setup_plugin(step_info["plugin_options"])
-        return plugins
+    # def init_plugins(self):
+    #     plugins = {}
+    #     # thread_safe = False
+    #     for step_name, step_info in self.study.solution.steps.items():
+    #         plugins[step_name] = step_info["plugin"]()
+    #         plugins[step_name].setup_plugin(step_info["plugin_options"])
+    #     return plugins
 
     def run_solution(self, state, plugins, iteration=None):
         if not iteration is None:
@@ -39,7 +38,7 @@ class Engine:
         if not plugins:
             plugins = {}
             for step_name, step_info in self.study.solution.steps.items():
-                plugin = self.get_new_plugin_instance(step_info["plugin_type"])
+                plugin = step_info["plugin"]()
                 plugin.setup_plugin(step_info["plugin_options"])
                 plugins[step_name] = plugin
 
@@ -76,19 +75,17 @@ class Engine:
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
 
-        plugins = self.init_plugins()
+        # plugins = self.init_plugins()
 
-        if num_processesors:
-            if not self.are_plugins_threadsafe():
-                print("WARNING: NON-THREADSAFE PLUGIN DETECTED, CREATING UNIQUE INSTANCE FOR EACH THREAD")
-                plugins = None
-            else:
-                pass
-
-        for i, state in enumerate(tradestudy.trade.get_states()):
+        # if num_processesors:
+        #     if not self.are_plugins_threadsafe():
+        #         print("WARNING: NON-THREADSAFE PLUGIN DETECTED, CREATING UNIQUE INSTANCE FOR EACH THREAD")
+        #         plugins = None
+        #     else:
+        #         pass
+        plugins = None
+        for i, state in enumerate(tradestudy.get_states()):
             self.run_solution(state, plugins, i)
-        self.study.save()
-
 
     def sort_steps(self):
         step_names = self.study.solution.get_step_names()
