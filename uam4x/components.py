@@ -175,6 +175,44 @@ class Mode:
         self._overrides = {}
         self.component = component  # Reference to parent component for inheritance
 
+    def set_parameter(self, name: str, value):
+        """
+        Set a parameter override for this mode.
+
+        Parameters
+        ----------
+        name : str
+            Parameter name.
+        value : Any
+            Value to set.
+        """
+        if name not in self.component._parameters:
+            raise AttributeError(f"Parameter '{name}' does not exist in component '{self.component.name}' for mode '{self.name}'")
+        dtype = self.component._parameters[name].dtype
+        if not isinstance(value, dtype):
+            raise TypeError(f"Override for parameter '{name}' in mode '{self.name}' must be of type {dtype.__name__}, got {type(value).__name__}")
+        self._overrides[name] = value
+
+    def get_parameter(self, name: str):
+        """
+        Get the value of a parameter override or inherited from the component.
+
+        Parameters
+        ----------
+        name : str
+            Parameter name.
+
+        Returns
+        -------
+        Any
+            The value of the parameter.
+        """
+        if name in self._overrides:
+            return self._overrides[name]
+        if name in self.component._parameters:
+            return self.component._parameters[name].value
+        raise AttributeError(f"Parameter '{name}' does not exist in component '{self.component.name}' for mode '{self.name}'")
+
     def __getattr__(self, item):
         """
         Get an attribute or parameter override from the mode or parent component.
@@ -191,7 +229,7 @@ class Mode:
         # Only called if attribute not found in normal places
         if item in self._overrides:
             return self._overrides[item]
-        if self.component and hasattr(self.component, item):
+        if self.component and hasattr(self.component, item) and not isinstance(getattr(self.component, item), Mode) and not callable(getattr(self.component, item)):
             return getattr(self.component, item)
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
 
