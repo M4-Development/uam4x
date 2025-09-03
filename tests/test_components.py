@@ -74,6 +74,25 @@ def test_child_component_all_types():
     assert child.mode2.int_param == 0
     assert child.mode2.str_param == "zero"
     assert child.mode2.bool_param is True
+    assert child.baseline.float_param == 3.45
+    assert child.baseline.int_param == 123
+    assert child.baseline.str_param == "alt"
+    assert child.baseline.bool_param is True
+
+    # Add another mode
+    mode3 = child.add_mode("mode3")
+    mode3.set_parameter("float_param", 5.0)
+    mode3.set_parameter("int_param", 10)
+    mode3.set_parameter("str_param", "ten")
+    mode3.set_parameter("bool_param", False)
+    assert child.mode3.float_param == 5.0
+    assert child.mode3.int_param == 10
+    assert child.mode3.str_param == "ten"
+    assert child.mode3.bool_param is False
+    assert child.baseline.float_param == 3.45
+    assert child.baseline.int_param == 123
+    assert child.baseline.str_param == "alt"
+    assert child.baseline.bool_param is True
     # Incorrect usage: wrong type
 
     with pytest.raises(TypeError):
