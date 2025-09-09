@@ -1,9 +1,13 @@
-# Component/Mode/Parameter system with inheritance
-# Classic class-based implementation (no dataclasses)
+import os
+
+
 from uam4x.units import (
     UnitType, LengthUnit, AngleUnit, MassUnit, TimeUnit, ForceUnit, TemperatureUnit, PressureUnit, EnergyUnit, PowerUnit, VolumeUnit, AreaUnit, SpeedUnit, AccelerationUnit
 )
 from enum import Enum
+
+import json
+import importlib.util
 
 _type_map = {
     "int": int,
@@ -444,6 +448,7 @@ class Component:
                 mode_result[pname] = isinstance(override_value, dtype)
             result[mode_name] = mode_result
         return result
+
     def __str__(self):
         """
         Returns a string representation of the component and its parameters.
@@ -455,6 +460,7 @@ class Component:
         param_strs = [str(param) for param in self._parameters.values()]
         params = "\n    ".join(param_strs)
         return f"{self.__class__.__name__}('{self.name}')\n    {params}"
+
     def _to_dict(self) -> dict:
         """
         Serialize the component to a JSON-serializable dictionary.
@@ -469,6 +475,7 @@ class Component:
             "parameters": {k: v._to_dict() for k, v in self._parameters.items()},
             "modes": {k: {"overrides": dict(mode._overrides)} for k, mode in self._modes.items()}
         }
+
     @classmethod
     def _from_dict(cls, data: dict) -> 'Component':
         """
@@ -508,9 +515,20 @@ class Component:
         """
         return {name: param.value for name, param in self._parameters.items()}
 
-
 def register_component(cls):
-    _component_registry[cls.__name__] = cls
+    comp_name = cls.__name__
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
+    with open(config_path, 'r')as configfile:
+        _config = json.load(configfile)
+
+    if comp_name in _config['COMPONENTS'] and _config['COMPONENTS'][comp_name] != importlib.util.find_spec(cls.__module__).origin:
+        print(f"WARNING: Component '{comp_name}' already registered\nOverwritting existing data")
+    if not "uam4x.components" in cls.__module__.replace('.', '/'):
+        _config['COMPONENTS'][comp_name] = importlib.util.find_spec(cls.__module__).origin
+        with open(config_path, 'w') as configfile:
+            json.dump(_config, configfile, indent=4)
+
+    _component_registry[comp_name] = cls
     return cls
 
 # Wing component with only span, chord, and sweep
@@ -543,12 +561,10 @@ class Aircraft(Component):
 def get_commponent_class(component_name):
     if not component_name in _component_registry:
         msg = f"Component '{component_name}' was not registered. Please check the following:\n"
-        msg += f"\t1. Does the Component exist / did you spell the name correctly?\n"
-        msg += f"\t2. Did you import the file containing the Component?\n"
-        msg += f"\t3. Does the Component definition have the @register_component decorator?\n"
+        msg += f"\t1. Did you register the component using the @register_component?\n"
+        msg += f"\t2. Were there Plugin Load Errors when you imported uam4x?\n"
         raise ImportError(msg)
     return _component_registry[component_name]
-
 
 # --- Test script ---
 if __name__ == "__main__":
@@ -580,4 +596,4 @@ if __name__ == "__main__":
 
     import json
     with open('temp.json', 'w') as f:
-        json.dump(wing._to_dict(), f, indent=2)
+        json.dump(wing._to_dict(), f, indent=4)

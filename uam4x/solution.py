@@ -1,4 +1,8 @@
 from typing import Callable
+import os
+import json
+import importlib.util
+
 _plugin_registry = {}
 
 class Solution:
@@ -105,15 +109,27 @@ class Plugin():
 
 
 def register_plugin(cls):
-    _plugin_registry[cls.__name__] = cls
+    plugin_name = cls.__name__
+
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
+    with open(config_path, 'r')as configfile:
+        _config = json.load(configfile)
+
+    if plugin_name in _config['PLUGINS'] and _config['PLUGINS'][plugin_name] != importlib.util.find_spec(cls.__module__).origin:
+        print(f"WARNING: Plugin '{plugin_name}' already registered\nOverwritting existing data")
+
+    _config['PLUGINS'][plugin_name] = importlib.util.find_spec(cls.__module__).origin
+    with open(config_path, 'w') as configfile:
+            json.dump(_config, configfile, indent=4)
+
+    _plugin_registry[plugin_name] = cls
     return cls
 
 def get_plugin_class(plugin_name):
     if not plugin_name in _plugin_registry:
         msg = f"Plugin '{plugin_name}' was not registered. Please check the following:\n"
-        msg += f"\t1. Does the plugin exist / did you spell the name correctly?\n"
-        msg += f"\t2. Did you import the file containing the plugin?\n"
-        msg += f"\t3. Does the plugin definition have the @register_plugin decorator?\n"
+        msg += f"\t1. Did you register the plugin using the @register_plugin?\n"
+        msg += f"\t2. Were there Plugin Load Errors when you imported uam4x?\n"
         raise ImportError(msg)
     return _plugin_registry[plugin_name]
 
