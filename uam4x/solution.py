@@ -133,3 +133,7 @@ def get_plugin_class(plugin_name):
         raise ImportError(msg)
     return _plugin_registry[plugin_name]
 
+def get_plugin_names():
+    """Get a list of all registered plugin names."""
+    return list(_plugin_registry.keys())
+
