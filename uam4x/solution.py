@@ -2,7 +2,7 @@ from typing import Callable
 import os
 import json
 import importlib.util
-
+from uam4x.utils import check_and_get_config
 _plugin_registry = {}
 
 class Solution:
@@ -112,8 +112,7 @@ def register_plugin(cls):
     plugin_name = cls.__name__
 
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
-    with open(config_path, 'r')as configfile:
-        _config = json.load(configfile)
+    _config = check_and_get_config(config_path)
 
     if plugin_name in _config['PLUGINS'] and _config['PLUGINS'][plugin_name] != importlib.util.find_spec(cls.__module__).origin:
         print(f"WARNING: Plugin '{plugin_name}' already registered\nOverwritting existing data")

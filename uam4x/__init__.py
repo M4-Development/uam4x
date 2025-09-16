@@ -1,7 +1,7 @@
 
 from uam4x.components import register_component, Component, _component_registry
 from uam4x.solution import register_plugin, Plugin, _plugin_registry
-
+from uam4x.utils import check_and_get_config
 import os
 import json
 
@@ -10,20 +10,8 @@ import sys
 from pathlib import Path
 
 _conf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
-if not os.path.exists(_conf_path):
-    with open(_conf_path, 'w') as configfile:
-        json.dump({},configfile)
-with open(_conf_path, 'r') as configfile:
-    try:
-        _config = json.load(configfile)
-    except json.decoder.JSONDecodeError:
-        print("WARNING: Could not load conf.json")
-        _config = {}
+_config = check_and_get_config(_conf_path)
 
-if 'COMPONENTS' not in _config:
-    _config['COMPONENTS'] = {}
-    with open(_conf_path, 'w') as configfile:
-        json.dump(_config, configfile, indent=4)
 for _comp_name, _python_file_path in _config['COMPONENTS'].items():
     # Check if this is a built-in component from uam4x/uam4x/components.py
     is_builtin = ("uam4x" == os.path.split(_python_file_path)[-2] and
@@ -44,10 +32,7 @@ for _comp_name, _python_file_path in _config['COMPONENTS'].items():
             print(f"WARNING: Component load error. Could not find {_comp_name} in {_python_file_path}")
     # Built-in components are already loaded via "from uam4x.components import ..." at the top
 
-if 'PLUGINS' not in _config:
-    _config['PLUGINS'] = {}
-    with open(_conf_path, 'w') as configfile:
-        json.dump(_config, configfile, indent=4)
+
 for _plugin_name, _python_file_path in _config['PLUGINS'].items():
     # Create unique module name to avoid conflicts
     _module_name = f"{Path(_python_file_path).parent.name}.{Path(_python_file_path).stem}"

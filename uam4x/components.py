@@ -4,6 +4,8 @@ import os
 from uam4x.units import (
     UnitType, LengthUnit, AngleUnit, MassUnit, TimeUnit, ForceUnit, TemperatureUnit, PressureUnit, EnergyUnit, PowerUnit, VolumeUnit, AreaUnit, SpeedUnit, AccelerationUnit
 )
+from uam4x.utils import check_and_get_config
+
 from enum import Enum
 
 import json
@@ -517,9 +519,17 @@ class Component:
 
 def register_component(cls):
     comp_name = cls.__name__
+
+    # Only register in the registry, don't modify conf.json for built-in components
+    # when running components.py directly
+    if cls.__module__ == "__main__":
+        _component_registry[comp_name] = cls
+        return cls
+
+    # For external components, update conf.json
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
-    with open(config_path, 'r')as configfile:
-        _config = json.load(configfile)
+    _config = check_and_get_config(config_path)
+
 
     if comp_name in _config['COMPONENTS'] and _config['COMPONENTS'][comp_name] != importlib.util.find_spec(cls.__module__).origin:
         print(f"WARNING: Component '{comp_name}' already registered\nOverwritting existing data")
