@@ -168,6 +168,80 @@ class Study:
             if dependent_split[0] == step_name:
                 inputs[".".join(dependent_split[1:])] = self._get_value_with_overwrites(independent, state)
         return inputs
+
+    def get_all_names_by_category(self):
+        """
+        Get all possible vehicle names and step input/output names.
+
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - 'vehicle_names': List of all possible vehicle parameter names (e.g., 'vehicles.veh1.wing1.mode.span')
+            - 'step_inputs': List of all step input names (e.g., 'step1.weights.wing_weight')
+            - 'step_outputs': List of all step output names (e.g., 'step1.weights.wing_weight')
+        """
+        vehicle_names = []
+        step_inputs = []
+        step_outputs = []
+
+        # Get all vehicle parameter names
+        for vehicle_name, vehicle in self.vehicles.items():
+            for component in vehicle.components:
+                # Add baseline parameters
+                for param_name in component._parameters.keys():
+                    vehicle_names.append(f"vehicles.{vehicle_name}.{component.name}.{param_name}")
+
+                # Add mode parameters
+                for mode_name, mode in component._modes.items():
+                    for param_name in component._parameters.keys():
+                        vehicle_names.append(f"vehicles.{vehicle_name}.{component.name}.{mode_name}.{param_name}")
+
+        # Get step input and output names from links
+        for independent, dependent in self.solution.links:
+            # Extract step name from dependent (input)
+            dependent_parts = dependent.split('.')
+            if len(dependent_parts) > 1:
+                step_name = dependent_parts[0]
+                if step_name.startswith('step'):
+                    step_inputs.append(dependent)
+
+            # Extract step name from independent (output)
+            independent_parts = independent.split('.')
+            if len(independent_parts) > 1:
+                step_name = independent_parts[0]
+                if step_name.startswith('step'):
+                    step_outputs.append(independent)
+
+        # Add tracked outputs as step outputs
+        for tracked_output in self.solution.tracked_outputs:
+            output_parts = tracked_output.split('.')
+            if len(output_parts) > 1:
+                step_name = output_parts[0]
+                if step_name.startswith('step'):
+                    step_outputs.append(tracked_output)
+
+        # Remove duplicates and sort
+        vehicle_names = sorted(list(set(vehicle_names)))
+        step_inputs = sorted(list(set(step_inputs)))
+        step_outputs = sorted(list(set(step_outputs)))
+
+        return {
+            'vehicle_names': vehicle_names,
+            'step_inputs': step_inputs,
+            'step_outputs': step_outputs
+        }
+
+    def get_all_names(self):
+        """
+        Get all possible vehicle names and step input/output names.
+
+        Returns:
+            list: List of all possible vehicle names and step input/output names.
+        """
+        all_names = self.get_all_names_by_category()
+        return all_names['vehicle_names'] + all_names['step_inputs'] + all_names['step_outputs']
+
 class Variants:
     def __init__(self, dir: str) -> None:
         self.dir = dir
@@ -211,6 +285,13 @@ if __name__ == "__main__":
     # Define a solution with at least 2 steps
     solution = Solution()
 
+    # Add some example links and tracked outputs for testing
+    solution.add_link("vehicles.TestVehicle.left_wing.span", "step1.inputs.wing_span")
+    solution.add_link("vehicles.TestVehicle.right_wing.span", "step1.inputs.wing_span_right")
+    solution.add_link("step1.outputs.wing_weight", "step2.inputs.weight")
+    solution.add_tracked_output("step1.outputs.wing_weight")
+    solution.add_tracked_output("step2.outputs.total_weight")
+
     # Define a control with a sweep and an optimization child
     opt = Optimization(
         des_var_names=["x", "y"],
@@ -244,3 +325,16 @@ if __name__ == "__main__":
     print("Parameter sweep states:")
     for state in sweep.get_states():
         print(state)
+
+    # Test the new get_all_names method
+    print("\n=== Testing get_all_names method ===")
+    all_names = study.get_all_names()
+    print("Vehicle names:")
+    for name in all_names['vehicle_names']:
+        print(f"  {name}")
+    print("Step inputs:")
+    for name in all_names['step_inputs']:
+        print(f"  {name}")
+    print("Step outputs:")
+    for name in all_names['step_outputs']:
+        print(f"  {name}")
