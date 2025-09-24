@@ -4,6 +4,7 @@ from uam4x.vehicle import Vehicle
 import json
 import os
 import copy
+
 class _Overwrite():
     def __init__(self, param_state:dict) -> None:
         self.param_state = param_state
@@ -53,6 +54,9 @@ class Study:
         self.solution = Solution()
         self.control = Control()
         self._overwrites = []
+
+    def add_trade(self, trade_name:str, trade) -> None:
+        self.control.add_trade(trade_name, trade)
 
     def add_vehicle(self, vehicle) -> None:
         if vehicle.name in self.vehicles:
@@ -161,6 +165,42 @@ class Study:
                 return
         temp_over.add_item(name, value)
         self._overwrites.append(temp_over)
+
+    #TODO:
+    # make comment numpy style
+    # maybe add a general get type, that then calls get vehicle param type if vehicle param or get plugin input/output type if plugin
+    # this might need to be moved outside of study if plugins is required to parse plugin inputs/outputs
+    def get_param_type(self, dotted_path: str, plugins=None):
+        '''
+        Get a the type of a given parameter
+        assumes general form vehicles. ... .attribute
+        '''
+        parts = dotted_path.split('.')
+        obj = self
+        if parts[0] == 'vehicles':
+            for part in parts:
+                # Try dict access first (for vehicles, parameters, etc.)
+                if isinstance(obj, dict) and part in obj:
+                    obj = obj[part]
+                # Try attribute access
+                elif hasattr(obj, part):
+                    if hasattr(obj, 'get_parameter_type'):
+                        return obj.get_parameter_type(part)
+                    else:
+                        obj = getattr(obj, part)
+                else:
+                    raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
+        elif plugins:
+            plugin_name = dotted_path.split('.')[0]
+            part = '.'.join(dotted_path.split('.')[1:])
+            plugin = plugins[plugin_name]
+            if part in  plugin.plugin_input_names:
+                obj = plugin.plugin_input_names[part]['type']
+            elif part in  plugin.plugin_output_names:
+                obj = plugin.plugin_output_names[part]['type']
+
+        return obj
+
     def get_plugin_inputs(self, step_name, state):
         inputs = {}
         for (independent, dependent) in self.solution.links:
@@ -306,7 +346,7 @@ if __name__ == "__main__":
         param_name_to_value_list={
             "param1": [1, 2, 3],
             "param2": [10, 20, 30],
-        },
+            },
         child=opt
     )
     control = Control(title="Demo Study Control", author="UAM", description="Demo control for study")
