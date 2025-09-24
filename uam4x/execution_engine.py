@@ -1,6 +1,7 @@
 from uam4x.study import Study
 import os
 from uam4x.openmdao_optimization import Optimization
+import copy
 
 class Engine:
 
@@ -12,6 +13,35 @@ class Engine:
         self.current_sweep_values = {}
         self.work_dir = work_dir
         os.makedirs(self.work_dir, exist_ok=True)
+        self.trade_to_check_partials = {}
+
+    def check_partials(self, trade_name, form='forward', step=1.e-6):
+
+        #Standard setup:
+        self.sort_steps()
+        tradestudy = self.study.control.trade_studies[trade_name]
+
+        # Sample state, doesn't really matter here, special check
+        # partials directory created
+        sample_state = copy.deepcopy(tradestudy.get_states()[0])
+        out_dir = os.path.join(self.work_dir, f"check_partials")
+        os.makedirs(out_dir, exist_ok=True)
+
+        plugins = {}
+        for step_name, step_info in self.study.solution.steps.items():
+            plugin = step_info["plugin"]()
+            plugin.setup_plugin(step_info["plugin_options"])
+            plugins[step_name] = plugin
+
+        cwd = os.getcwd()
+        os.chdir(out_dir)
+        opt = Optimization(self.study, sample_state, plugins, out_dir, check_partials=True)
+        problem = opt.run_problem()
+
+        problem.check_partials(step=step, form=form, compact_print=True)
+        os.chdir(cwd)
+
+
 
     # def are_plugins_threadsafe(self):
     #     for step_name, step_info in self.study.solution.steps.items():
@@ -41,6 +71,36 @@ class Engine:
                 plugin = step_info["plugin"]()
                 plugin.setup_plugin(step_info["plugin_options"])
                 plugins[step_name] = plugin
+
+        # check link coherance (types)
+        bad_links = []
+        for link in  self.study.solution.links:
+            output_link = link[0]
+            input_link = link[1]
+            output_type = self.study.get_param_type(output_link, plugins)
+            input_type = self.study.get_param_type(input_link, plugins)
+            if output_type != input_type:
+                bad_links.append((output_link,output_type, input_link, input_type))
+
+        if bad_links:
+            msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
+            raise TypeError(msg)
+
+        for step_name in self.study.solution.steps:
+            # Check that links matched declared plugin I/O
+            input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
+
+            #check coherance of declared I/O from plugin and from branching script
+            for input_name in  input_names:
+                name = '.'.join(input_name.split('.')[1:])
+                if name not  in plugins[step_name].plugin_input_names:
+                    raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                     f"Check your plugin's setup() step for I/O declaration")
+            for output_name in  output_names:
+                name = '.'.join(output_name.split('.')[1:])
+                if name not  in plugins[step_name].plugin_output_names:
+                    raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                     f"Check your plugin's setup() step for I/O declaration")
 
         os.makedirs(out_dir, exist_ok=True)
         if state['optimization']:
@@ -74,7 +134,6 @@ class Engine:
     def run_tradestudy(self, trade_name, num_processesors=None, commit=False):
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
-
         # plugins = self.init_plugins()
 
         # if num_processesors:

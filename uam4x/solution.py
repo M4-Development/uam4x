@@ -4,6 +4,9 @@ import json
 import importlib.util
 from uam4x.utils import check_and_get_config
 _plugin_registry = {}
+from collections.abc import Sequence
+from numbers import  Real
+from itertools import  product
 
 class Solution:
     def __init__(self) -> None:
@@ -96,7 +99,18 @@ class Solution:
 class Plugin():
     def __init__(self) -> None:
         self.discrete_names = []
+        self._declare_partials = False
+        self._check_partials_options = False
+        self.partials_counter = 0
+        self.initial_partials = []
+        self.comprehensive_partials_dict = {}
+        self.method_to_partial = {}
+        self.plugin_input_names = {}
+        self.plugin_output_names = {}
+        self.partial_2d_list = []
 
+    def declare_discrete(self, name):
+        self.discrete_names.append(name)
 
     def setup_plugin(self, plugin_options:dict):
         pass
@@ -104,8 +118,144 @@ class Plugin():
     def run_plugin(self, links:dict, work_dir:str):
         pass
 
-    def declare_discrete(self, name):
-        self.discrete_names.append(name)
+    def declare_partials_plugin(self, of: str|Sequence[str], wrt: str|Sequence[str], method='fd', step=None, form=None):
+        '''
+        User can declare partials as many times as they want here, and this is
+        stored in a dictionary which will eventually be consolidated into a single
+        partials dictionary.
+        '''
+
+        # Check type of input, if string, wrap with list
+        if type(of) == str:
+            of = [of]
+        # Check type of output, if string, wrap with list
+        if type(wrt) == str:
+            wrt = [wrt]
+
+        # Error checking
+        if method not in ['fd', 'exact']:
+            raise ValueError(f'Cannot use methods other than exact or fd, user used method: {method}')
+
+        if method == 'fd':
+            if step is  not None:
+                if not isinstance(step, Real):
+                    raise ValueError(f'Step size must be a real number. The step size {step} is not valid')
+                if step <= 0:
+                    raise ValueError(f'Step size must be greater than zero. The step size {step} is not valid')
+            if form is not None:
+                if form not in ['forward', 'backward', 'central']:
+                    raise ValueError('Only allowed finite difference forms are: forward,\n'
+                                     f'backward, and central. The form: {form} is not valid')
+        else:
+            if step is  not None:
+                raise ValueError(f'User specified {method} method, which does not take in a step.\n'
+                                 f'Instead, leave step blank or set it equal to None')
+            if form is  not None:
+                raise ValueError(f'User specified {method} method, which does not take in a form.\n'
+                                 f'Instead, leave step blank or set it equal to None')
+
+        self.partials_counter += 1
+        self.initial_partials.append({'of': of,'wrt': wrt,'method': method, 'step': step, 'form': form})
+
+
+
+    def build_partials(self, input_names, output_names):
+        '''
+        Builds a comprehensive dictionary of partials
+        seperated by method (note only fd and exact allowed so far)
+        '''
+
+        # Validate names
+        # Collect declared names
+        partial_ins = set()
+        partial_outs = set()
+        for data in  self.initial_partials:
+            if data['wrt'] != ['*']:
+                for inp in  data['wrt']:
+                    partial_ins.add(inp)
+            if data['of'] != ['*']:
+                for out in  data['of']:
+                    partial_outs.add(out)
+
+        # Collect actual names
+        local_output_names = set()
+        local_input_names = set()
+        for output_name in  output_names:
+            output_name = '.'.join(output_name.split('.')[1:])
+            local_output_names.add(output_name)
+
+        for input_name in  input_names:
+            input_name = '.'.join(input_name.split('.')[1:])
+            local_input_names.add(input_name)
+
+        #Note the empty set is a subset of all other sets
+        if not partial_ins.issubset(local_input_names):
+            raise ValueError(f'Inputs and partials do not match:\n'
+                             f'Inputs: {input_names}\n'
+                             f'Partial inputs: {partial_ins}\n')
+        if not partial_outs.issubset(local_output_names):
+            raise ValueError(f'Outputs and partials do not match:\n'
+                             f'Outputs: {output_names}\n'
+                             f'Partial outputs: {partial_outs}\n')
+
+        #overwrites so declared partials order is last out
+        self.comprehensive_partials_dict = {}
+        for data in  self.initial_partials:
+            if data['of'] == ['*']:
+                ofs = local_output_names
+            else:
+                ofs = data['of']
+
+            if data['wrt'] == ['*']:
+                wrts = local_input_names
+            else:
+                wrts = data['wrt']
+
+            for in_name, out_name in product(ofs, wrts):
+                self.comprehensive_partials_dict[(in_name, out_name)] =  {'method': data['method'],
+                                                                                     'form': data['form'],
+                                                                                     'step':data['step'] }
+
+        return self.comprehensive_partials_dict
+
+    def categorize_partials(self):
+
+        method_to_partial = {'fd': [],'exact': []}
+        for pair, data in  self.comprehensive_partials_dict.items():
+            if data['method'] == 'fd':
+                method_to_partial['fd'].append(pair)
+            elif data['method'] == 'exact':
+                method_to_partial['exact'].append(pair)
+
+        self.method_to_partial = method_to_partial
+
+        if method_to_partial['exact']:
+            self._declare_partials = True
+
+        return self.method_to_partial
+
+
+    def compute_partials_plugin(self, links: dict):
+        pass
+
+    def set_check_partials_options(self, form='forward', step=None):
+        self._check_partials_options = True
+        self.check_form = form
+        self.check_step = step
+
+    def declare_input(self, name, var_type, value=None):
+        if '~' in  name:
+            raise ValueError('Tildes (~) are not allowed in variable names\n'
+                             f'The following name is not allowed: {name}')
+        self.plugin_input_names[name] = {'type': var_type, 'value': value}
+        # add row of defaults to 2d list
+
+    def declare_output(self, name, var_type, value=None):
+        if '~' in  name:
+            raise ValueError('Tildes (~) are not allowed in variable names\n'
+                             f'The following name is not allowed: {name}')
+        self.plugin_output_names[name] = {'type': var_type,'value': value}
+        #add column of defaults to 2d list
 
 
 def register_plugin(cls):
@@ -119,7 +269,7 @@ def register_plugin(cls):
 
     _config['PLUGINS'][plugin_name] = importlib.util.find_spec(cls.__module__).origin
     with open(config_path, 'w') as configfile:
-            json.dump(_config, configfile, indent=4)
+        json.dump(_config, configfile, indent=4)
 
     _plugin_registry[plugin_name] = cls
     return cls

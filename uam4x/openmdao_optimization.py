@@ -2,13 +2,15 @@ import openmdao.api as om
 from uam4x.study import Study
 import os
 import shutil
+from uam4x.utils import check_continuous
 
 class Optimization:
-    def __init__(self, study:Study, state, plugins, out_dir) -> None:
+    def __init__(self, study:Study, state, plugins, out_dir,check_partials=False) -> None:
         self.study = study
         self.state = state
         self.plugins = plugins
         self.out_dir = out_dir
+        self.check_partials = check_partials
 
     def run_problem(self):
         problem = om.Problem()
@@ -24,13 +26,36 @@ class Optimization:
 
         #make plugin steps
         for step_name in self.study.solution.steps:
-            input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
+            input_names = set([step_name + '.' + input_name for input_name in set(self.plugins[step_name].plugin_input_names.keys())])
+            output_names = set([step_name + '.' + output_name for output_name in set(self.plugins[step_name].plugin_output_names.keys())])
             comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(), promotes=['*'])
             comp.options["plugin"] = self.plugins[step_name]
             comp.options["input_names"] = input_names
             comp.options["output_names"] = output_names
             comp.options["work_dir"] = os.path.join(self.out_dir, step_name)
             comp.options["step_name"] = step_name
+
+            # Check for discrete I/O passing
+            for link in  self.study.solution.links:
+                input_name = link[0]
+                output_name = link[1]
+                link_input_plugin = input_name.split('.')[0]
+                link_output_plugin = output_name.split('.')[0]
+                if link_input_plugin in  self.study.solution.steps and  link_output_plugin in  self.study.solution.steps:
+                    link_input_var_name =  '.'.join(input_name.split('.')[1:])
+                    link_output_var_name = '.'.join(output_name.split('.')[1:])
+                    input_type = self.plugins[link_input_plugin].plugin_output_names[link_input_var_name]['type']
+                    output_type = self.plugins[link_output_plugin].plugin_input_names[link_output_var_name]['type']
+                    if not check_continuous(input_type):
+                        raise TypeError(f"Links between optimization components must be continuous (of type float)\n"
+                                        f"Check I/O declarations in plugin: {link_input_plugin}\n"
+                                         f"Variable in violation: {input_name}")
+
+                    if not check_continuous(output_type):
+                        raise TypeError(f"Links between optimization components must be continuous (of type float)\n"
+                                        f"Check I/O declarations in plugin: {link_input_plugin}\n"
+                                         f"Variable in violation: {output_name}")
+
 
         # Add connections
         for independent, dependent in self.study.solution.links:
@@ -42,25 +67,49 @@ class Optimization:
             self.state['des_var_names'],
             self.state['des_var_lower'],
             self.state['des_var_upper'],
-        ):
+            ):
+
+            des_var_type = self.study.get_param_type(name)
+            if not check_continuous(des_var_type):
+                raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
+                                f'Only floats allowed as design variables')
+
             problem.model.add_design_var(name.replace(".", "~"), float(lower), float(upper))
+
 
         # add constraints
         for name, lower, upper in zip(
             self.state['constraint_names'],
             self.state['constraint_lower'],
             self.state['constraint_upper'],
-        ):
+            ):
+
+            constraint_type = self.study.get_param_type(name, self.plugins)
+            is_continuous = check_continuous(constraint_type)
+            if not is_continuous:
+                raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
+                                f'Only floats allowed as constraints')
+
             problem.model.add_constraint(name.replace(".", "~"), float(lower), float(upper))
 
         # add objectives
+        objective_type = self.study.get_param_type(self.state["objective_name"], self.plugins)
+        is_continuous = check_continuous(objective_type)
+        if not is_continuous:
+            raise TypeError(f'The objective: {self.state["objective_name"]} is of type {objective_type}\n'
+                            f'Only floats allowed as objectives')
+
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
         problem.driver = om.ScipyOptimizeDriver()
         problem.driver.options['optimizer'] = 'SLSQP'
         problem.setup()
         problem.run_driver()
-        for tracked_output in self.study.solution.tracked_outputs + self.state['des_var_names']:
-            self.study._add_overwrite(self.state, tracked_output, problem.get_val(tracked_output.replace(".", "~"))[0])
+
+        if not self.check_partials:
+            for tracked_output in self.study.solution.tracked_outputs + self.state['des_var_names']:
+                self.study._add_overwrite(self.state, tracked_output, problem.get_val(tracked_output.replace(".", "~"))[0])
+
+        return problem
 
 class OpenmdaoPreComp(om.IndepVarComp):
     def initialize(self):
@@ -85,36 +134,52 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         self.step_name = self.options["step_name"]
         cont_input = False
         cont_output = False
+        if self.plugin._check_partials_options:
+            self.set_check_partial_options(wrt=['*'], form=self.plugin.check_form, step=self.plugin.check_step)
+
         for input_name in self.input_names:
-            if '.'.join(input_name.split('.')[1:]) in self.plugin.discrete_names:
+            name = '.'.join(input_name.split('.')[1:])
+            input_type = self.plugin.plugin_input_names[name]['type']
+            if not check_continuous(input_type):
                 self.add_discrete_input(input_name.replace(".", "~"), val='temp')
             else:
                 cont_input = True
                 self.add_input(input_name.replace(".", "~"))
         for output_name in self.output_names:
-            if '.'.join(output_name.split('.')[1:]) in self.plugin.discrete_names:
+            name = '.'.join(output_name.split('.')[1:])
+            output_type = self.plugin.plugin_output_names[name]['type']
+            if not check_continuous(output_type):
                 self.add_discrete_output(output_name.replace(".", "~"), val='temp')
             else:
                 cont_output = True
                 self.add_output(output_name.replace(".", "~"))
 
         if cont_input and cont_output:
-            self.declare_partials("*", "*", method='fd')
+            partials = self.plugin.build_partials(self.input_names, self.output_names)
+            self.plugin.categorize_partials()
+            for pair,data in  partials.items():
+                of = self.step_name + '~' + pair[0]
+                wrt = self.step_name + '~' + pair[1]
+                method = data['method']
+                step = data['step']
+                form = data['form']
+                self.declare_partials(of=of, wrt=wrt, method=method, step=step, form=form)
+
 
     def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
         if os.path.isdir(self.work_dir):
             shutil.rmtree(self.work_dir)
         os.makedirs(self.work_dir)
-        plugin_dict = {}
+        self.plugin_dict = {}
         for name, value in inputs.items():
             plugin_name = name.replace("~", ".")
-            pluing_name = ".".join(plugin_name.split(".")[1:])
-            plugin_dict[pluing_name] = value[0]
+            plugin_name = ".".join(plugin_name.split(".")[1:])
+            self.plugin_dict[plugin_name] = value[0]
         for name, value in discrete_inputs.items():
             plugin_name = name.replace("~", ".")
-            pluing_name = ".".join(plugin_name.split(".")[1:])
-            plugin_dict[pluing_name] = value
-        results = self.plugin.run_plugin(plugin_dict, self.work_dir)
+            plugin_name = ".".join(plugin_name.split(".")[1:])
+            self.plugin_dict[plugin_name] = value
+        results = self.plugin.run_plugin(self.plugin_dict, self.work_dir)
         for name, value in results.items():
             name_with_plugin = self.step_name + "." + name
             if name_with_plugin in self.output_names:
@@ -122,3 +187,19 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                     discrete_outputs[name_with_plugin.replace(".", "~")] = value
                 else:
                     outputs[name_with_plugin.replace(".", "~")] = value
+
+    def compute_partials(self, inputs, partials, discrete_inputs={}):
+        if not self.plugin._declare_partials:
+            return
+        else:
+            results = self.plugin.compute_partials_plugin(self.plugin_dict)
+            for name, value in  results.items():
+                output_name = self.step_name + '.' + name[0]
+                input_name = self.step_name + '.' + name[1]
+
+                if output_name in self.output_names and  input_name in  self.input_names:
+                    output_name_with_plugin = output_name.replace('.', '~')
+                    input_name_with_plugin = input_name.replace('.', '~')
+                    partials[output_name_with_plugin, input_name_with_plugin] = value
+                else:
+                    raise ValueError('Missing links somewhere')
