@@ -431,6 +431,25 @@ class Component:
             raise AttributeError(f"Parameter '{param_name}' not defined for {self.__class__.__name__}.")
         return self._parameters[param_name].value
 
+    def  get_parameter_type(self, param_name: str):
+        """
+        Get the type of a parameter by name.
+
+        Parameters
+        ----------
+        param_name : str
+            Name of the parameter.
+
+        Returns
+        -------
+        Any or None
+            The type of the parameter, or None if not found.
+        """
+
+        if param_name not in self._parameters:
+            raise AttributeError(f"Parameter '{param_name}' not defined for {self.__class__.__name__}.")
+        return self._parameters[param_name].dtype
+
     def check_all_parameter_types(self):
         """
         Check types of all parameters and mode overrides.
@@ -497,7 +516,7 @@ class Component:
         comp_class = get_commponent_class(comp_type)
         comp = comp_class(data["name"])
         for k, v in data["parameters"].items():
-             comp._parameters[k] = Parameter._from_dict(v)
+            comp._parameters[k] = Parameter._from_dict(v)
 
         # Modes
         for mode_name, mode_data in data["modes"].items():
