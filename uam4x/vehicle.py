@@ -41,7 +41,9 @@ class Vehicle:
         return self._name
 
     @name.setter
-    def name(self, value: str):
+    def name(self, value):
+        if not isinstance(value, str):
+            raise ValueError("Name must be a string.")
         self._name = value
 
     @property
