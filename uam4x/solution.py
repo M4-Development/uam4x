@@ -264,10 +264,22 @@ def register_plugin(cls):
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
     _config = check_and_get_config(config_path)
 
-    if plugin_name in _config['PLUGINS'] and _config['PLUGINS'][plugin_name] != importlib.util.find_spec(cls.__module__).origin:
+    # Handle case where module is run as __main__ (no __spec__)
+    try:
+        module_origin = importlib.util.find_spec(cls.__module__).origin
+    except (ValueError, AttributeError):
+        # If module is run as __main__, get the actual file path from sys.argv[0]
+        import sys
+        if sys.argv and len(sys.argv) > 0:
+            module_origin = os.path.abspath(sys.argv[0])
+        else:
+            # Fallback to current working directory + module name
+            module_origin = os.path.join(os.getcwd(), cls.__module__ + '.py')
+
+    if plugin_name in _config['PLUGINS'] and _config['PLUGINS'][plugin_name] != module_origin:
         print(f"WARNING: Plugin '{plugin_name}' already registered\nOverwritting existing data")
 
-    _config['PLUGINS'][plugin_name] = importlib.util.find_spec(cls.__module__).origin
+    _config['PLUGINS'][plugin_name] = module_origin
     with open(config_path, 'w') as configfile:
         json.dump(_config, configfile, indent=4)
 

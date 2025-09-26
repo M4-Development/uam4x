@@ -1,4 +1,28 @@
 from uam4x.components import Component
+class VehicleManager(list):
+
+    def __init__(self):
+        self._vehicles = []
+
+    def add_vehicle(self, vehicle):
+        if vehicle.name in self:
+            raise ValueError(f"Vehicle '{vehicle.name}' already exists in the study.")
+        self._vehicles.append(vehicle)
+
+
+    def get_vehicle(self, vehicle):
+        return self.vehicle_name
+
+    def __getattr__(self, item):
+        # Allow attribute access to components by their name
+        for veh in self._vehicles:
+            if veh.name == item:
+                return veh
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
+
+    def __iter__(self):
+        return self._vehicles.__iter__()
+
 class Vehicle:
     def __init__(self, name, components=None):
         """
@@ -65,6 +89,8 @@ class Vehicle:
         for cdata in data["components"]:
             v.add_component(Component._from_dict(cdata))
         return v
+
+
 
 
 if __name__ == "__main__":

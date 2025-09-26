@@ -3,6 +3,8 @@ import os
 from uam4x.openmdao_optimization import Optimization
 import copy
 
+from uam4x.utils import check_continuous
+
 class Engine:
 
     def __init__(self, study:Study, work_dir, num_processes=1) -> None:
@@ -59,7 +61,7 @@ class Engine:
     #         plugins[step_name].setup_plugin(step_info["plugin_options"])
     #     return plugins
 
-    def run_solution(self, state, plugins, iteration=None):
+    def run_solution(self, state, plugins, iteration=None, check=True):
         if not iteration is None:
             out_dir = os.path.join(self.work_dir, f"out_{iteration}")
         else:
@@ -72,35 +74,8 @@ class Engine:
                 plugin.setup_plugin(step_info["plugin_options"])
                 plugins[step_name] = plugin
 
-        # check link coherance (types)
-        bad_links = []
-        for link in  self.study.solution.links:
-            output_link = link[0]
-            input_link = link[1]
-            output_type = self.study.get_param_type(output_link, plugins)
-            input_type = self.study.get_param_type(input_link, plugins)
-            if output_type != input_type:
-                bad_links.append((output_link,output_type, input_link, input_type))
-
-        if bad_links:
-            msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
-            raise TypeError(msg)
-
-        for step_name in self.study.solution.steps:
-            # Check that links matched declared plugin I/O
-            input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
-
-            #check coherance of declared I/O from plugin and from branching script
-            for input_name in  input_names:
-                name = '.'.join(input_name.split('.')[1:])
-                if name not  in plugins[step_name].plugin_input_names:
-                    raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-                                     f"Check your plugin's setup() step for I/O declaration")
-            for output_name in  output_names:
-                name = '.'.join(output_name.split('.')[1:])
-                if name not  in plugins[step_name].plugin_output_names:
-                    raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-                                     f"Check your plugin's setup() step for I/O declaration")
+        if check:
+            self.check_model(plugins, state)
 
         os.makedirs(out_dir, exist_ok=True)
         if state['optimization']:
@@ -170,3 +145,120 @@ class Engine:
             raise RuntimeError("Circular Solution Sequence Detected!")
         else:
             self.study.solution._steps = dict(new_step_order)
+
+    def get_param_type(self, dotted_path: str, plugins):
+        '''
+        Get a the type of a given parameter
+        assumes general form vehicles. ... .attribute
+        '''
+        parts = dotted_path.split('.')
+        obj = self.study
+        if parts[0] == 'vehicles':
+            for part in parts:
+                # Try dict access first (for vehicles, parameters, etc.)
+                if isinstance(obj, dict) and part in obj:
+                    obj = obj[part]
+                # Try attribute access
+                elif hasattr(obj, part):
+                    if hasattr(obj, 'get_parameter_type'):
+                        return obj.get_parameter_type(part)
+                    else:
+                        obj = getattr(obj, part)
+                else:
+                    raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
+        elif plugins:
+            plugin_name = dotted_path.split('.')[0]
+            part = '.'.join(dotted_path.split('.')[1:])
+            plugin = plugins[plugin_name]
+            if part in  plugin.plugin_input_names:
+                obj = plugin.plugin_input_names[part]['type']
+            elif part in  plugin.plugin_output_names:
+                obj = plugin.plugin_output_names[part]['type']
+
+        return obj
+
+    def check_model(self, plugins, state):
+        self.check_links_to_plugins(plugins)
+        self.check_link_types(plugins)
+        if state['optimization']: #TODO can this not exist?
+            self.check_desvars(plugins, state)
+            self.check_constraints(plugins, state)
+            self.check_objective(plugins, state)
+            self.check_optimization_discrete(plugins, state)
+
+    def check_links_to_plugins(self, plugins):
+        for step_name in self.study.solution.steps:
+            # Check that links matched declared plugin I/O
+            input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
+
+            #check coherance of declared I/O from plugin and from branching script
+            for input_name in  input_names:
+                name = '.'.join(input_name.split('.')[1:])
+                if name not  in plugins[step_name].plugin_input_names:
+                    raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                     f"Check your plugin's setup() step for I/O declaration")
+            for output_name in  output_names:
+                name = '.'.join(output_name.split('.')[1:])
+                if name not  in plugins[step_name].plugin_output_names:
+                    raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                     f"Check your plugin's setup() step for I/O declaration")
+
+    def check_link_types(self, plugins):
+        bad_links = []
+        for link in  self.study.solution.links:
+            output_link = link[0]
+            input_link = link[1]
+            output_type = self.get_param_type(output_link, plugins)
+            input_type = self.get_param_type(input_link, plugins)
+            if output_type != input_type:
+                bad_links.append((output_link,output_type, input_link, input_type))
+
+        if bad_links:
+            msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
+            raise TypeError(msg)
+
+    def check_desvars(self, plugins, state):
+        # add desvars
+        for name, lower, upper in zip(
+            state['des_var_names'],
+            state['des_var_lower'],
+            state['des_var_upper'],
+            ):
+
+            des_var_type = self.get_param_type(name, plugins)
+            if not check_continuous(des_var_type):
+                raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
+                                f'Only floats allowed as design variables')
+    def check_constraints(self, plugins, state):
+        for name, lower, upper in zip(
+            state['constraint_names'],
+            state['constraint_lower'],
+            state['constraint_upper'],
+        ):
+            constraint_type = self.get_param_type(name, plugins)
+            is_continuous = check_continuous(constraint_type)
+            if not is_continuous:
+                raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
+                                f'Only floats allowed as constraints')
+    def check_objective(self, plugins, state):
+        objective_type = self.get_param_type(state["objective_name"], plugins)
+        is_continuous = check_continuous(objective_type)
+        if not is_continuous:
+            raise TypeError(f'The objective: {state["objective_name"]} is of type {objective_type}\n'
+                            f'Only floats allowed as objectives')
+
+    def check_optimization_discrete(self, plugins, state):
+        # Check for discrete I/O passing
+        for link in  self.study.solution.links:
+            input_name = link[0]
+            output_name = link[1]
+            link_input_plugin = input_name.split('.')[0]
+            link_output_plugin = output_name.split('.')[0]
+            if link_input_plugin in  self.study.solution.steps and  link_output_plugin in  self.study.solution.steps:
+                #not checking output since it should be the same as input
+                link_input_var_name =  '.'.join(input_name.split('.')[1:])
+                input_type = plugins[link_input_plugin].plugin_output_names[link_input_var_name]['type']
+                if not check_continuous(input_type):
+                    raise TypeError(f"Links between optimization components must be continuous (of type float)\n"
+                                    f"Check I/O declarations in plugin: {link_input_plugin}\n"
+                                        f"Variable in violation: {input_name}")

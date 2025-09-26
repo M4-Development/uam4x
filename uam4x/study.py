@@ -1,6 +1,6 @@
 from uam4x.solution import Solution
 from uam4x.control import Control
-from uam4x.vehicle import Vehicle
+from uam4x.vehicle import Vehicle, VehicleManager
 import json
 import os
 import copy
@@ -50,7 +50,7 @@ class _Overwrite():
 
 class Study:
     def __init__(self) -> None:
-        self.vehicles = {}
+        self.vehicles = VehicleManager()
         self.solution = Solution()
         self.control = Control()
         self._overwrites = []
@@ -59,19 +59,17 @@ class Study:
         self.control.add_trade(trade_name, trade)
 
     def add_vehicle(self, vehicle) -> None:
-        if vehicle.name in self.vehicles:
-            raise ValueError(f"Vehicle '{vehicle.name}' already exists in the study.")
-        self.vehicles[vehicle.name] = vehicle
+        return self.vehicles.add_vehicle(vehicle)
+
 
     def get_vehicle(self, vehicle_name: str):
-        if vehicle_name not in self.vehicles:
-            raise KeyError(f"Vehicle '{vehicle_name}' not found in the study.")
-        return self.vehicles[vehicle_name]
+        return self.vehicles.get_vehicle(vehicle_name)
+
     def _to_dict(self) -> dict:
         """Convert the study to a dictionary representation."""
         return {
             "control": self.control._to_dict(),
-            "vehicles": {k: v._to_dict() for k, v in self.vehicles.items()},
+            "vehicles": {v.name: v._to_dict() for v in self.vehicles},
             "solution": self.solution._to_dict(),
             "results": [overwrite.tracked_outputs(self.solution.tracked_outputs) for overwrite in self._overwrites]
         }
@@ -145,12 +143,6 @@ class Study:
             # Try attribute access
             elif hasattr(obj, part):
                 obj = getattr(obj, part)
-            # # Try __getitem__ for custom containers
-            # elif hasattr(obj, '__getitem__'):
-            #     try:
-            #         obj = obj[part]
-            #     except Exception:
-            #         raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
             else:
                 raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
         # If it's a Parameter, return its value
@@ -165,41 +157,6 @@ class Study:
                 return
         temp_over.add_item(name, value)
         self._overwrites.append(temp_over)
-
-    #TODO:
-    # make comment numpy style
-    # maybe add a general get type, that then calls get vehicle param type if vehicle param or get plugin input/output type if plugin
-    # this might need to be moved outside of study if plugins is required to parse plugin inputs/outputs
-    def get_param_type(self, dotted_path: str, plugins=None):
-        '''
-        Get a the type of a given parameter
-        assumes general form vehicles. ... .attribute
-        '''
-        parts = dotted_path.split('.')
-        obj = self
-        if parts[0] == 'vehicles':
-            for part in parts:
-                # Try dict access first (for vehicles, parameters, etc.)
-                if isinstance(obj, dict) and part in obj:
-                    obj = obj[part]
-                # Try attribute access
-                elif hasattr(obj, part):
-                    if hasattr(obj, 'get_parameter_type'):
-                        return obj.get_parameter_type(part)
-                    else:
-                        obj = getattr(obj, part)
-                else:
-                    raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
-        elif plugins:
-            plugin_name = dotted_path.split('.')[0]
-            part = '.'.join(dotted_path.split('.')[1:])
-            plugin = plugins[plugin_name]
-            if part in  plugin.plugin_input_names:
-                obj = plugin.plugin_input_names[part]['type']
-            elif part in  plugin.plugin_output_names:
-                obj = plugin.plugin_output_names[part]['type']
-
-        return obj
 
     def get_plugin_inputs(self, step_name, state):
         inputs = {}
@@ -226,7 +183,8 @@ class Study:
         step_outputs = []
 
         # Get all vehicle parameter names
-        for vehicle_name, vehicle in self.vehicles.items():
+        for vehicle in self.vehicles:
+            vehicle_name = vehicle.name
             for component in vehicle.components:
                 # Add baseline parameters
                 for param_name in component._parameters.keys():
@@ -318,6 +276,9 @@ if __name__ == "__main__":
     # Define a vehicle with 2 wings
     v = Vehicle("TestVehicle")
     left_wing = Wing("left_wing")
+    left_wing.span = 5.
+    left_wing.add_mode("happy")
+    left_wing.happy.span = 10.
     right_wing = Wing("right_wing")
     v.add_component(left_wing)
     v.add_component(right_wing)
@@ -368,7 +329,7 @@ if __name__ == "__main__":
 
     # Test the new get_all_names method
     print("\n=== Testing get_all_names method ===")
-    all_names = study.get_all_names()
+    all_names = study.get_all_names_by_category()
     print("Vehicle names:")
     for name in all_names['vehicle_names']:
         print(f"  {name}")
@@ -378,3 +339,39 @@ if __name__ == "__main__":
     print("Step outputs:")
     for name in all_names['step_outputs']:
         print(f"  {name}")
+
+
+    #new tom checks
+    s = study
+    sv = study.vehicles
+    svt = study.vehicles.TestVehicle
+    svtl = study.vehicles.TestVehicle.left_wing
+    svtls = study.vehicles.TestVehicle.left_wing.span
+    svtlhs = study.vehicles.TestVehicle.left_wing.happy.span
+
+    svt1 = sv.TestVehicle
+    svtl1 = sv.TestVehicle.left_wing
+    svtls1 = sv.TestVehicle.left_wing.span
+    svtlhs1 = sv.TestVehicle.left_wing.happy.span
+
+    svtl2 = svt.left_wing
+    svtls2 = svt.left_wing.span
+    svtlhs2 = svt.left_wing.happy.span
+
+    svtls3 = svtl.span
+    svtlhs3 = svtl.happy.span
+
+    assert svt is svt1
+    assert svtl is svtl1
+    assert svtl is svtl2
+    assert svtls is svtls1
+    assert svtls is svtls2
+    assert svtls is svtls3
+    assert svtlhs is svtlhs1
+    assert svtlhs is svtlhs2
+    assert svtlhs is svtlhs3
+
+    from execution_engine import Engine
+    engine = Engine(study, "test_work")
+    print(engine.get_param_type("vehicles.TestVehicle.left_wing.happy.span",[]))
+    print(engine.get_param_type("vehicles.TestVehicle.left_wing.span",[]))

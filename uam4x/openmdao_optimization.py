@@ -2,6 +2,7 @@ import openmdao.api as om
 from uam4x.study import Study
 import os
 import shutil
+
 from uam4x.utils import check_continuous
 
 class Optimization:
@@ -35,70 +36,27 @@ class Optimization:
             comp.options["work_dir"] = os.path.join(self.out_dir, step_name)
             comp.options["step_name"] = step_name
 
-            # Check for discrete I/O passing
-            for link in  self.study.solution.links:
-                input_name = link[0]
-                output_name = link[1]
-                link_input_plugin = input_name.split('.')[0]
-                link_output_plugin = output_name.split('.')[0]
-                if link_input_plugin in  self.study.solution.steps and  link_output_plugin in  self.study.solution.steps:
-                    link_input_var_name =  '.'.join(input_name.split('.')[1:])
-                    link_output_var_name = '.'.join(output_name.split('.')[1:])
-                    input_type = self.plugins[link_input_plugin].plugin_output_names[link_input_var_name]['type']
-                    output_type = self.plugins[link_output_plugin].plugin_input_names[link_output_var_name]['type']
-                    if not check_continuous(input_type):
-                        raise TypeError(f"Links between optimization components must be continuous (of type float)\n"
-                                        f"Check I/O declarations in plugin: {link_input_plugin}\n"
-                                         f"Variable in violation: {input_name}")
-
-                    if not check_continuous(output_type):
-                        raise TypeError(f"Links between optimization components must be continuous (of type float)\n"
-                                        f"Check I/O declarations in plugin: {link_input_plugin}\n"
-                                         f"Variable in violation: {output_name}")
-
-
         # Add connections
         for independent, dependent in self.study.solution.links:
             problem.model.connect(independent.replace(".", "~"), dependent.replace(".", "~"))
-
 
         # add desvars
         for name, lower, upper in zip(
             self.state['des_var_names'],
             self.state['des_var_lower'],
             self.state['des_var_upper'],
-            ):
-
-            des_var_type = self.study.get_param_type(name)
-            if not check_continuous(des_var_type):
-                raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
-                                f'Only floats allowed as design variables')
-
+        ):
             problem.model.add_design_var(name.replace(".", "~"), float(lower), float(upper))
-
 
         # add constraints
         for name, lower, upper in zip(
             self.state['constraint_names'],
             self.state['constraint_lower'],
             self.state['constraint_upper'],
-            ):
-
-            constraint_type = self.study.get_param_type(name, self.plugins)
-            is_continuous = check_continuous(constraint_type)
-            if not is_continuous:
-                raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
-                                f'Only floats allowed as constraints')
-
+        ):
             problem.model.add_constraint(name.replace(".", "~"), float(lower), float(upper))
 
         # add objectives
-        objective_type = self.study.get_param_type(self.state["objective_name"], self.plugins)
-        is_continuous = check_continuous(objective_type)
-        if not is_continuous:
-            raise TypeError(f'The objective: {self.state["objective_name"]} is of type {objective_type}\n'
-                            f'Only floats allowed as objectives')
-
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
         problem.driver = om.ScipyOptimizeDriver()
         problem.driver.options['optimizer'] = 'SLSQP'

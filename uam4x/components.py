@@ -4,23 +4,14 @@ import os
 from uam4x.units import (
     UnitType, LengthUnit, AngleUnit, MassUnit, TimeUnit, ForceUnit, TemperatureUnit, PressureUnit, EnergyUnit, PowerUnit, VolumeUnit, AreaUnit, SpeedUnit, AccelerationUnit
 )
-from uam4x.utils import check_and_get_config
+from uam4x.utils import check_and_get_config, type_string_to_type
 
 from enum import Enum
 
 import json
 import importlib.util
 
-_type_map = {
-    "int": int,
-    "float": float,
-    "str": str,
-    "bool": bool
-}
-
 _component_registry = {}
-
-
 
 class Parameter:
     """
@@ -153,7 +144,7 @@ class Parameter:
         -------
         Parameter
         """
-        dtype = _type_map[data["dtype"]]
+        dtype = type_string_to_type(data["dtype"])
         value = dtype(data["value"])
         return cls(
             name=data["name"],
@@ -431,7 +422,7 @@ class Component:
             raise AttributeError(f"Parameter '{param_name}' not defined for {self.__class__.__name__}.")
         return self._parameters[param_name].value
 
-    def  get_parameter_type(self, param_name: str):
+    def get_parameter_type(self, param_name: str):
         """
         Get the type of a parameter by name.
 
