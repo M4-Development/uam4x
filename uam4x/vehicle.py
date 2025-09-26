@@ -40,6 +40,10 @@ class Vehicle:
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self, value: str):
+        self._name = value
+
     @property
     def components(self):
         return self._components
