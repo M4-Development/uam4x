@@ -60,6 +60,7 @@ class Optimization:
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
         problem.driver = om.ScipyOptimizeDriver()
         problem.driver.options['optimizer'] = 'SLSQP'
+        # problem.model.approx_totals(method='fd', step=0.01)
         problem.setup()
         problem.run_driver()
 
@@ -75,7 +76,11 @@ class OpenmdaoPreComp(om.IndepVarComp):
     def setup(self):
         vehicle_val_dict = self.options["vehicle_val_dict"]
         for param_name, value in vehicle_val_dict.items():
-            self.add_output(param_name.replace(".", "~"), val=value)
+            # check type if int and it a discrete output
+            if not isinstance(value, float):
+                self.add_discrete_output(param_name.replace(".", "~"), val=value)
+            else:
+                self.add_output(param_name.replace(".", "~"), val=value)
 
 class UniversalOpenmdaoComp(om.ExplicitComponent):
     def initialize(self):
@@ -99,7 +104,11 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             name = '.'.join(input_name.split('.')[1:])
             input_type = self.plugin.plugin_input_names[name]['type']
             if not check_continuous(input_type):
-                self.add_discrete_input(input_name.replace(".", "~"), val='temp')
+                if input_type is int:
+                    temp = 1
+                else:
+                    temp = 'temp'
+                self.add_discrete_input(input_name.replace(".", "~"), temp)
             else:
                 cont_input = True
                 self.add_input(input_name.replace(".", "~"))
@@ -107,7 +116,11 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             name = '.'.join(output_name.split('.')[1:])
             output_type = self.plugin.plugin_output_names[name]['type']
             if not check_continuous(output_type):
-                self.add_discrete_output(output_name.replace(".", "~"), val='temp')
+                if input_type is int:
+                    temp = 1
+                else:
+                    temp = 'temp'
+                self.add_discrete_output(output_name.replace(".", "~"), temp)
             else:
                 cont_output = True
                 self.add_output(output_name.replace(".", "~"))
