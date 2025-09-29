@@ -567,10 +567,30 @@ class Rotor(Component):
         self.add_parameter("vtip", 550., float, unit_type=UnitType.SPEED, description="Rotor tip speed")
         self.add_parameter("tilt", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor tilt")
         self.add_parameter("radius", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor radius")
-        self.add_parameter("nblade", 2, int, description="Number of blades")
+        self.add_parameter("nblade", 2.0, float, description="Number of blades")
         self.add_parameter("rpm", 1000.0, float, unit_type=UnitType.FREQUENCY if hasattr(UnitType, 'FREQUENCY') else None, description="Rotor RPM")
         self.add_parameter("blade_chord", 0.1, float, unit_type=UnitType.LENGTH, description="Blade chord length")
         self.add_parameter("collective_pitch", 0.0, float, unit_type=UnitType.ANGLE, description="Collective pitch angle (deg)")
+
+@register_component
+class RotorBladeRegion(Component):
+    def setup(self):
+        self.add_parameter("spanwise_start", 0.0, float, unit_type=UnitType.LENGTH, description="start of section as a fration of the total span")
+        self.add_parameter("spanwise_stop", 0.0, float, unit_type=UnitType.LENGTH, description="end of section as a fration of the total span")
+        self.add_parameter("chord_start", 0.0, float, unit_type=UnitType.LENGTH, description="chord at the start of the section")
+        self.add_parameter("chord_stop", 0.0, float, unit_type=UnitType.LENGTH, description="chord at the end of the section")
+        self.add_parameter("sweep", 0.0, float, unit_type=UnitType.ANGLE, description="sweep angle")
+        self.add_parameter("dihedral", 0.0, float, unit_type=UnitType.ANGLE, description="dihedral angle")
+        self.add_parameter("twist_start", 0.0, float, unit_type=UnitType.ANGLE, description="twist angle at the start of the section")
+        self.add_parameter("twist_stop", 0.0, float, unit_type=UnitType.ANGLE, description="twist angle at the end of the section")
+        self.add_parameter("airfoil_start", "", str, unit_type=None, description="airfoil at the begining of the section")
+        self.add_parameter("airfoil_stop", "", str, unit_type=None, description="airfoil at the end of the section")
+        self.add_parameter("horizontal_shift_start", 0.0, float, unit_type=UnitType.LENGTH, description="")
+        self.add_parameter("horizontal_shift_stop", 0.0, float, unit_type=UnitType.LENGTH, description="")
+        self.add_parameter("vertical_shift_start", 0.0, float, unit_type=UnitType.LENGTH, description="")
+        self.add_parameter("vertical_shift_stop", 0.0, float, unit_type=UnitType.LENGTH, description="")
+        self.add_parameter("mainsparweb_thickness", 0.0, float, unit_type=UnitType.LENGTH, description="")
+
 
 @register_component
 class Aircraft(Component):
