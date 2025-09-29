@@ -160,8 +160,13 @@ class Engine:
                     obj = obj[part]
                 # Try attribute access
                 elif hasattr(obj, part):
-                    if hasattr(obj, 'get_parameter_type'):
-                        return obj.get_parameter_type(part)
+                    if hasattr(obj,'_modes'):
+                        modes = list(obj._modes.keys())
+                    else:
+                        modes = []
+                    if hasattr(obj, 'get_parameter_type') :
+                            if part not in modes:
+                                return obj.get_parameter_type(part)
                     else:
                         obj = getattr(obj, part)
                 else:
@@ -200,7 +205,7 @@ class Engine:
             for output_name in  output_names:
                 name = '.'.join(output_name.split('.')[1:])
                 if name not  in plugins[step_name].plugin_output_names:
-                    raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                    raise ValueError(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                      f"Check your plugin's setup() step for I/O declaration")
 
     def check_link_types(self, plugins):
