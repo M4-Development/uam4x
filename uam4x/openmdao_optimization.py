@@ -60,7 +60,6 @@ class Optimization:
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
         problem.driver = om.ScipyOptimizeDriver()
         problem.driver.options['optimizer'] = 'SLSQP'
-        # problem.model.approx_totals(method='fd', step=0.01)
         problem.setup()
         problem.run_driver()
 
@@ -129,8 +128,8 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             partials = self.plugin.build_partials(self.input_names, self.output_names)
             self.plugin.categorize_partials()
             for pair,data in  partials.items():
-                of = self.step_name + '~' + pair[0]
-                wrt = self.step_name + '~' + pair[1]
+                of = self.step_name + '~' + pair[0].replace('.', '~')
+                wrt = self.step_name + '~' + pair[1].replace('.', '~')
                 method = data['method']
                 step = data['step']
                 form = data['form']
