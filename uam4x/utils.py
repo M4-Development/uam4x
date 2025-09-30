@@ -8,7 +8,8 @@ TYPE_MAP = {
     "int": int,
     "float": float,
     "str": str,
-    "bool": bool
+    "bool": bool,
+    "array": np.ndarray,
 }
 
 
@@ -34,11 +35,15 @@ def check_and_get_config(conf_path):
 
 
 def check_continuous(val_or_type):
+    #Handle values (e.g 1, 2.0, np.array([0.0,0.0,...]),np.array([0,0,...]))
     if (isinstance(val_or_type, (float, np.floating))):
         return True
-    if isinstance(val_or_type, type) and (val_or_type == float or issubclass(val_or_type, np.floating)):
+    elif isinstance(val_or_type, np.ndarray):
+        return np.issubdtype(val_or_type.dtype, np.floating)
+    #Handle types
+    if isinstance(val_or_type, type) and (val_or_type == float or issubclass(val_or_type, np.floating, np.ndarray)):
         return True
-
+    
     return False
 
 def type_string_to_type(type_name:str):

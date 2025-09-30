@@ -15,7 +15,6 @@ class Engine:
         self.current_sweep_values = {}
         self.work_dir = work_dir
         os.makedirs(self.work_dir, exist_ok=True)
-        self.trade_to_check_partials = {}
 
     def check_partials(self, trade_name, form='forward', step=1.e-6):
 

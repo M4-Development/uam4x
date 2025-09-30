@@ -248,14 +248,12 @@ class Plugin():
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
         self.plugin_input_names[name] = {'type': var_type, 'value': value}
-        # add row of defaults to 2d list
 
     def declare_output(self, name, var_type, value=None):
         if '~' in  name:
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
         self.plugin_output_names[name] = {'type': var_type,'value': value}
-        #add column of defaults to 2d list
 
 
 def register_plugin(cls):
