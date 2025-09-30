@@ -3,7 +3,7 @@ from uam4x.study import Study
 import os
 import shutil
 
-from uam4x.utils import check_continuous
+from uam4x.utils import check_continuous, get_param_type
 
 class Optimization:
     def __init__(self, study:Study, state, plugins, out_dir,check_partials=False) -> None:
@@ -19,11 +19,14 @@ class Optimization:
         #make vehicle step
         should_be_no_inputs, used_vehicle_param_names = self.study.get_plugin_input_and_output_names('vehicles')
         vehicle_val_dict = {}
+        vehicle_type_dict = {}
         for param_name in used_vehicle_param_names:
             value = self.study._get_value_with_overwrites(param_name, self.state)
             vehicle_val_dict[param_name] = value
+            vehicle_type_dict[param_name] = get_param_type(param_name, self.study)
         comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(), promotes=['*'])
         comp.options["vehicle_val_dict"] = vehicle_val_dict
+        comp.options["vehicle_type_dict"] = vehicle_type_dict
 
         #make plugin steps
         for step_name in self.study.solution.steps:
@@ -35,6 +38,7 @@ class Optimization:
             comp.options["output_names"] = output_names
             comp.options["work_dir"] = os.path.join(self.out_dir, step_name)
             comp.options["step_name"] = step_name
+            
 
         # Add connections
         for independent, dependent in self.study.solution.links:
@@ -72,11 +76,14 @@ class Optimization:
 class OpenmdaoPreComp(om.IndepVarComp):
     def initialize(self):
         self.options.declare("vehicle_val_dict")
+        self.options.declare("vehicle_type_dict")
     def setup(self):
         vehicle_val_dict = self.options["vehicle_val_dict"]
+        vehicle_type_dict = self.options["vehicle_type_dict"]
         for param_name, value in vehicle_val_dict.items():
             # check type if int and it a discrete output
-            if not isinstance(value, float):
+            param_type = vehicle_type_dict[param_name]
+            if not check_continuous(param_type):
                 self.add_discrete_output(param_name.replace(".", "~"), val=value)
             else:
                 self.add_output(param_name.replace(".", "~"), val=value)

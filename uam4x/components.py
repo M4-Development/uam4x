@@ -575,7 +575,7 @@ class Rotor(Component):
 @register_component
 class RotorBladeRegion(Component):
     def setup(self):
-        self.add_parameter("spanwise_start", 0.0, float, unit_type=UnitType.LENGTH, description="start of section as a fration of the total span")
+        self.add_parameter("spanwise_start", 0.0, float, unit_type=UnitType.LENGTH, description="start of section as a fraction of the total span")
         self.add_parameter("spanwise_stop", 0.0, float, unit_type=UnitType.LENGTH, description="end of section as a fration of the total span")
         self.add_parameter("chord_start", 0.0, float, unit_type=UnitType.LENGTH, description="chord at the start of the section")
         self.add_parameter("chord_stop", 0.0, float, unit_type=UnitType.LENGTH, description="chord at the end of the section")

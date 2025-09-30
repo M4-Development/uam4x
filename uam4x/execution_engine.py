@@ -3,7 +3,7 @@ import os
 from uam4x.openmdao_optimization import Optimization
 import copy
 
-from uam4x.utils import check_continuous
+from uam4x.utils import check_continuous, get_param_type
 
 class Engine:
 
@@ -145,41 +145,41 @@ class Engine:
         else:
             self.study.solution._steps = dict(new_step_order)
 
-    def get_param_type(self, dotted_path: str, plugins):
-        '''
-        Get a the type of a given parameter
-        assumes general form vehicles. ... .attribute
-        '''
-        parts = dotted_path.split('.')
-        obj = self.study
-        if parts[0] == 'vehicles':
-            for part in parts:
-                # Try dict access first (for vehicles, parameters, etc.)
-                if isinstance(obj, dict) and part in obj:
-                    obj = obj[part]
-                # Try attribute access
-                elif hasattr(obj, part):
-                    if hasattr(obj,'_modes'):
-                        modes = list(obj._modes.keys())
-                    else:
-                        modes = []
-                    if hasattr(obj, 'get_parameter_type') :
-                            if part not in modes:
-                                return obj.get_parameter_type(part)
-                    else:
-                        obj = getattr(obj, part)
-                else:
-                    raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
-        elif plugins:
-            plugin_name = dotted_path.split('.')[0]
-            part = '.'.join(dotted_path.split('.')[1:])
-            plugin = plugins[plugin_name]
-            if part in  plugin.plugin_input_names:
-                obj = plugin.plugin_input_names[part]['type']
-            elif part in  plugin.plugin_output_names:
-                obj = plugin.plugin_output_names[part]['type']
+    #def get_param_type(self, dotted_path: str, plugins):
+        #'''
+        #Get a the type of a given parameter
+        #assumes general form vehicles. ... .attribute
+        #'''
+        #parts = dotted_path.split('.')
+        #obj = self.study
+        #if parts[0] == 'vehicles':
+            #for part in parts:
+                ## Try dict access first (for vehicles, parameters, etc.)
+                #if isinstance(obj, dict) and part in obj:
+                    #obj = obj[part]
+                ## Try attribute access
+                #elif hasattr(obj, part):
+                    #if hasattr(obj,'_modes'):
+                        #modes = list(obj._modes.keys())
+                    #else:
+                        #modes = []
+                    #if hasattr(obj, 'get_parameter_type') :
+                            #if part not in modes:
+                                #return obj.get_parameter_type(part)
+                    #else:
+                        #obj = getattr(obj, part)
+                #else:
+                    #raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
+        #elif plugins:
+            #plugin_name = dotted_path.split('.')[0]
+            #part = '.'.join(dotted_path.split('.')[1:])
+            #plugin = plugins[plugin_name]
+            #if part in  plugin.plugin_input_names:
+                #obj = plugin.plugin_input_names[part]['type']
+            #elif part in  plugin.plugin_output_names:
+                #obj = plugin.plugin_output_names[part]['type']
 
-        return obj
+        #return obj
 
     def check_model(self, plugins, state):
         self.check_links_to_plugins(plugins)
@@ -212,8 +212,8 @@ class Engine:
         for link in  self.study.solution.links:
             output_link = link[0]
             input_link = link[1]
-            output_type = self.get_param_type(output_link, plugins)
-            input_type = self.get_param_type(input_link, plugins)
+            output_type = get_param_type(output_link, self.study, plugins)
+            input_type = get_param_type(input_link,self.study, plugins)
             if output_type != input_type:
                 bad_links.append((output_link,output_type, input_link, input_type))
 
@@ -229,7 +229,7 @@ class Engine:
             state['des_var_upper'],
             ):
 
-            des_var_type = self.get_param_type(name, plugins)
+            des_var_type = get_param_type(name,self.study, plugins)
             if not check_continuous(des_var_type):
                 raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
                                 f'Only floats allowed as design variables')
@@ -239,13 +239,13 @@ class Engine:
             state['constraint_lower'],
             state['constraint_upper'],
         ):
-            constraint_type = self.get_param_type(name, plugins)
+            constraint_type = get_param_type(name,self.study, plugins)
             is_continuous = check_continuous(constraint_type)
             if not is_continuous:
                 raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
                                 f'Only floats allowed as constraints')
     def check_objective(self, plugins, state):
-        objective_type = self.get_param_type(state["objective_name"], plugins)
+        objective_type = get_param_type(state["objective_name"], self.study, plugins)
         is_continuous = check_continuous(objective_type)
         if not is_continuous:
             raise TypeError(f'The objective: {state["objective_name"]} is of type {objective_type}\n'

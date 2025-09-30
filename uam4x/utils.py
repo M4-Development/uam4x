@@ -41,10 +41,49 @@ def check_continuous(val_or_type):
     elif isinstance(val_or_type, np.ndarray):
         return np.issubdtype(val_or_type.dtype, np.floating)
     #Handle types
-    if isinstance(val_or_type, type) and (val_or_type == float or issubclass(val_or_type, np.floating, np.ndarray)):
+    if isinstance(val_or_type, type) and (val_or_type == float or issubclass(val_or_type, (np.floating, np.ndarray))):
         return True
     
     return False
 
 def type_string_to_type(type_name:str):
     return TYPE_MAP[type_name.lower()]
+
+
+def get_param_type(dotted_path: str, study, plugins= None):
+    '''
+    Get a the type of a given parameter
+    assumes general form vehicles. ... .attribute
+    '''
+    parts = dotted_path.split('.')
+    obj = study
+    if parts[0] == 'vehicles':
+        for part in parts:
+            # Try dict access first (for vehicles, parameters, etc.)
+            if isinstance(obj, dict) and part in obj:
+                obj = obj[part]
+            # Try attribute access
+            elif hasattr(obj, part):
+                if hasattr(obj,'_modes'):
+                    modes = list(obj._modes.keys())
+                else:
+                    modes = []
+                if hasattr(obj, 'get_parameter_type') :
+                        if part not in modes:
+                            return obj.get_parameter_type(part)
+                else:
+                    obj = getattr(obj, part)
+            else:
+                raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
+    elif plugins:
+        plugin_name = dotted_path.split('.')[0]
+        part = '.'.join(dotted_path.split('.')[1:])
+        plugin = plugins[plugin_name]
+        if part in  plugin.plugin_input_names:
+            obj = plugin.plugin_input_names[part]['type']
+        elif part in  plugin.plugin_output_names:
+            obj = plugin.plugin_output_names[part]['type']
+
+    return obj
+    
+    
