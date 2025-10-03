@@ -2,7 +2,7 @@ import openmdao.api as om
 from uam4x.study import Study
 import os
 import shutil
-
+import numpy as np
 from uam4x.utils import check_continuous, get_param_type
 from uam4x.log import get_log
 from uam4x.utils import log
@@ -42,9 +42,13 @@ class Optimization:
             comp.options["plugin"] = self.plugins[step_name]
             comp.options["input_names"] = input_names
             comp.options["output_names"] = output_names
-            comp.options["work_dir"] = os.path.join(self.out_dir, step_name)
+            work_dir = os.path.join(self.out_dir, step_name)
+            # clean the work dir between runs
+            comp.options["work_dir"] = work_dir
+            if os.path.isdir(work_dir):
+                shutil.rmtree(work_dir)
+            os.makedirs(work_dir)
             comp.options["step_name"] = step_name
-
 
         # Add connections
         for independent, dependent in self.study.solution.links:
@@ -56,7 +60,14 @@ class Optimization:
             self.state['des_var_lower'],
             self.state['des_var_upper'],
         ):
-            problem.model.add_design_var(name.replace(".", "~"), float(lower), float(upper))
+            dv_type = get_param_type(name, self.study)
+            if dv_type == np.ndarray:
+                lower = np.array(lower)
+                upper = np.array(upper)
+            else:
+                lower = dv_type(lower)
+                upper = dv_type(upper)
+            problem.model.add_design_var(name.replace(".", "~"), lower, upper)
 
         # add constraints
         for name, lower, upper in zip(
@@ -64,7 +75,15 @@ class Optimization:
             self.state['constraint_lower'],
             self.state['constraint_upper'],
         ):
-            problem.model.add_constraint(name.replace(".", "~"), float(lower), float(upper))
+
+            const_type = get_param_type(name, self.study, self.plugins)
+            if const_type == np.ndarray:
+                lower = np.array(lower)
+                upper = np.array(upper)
+            else:
+                lower = const_type(lower)
+                upper = const_type(upper)
+            problem.model.add_constraint(name.replace(".", "~"), lower, upper)
 
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
@@ -92,7 +111,6 @@ class OpenmdaoPreComp(om.IndepVarComp):
         vehicle_val_dict = self.options["vehicle_val_dict"]
         vehicle_type_dict = self.options["vehicle_type_dict"]
         for param_name, value in vehicle_val_dict.items():
-            # check type if int and it a discrete output
             param_type = vehicle_type_dict[param_name]
             if not check_continuous(param_type):
                 self.add_discrete_output(param_name.replace(".", "~"), val=value)
@@ -109,6 +127,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         self.options.declare("output_names")
         self.options.declare("work_dir")
         self.options.declare("step_name")
+
     def setup(self):
         self.log.debug('setup')
         self.plugin = self.options["plugin"]
@@ -124,6 +143,8 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         for input_name in self.input_names:
             name = '.'.join(input_name.split('.')[1:])
             input_type = self.plugin.plugin_input_names[name]['type']
+            input_shape = self.plugin.plugin_input_names[name]['shape']
+            input_shape_by_conn = self.plugin.plugin_input_names[name]['shape_by_conn']
             if not check_continuous(input_type):
                 if input_type is int:
                     temp = 1
@@ -132,19 +153,22 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 self.add_discrete_input(input_name.replace(".", "~"), temp)
             else:
                 cont_input = True
-                self.add_input(input_name.replace(".", "~"))
+                self.add_input(input_name.replace(".", "~"), shape=input_shape, shape_by_conn=input_shape_by_conn)
+
         for output_name in self.output_names:
             name = '.'.join(output_name.split('.')[1:])
             output_type = self.plugin.plugin_output_names[name]['type']
+            output_shape = self.plugin.plugin_output_names[name]['shape']
+            output_shape_by_conn = self.plugin.plugin_output_names[name]['shape_by_conn']
             if not check_continuous(output_type):
-                if input_type is int:
+                if output_type is int:
                     temp = 1
                 else:
                     temp = 'temp'
                 self.add_discrete_output(output_name.replace(".", "~"), temp)
             else:
                 cont_output = True
-                self.add_output(output_name.replace(".", "~"))
+                self.add_output(output_name.replace(".", "~"), shape=output_shape,shape_by_conn=output_shape_by_conn)
 
         if cont_input and cont_output:
             partials = self.plugin.build_partials(self.input_names, self.output_names)
@@ -160,14 +184,13 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
 
     def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
         self.log.debug('compute')
-        if os.path.isdir(self.work_dir):
-            shutil.rmtree(self.work_dir)
-        os.makedirs(self.work_dir)
         self.plugin_dict = {}
         for name, value in inputs.items():
             plugin_name = name.replace("~", ".")
             plugin_name = ".".join(plugin_name.split(".")[1:])
-            self.plugin_dict[plugin_name] = value[0]
+            if not self.plugin.plugin_input_names[plugin_name]['type'] == np.ndarray:
+                value = value[0]
+            self.plugin_dict[plugin_name] = value
         for name, value in discrete_inputs.items():
             plugin_name = name.replace("~", ".")
             plugin_name = ".".join(plugin_name.split(".")[1:])
@@ -176,10 +199,11 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         for name, value in results.items():
             name_with_plugin = self.step_name + "." + name
             if name_with_plugin in self.output_names:
-                if name in self.plugin.discrete_names:
+                if not check_continuous(self.plugin.plugin_output_names[name]['type']):
                     discrete_outputs[name_with_plugin.replace(".", "~")] = value
                 else:
                     outputs[name_with_plugin.replace(".", "~")] = value
+
 
     def compute_partials(self, inputs, partials, discrete_inputs={}):
         self.log.debug('compute partials')

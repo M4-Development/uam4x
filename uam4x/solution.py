@@ -8,7 +8,6 @@ from collections.abc import Sequence
 from numbers import  Real
 from itertools import  product
 from uam4x.log import get_log
-from uam4x.utils import log
 
 class Solution:
     def __init__(self) -> None:
@@ -116,7 +115,6 @@ class Solution:
 
 class Plugin():
     def __init__(self) -> None:
-        self.discrete_names = []
         self._declare_partials = False
         self._check_partials_options = False
         self.partials_counter = 0
@@ -127,10 +125,6 @@ class Plugin():
         self.plugin_output_names = {}
         self.partial_2d_list = []
         self.log = get_log(log, object_name='Plugin base class')
-
-    def declare_discrete(self, name):
-        self.log.debug('declare discrete')
-        self.discrete_names.append(name)
 
     def setup_plugin(self, plugin_options:dict):
         self.log.debug('setup plugin')
@@ -283,23 +277,23 @@ class Plugin():
         self.check_form = form
         self.check_step = step
 
-    def declare_input(self, name, var_type, value=None):
+    def declare_input(self, name, var_type, value=None, shape=None, shape_by_conn=False):
         self.log.debug(f'declare input: {name}')
         if '~' in  name:
             self.log.error('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
-        self.plugin_input_names[name] = {'type': var_type, 'value': value}
+        self.plugin_input_names[name] = {'type': var_type, 'value': value,'shape': shape,'shape_by_conn': shape_by_conn}
 
-    def declare_output(self, name, var_type, value=None):
+    def declare_output(self, name, var_type, value=None, shape=None, shape_by_conn=False):
         self.log.debug(f'declare output: {name}')
         if '~' in  name:
             self.log.error('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
-        self.plugin_output_names[name] = {'type': var_type,'value': value}
+        self.plugin_output_names[name] = {'type': var_type,'value': value, 'shape': shape,'shape_by_conn': shape_by_conn}
 
 
 def register_plugin(cls):

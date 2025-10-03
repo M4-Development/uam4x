@@ -11,6 +11,7 @@ from enum import Enum
 
 import json
 import importlib.util
+import numpy as np
 
 _component_registry = {}
 
@@ -43,6 +44,7 @@ class Parameter:
             self.log.error(f"Parameter '{name}' must be of type {dtype.__name__}, got {type(default_value).__name__}")
             raise TypeError(f"Parameter '{name}' must be of type {dtype.__name__}, got {type(default_value).__name__}")
         self._value = default_value
+    
         self.unit_type = unit_type if unit_type is not None else UnitType.NONE
         self.unit = unit if unit is not None else ""
         self.description = description
@@ -156,7 +158,10 @@ class Parameter:
         """
         log.debug('Deserialize a parameter from a dictionary')
         dtype = type_string_to_type(data["dtype"])
-        value = dtype(data["value"])
+        if dtype == np.ndarray:
+            value = np.array(data["value"])
+        else:
+            value = dtype(data["value"])
         return cls(
             name=data["name"],
             default_value=value,

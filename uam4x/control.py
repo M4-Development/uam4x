@@ -15,7 +15,7 @@ class Optimization:
     ) -> None:
         self.des_var_names = des_var_names
         self.des_var_lower = des_var_lower
-        self.des_var_upper = des_var_upper
+        self.des_var_upper = des_var_upper        
         self.constraint_names = constraint_names
         self.constraint_lower = constraint_lower
         self.constraint_upper = constraint_upper

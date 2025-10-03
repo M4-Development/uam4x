@@ -12,7 +12,7 @@ TYPE_MAP = {
     "float": float,
     "str": str,
     "bool": bool,
-    "array": np.ndarray,
+    "ndarray": np.ndarray,
 }
 
 
@@ -88,7 +88,26 @@ def get_param_type(dotted_path: str, study, plugins= None):
             obj = plugin.plugin_input_names[part]['type']
         elif part in  plugin.plugin_output_names:
             obj = plugin.plugin_output_names[part]['type']
+    else:
+        raise ValueError(f'No vehicle parameter type found, no plugins declared')
 
     return obj
+
+def convert_numpy_to_python(value):
+    '''
+    Converts numpy type instances (np.ndarray,np.floating,np.int)
+    to python types for Json serialization
+    '''
+    if isinstance(value, (np.integer, np.floating, np.bool_)):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return [convert_numpy_to_python(x) for x in value.tolist()]
+    if isinstance(value, list):
+        return [convert_numpy_to_python(x) for x in value]
+    if isinstance(value, dict):
+        return {k: convert_numpy_to_python(x) for  k, x in value.items()}
+
+    return value
+
 
 

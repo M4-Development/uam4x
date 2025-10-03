@@ -5,12 +5,8 @@ import json
 import os
 import copy
 from uam4x.log import get_log
-from uam4x.utils import log
-from uam4x.dev_info import DEV
-# DEV = False
-if DEV:
-    log.set_min_console_level("DEBUG")
 
+from uam4x.utils import convert_numpy_to_python
 
 class _Overwrite():
     def __init__(self, param_state:dict) -> None:
@@ -90,10 +86,10 @@ class Study:
         """Convert the study to a dictionary representation."""
         self.log.debug('write to dict')
         return {
-            "control": self.control._to_dict(),
-            "vehicles": {v.name: v._to_dict() for v in self.vehicles},
-            "solution": self.solution._to_dict(),
-            "results": [overwrite.tracked_outputs(self.solution.tracked_outputs) for overwrite in self._overwrites]
+            "control": convert_numpy_to_python(self.control._to_dict()),
+            "vehicles": convert_numpy_to_python({v.name: convert_numpy_to_python(v._to_dict()) for v in self.vehicles}),
+            "solution": convert_numpy_to_python(self.solution._to_dict()),
+            "results": convert_numpy_to_python([overwrite.tracked_outputs(self.solution.tracked_outputs) for overwrite in self._overwrites])
         }
     @classmethod
     def _from_dict(cls, data: dict, work_dir = None) -> 'Study':
