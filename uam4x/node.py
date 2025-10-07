@@ -118,6 +118,18 @@ class Node:
                 return {'file': 'unknown', 'line': 'unknown'}
         return {'file': 'unknown', 'line': 'unknown'}
 
+    def get_code_as_string(self) -> str:
+        """
+        Get the code of the node as a string.
+        """
+        # This returns the raw bytecode of the function, not the source code as a string.
+        # To get the actual source code as a string, use inspect.getsource.
+
+        try:
+            return inspect.getsource(self.function)
+        except (OSError, TypeError):
+            return "# Source code unavailable"
+
 
 def register_node(name: str = None, description: str = ""):
     """
@@ -240,7 +252,7 @@ def get_node(node_name: str) -> Optional[Node]:
     Optional[Node]
         The node if found, None otherwise
     """
-    return _node_registry.get(node_name)
+    return _node_registry[node_name]
 
 def get_node_names() -> List[str]:
     """
