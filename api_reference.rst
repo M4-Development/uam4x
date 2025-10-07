@@ -16,6 +16,7 @@ Core Modules
    uam4x.solution
    uam4x.utils
    uam4x.units
+   uam4x.execution_engine
 
 Component System
 ----------------
@@ -64,6 +65,16 @@ Units System
 Units and dimensional analysis:
 
 .. automodule:: uam4x.units
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Execution Engine
+----------------
+
+The execution engine manages study execution and optimization:
+
+.. automodule:: uam4x.execution_engine
    :members:
    :undoc-members:
    :show-inheritance:
