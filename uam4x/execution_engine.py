@@ -77,6 +77,7 @@ class Engine:
             If circular solution sequence is detected.
         """
         self.log.debug('check partials')
+
         #Standard setup:
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]

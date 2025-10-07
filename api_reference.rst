@@ -18,6 +18,7 @@ Core Modules
    uam4x.units
    uam4x.execution_engine
    uam4x.node
+   uam4x.execution_engine
 
 Component System
 ----------------
@@ -86,6 +87,16 @@ Node Registry
 The node registry system manages workflow nodes:
 
 .. automodule:: uam4x.node
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Execution Engine
+----------------
+
+The execution engine manages study execution and optimization:
+
+.. automodule:: uam4x.execution_engine
    :members:
    :undoc-members:
    :show-inheritance:
