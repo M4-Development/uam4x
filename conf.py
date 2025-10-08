@@ -29,7 +29,6 @@ release = '1.0.0'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
@@ -95,13 +94,7 @@ html_static_path = ['_static']
 # external dependencies are not available at build time and cause import
 # errors.
 autodoc_mock_imports = [
-    'wx',
-    'numpy',
-    'scipy',
-    'matplotlib',
-    'openmdao',
-    'openvsp',
-    'importlib_metadata',
+
 ]
 
 # This value controls the behavior of sphinx-build -W during importing modules.
@@ -219,133 +212,3 @@ epub_title = project
 # A list of files that should not be packed into the epub file.
 epub_exclude_files = ['search.html']
 
-# -- Extension configuration -------------------------------------------------
-
-# -- Options for autodoc extension -------------------------------------------
-# This value controls the behavior of sphinx-build -W during importing modules.
-# If False, warning messages during imports are ignored.
-autodoc_warningiserror = False
-
-# This value is a list of modules to be mocked up. This is useful when some
-# external dependencies are not available at build time and cause import
-# errors.
-autodoc_mock_imports = [
-    'wx',
-    'numpy',
-    'scipy',
-    'matplotlib',
-    'openmdao',
-    'openvsp',
-    'importlib_metadata',
-]
-
-# This value controls whether to scan all found documents for autosummary
-# generation, and to generate stub files for each.
-autosummary_generate = True
-
-# -- Options for intersphinx extension ---------------------------------------
-
-# Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {
-    'python': ('https://docs.python.org/3/', None),
-    'numpy': ('https://numpy.org/doc/stable/', None),
-    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
-    'matplotlib': ('https://matplotlib.org/stable/', None),
-    'openmdao': ('https://openmdao.org/newdocs/versions/latest/', None),
-}
-
-# -- Options for todo extension ----------------------------------------------
-
-# If true, `todo` and `todoList` produce output, else they produce nothing.
-todo_include_todos = True
-
-# -- Options for Napoleon extension ------------------------------------------
-
-# Napoleon settings for processing Google and NumPy style docstrings
-napoleon_google_docstring = True
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = False
-napoleon_include_private_with_doc = False
-napoleon_include_special_with_doc = True
-napoleon_use_admonition_for_examples = False
-napoleon_use_admonition_for_notes = False
-napoleon_use_admonition_for_references = False
-napoleon_use_ivar = False
-napoleon_use_param = True
-napoleon_use_rtype = True
-napoleon_preprocess_types = False
-napoleon_type_aliases = None
-napoleon_attr_annotations = True
-
-# -- Options for HTMLHelp output ---------------------------------------------
-
-# Output file base name for HTML help builder.
-htmlhelp_basename = 'UAM4Xdoc'
-
-# -- Options for LaTeX output ------------------------------------------------
-
-latex_elements = {
-    # The paper size ('letterpaper' or 'a4paper').
-    #
-    # 'papersize': 'letterpaper',
-
-    # The font size ('10pt', '11pt' or '12pt').
-    #
-    # 'pointsize': '10pt',
-
-    # Additional stuff for the LaTeX preamble.
-    #
-    # 'preamble': '',
-
-    # Latex figure (float) alignment
-    #
-    # 'figure_align': 'htbp',
-}
-
-# Grouping the document tree into LaTeX files. List of tuples
-# (source start file, target name, title,
-#  author, documentclass [howto, manual, or own class]).
-latex_documents = [
-    (master_doc, 'UAM4X.tex', 'UAM4X Documentation',
-     'NASA', 'manual'),
-]
-
-# -- Options for manual page output ------------------------------------------
-
-# One entry per manual page. List of tuples
-# (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, 'uam4x', 'UAM4X Documentation',
-     [author], 1)
-]
-
-# -- Options for Texinfo output ----------------------------------------------
-
-# Grouping the document tree into Texinfo files. List of tuples
-# (source start file, target name, title, author,
-#  dir menu entry, description, category)
-texinfo_documents = [
-    (master_doc, 'UAM4X', 'UAM4X Documentation',
-     author, 'UAM4X', 'Urban Air Mobility 4X Framework',
-     'Miscellaneous'),
-]
-
-# -- Options for Epub output -------------------------------------------------
-
-# Bibliographic Dublin Core info.
-epub_title = project
-
-# The unique identifier of the text. This can be a ISBN number
-# or the project homepage.
-#
-# epub_identifier = ''
-
-# A unique identification for the text.
-#
-# epub_uid = ''
-
-# A dictionary mapping XHTML filename to the title of the document.
-# epub_titles = {}
-
-# A list of files that should not be packed into the epub file.
-epub_exclude_files = ['search.html']
