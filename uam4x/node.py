@@ -42,6 +42,7 @@ class Node:
         self.function = function
         self.module_path = ""
         self.source_file = ""
+        self.node_type = "Node"
 
     def execute(self, study):
         """
