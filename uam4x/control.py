@@ -1,69 +1,47 @@
 from typing import Any, Dict, List, Union
+import copy
 from uam4x.log import get_log
 from uam4x.utils import log
 
 class Optimization:
-    def __init__(
-        self,
-        des_var_names: list[str],
-        des_var_lower: list[float],
-        des_var_upper: list[float],
-        constraint_names: list[str],
-        constraint_lower: list[float],
-        constraint_upper: list[float],
-        objective_name: str
-    ) -> None:
-        self.des_var_names = des_var_names
-        self.des_var_lower = des_var_lower
-        self.des_var_upper = des_var_upper        
-        self.constraint_names = constraint_names
-        self.constraint_lower = constraint_lower
-        self.constraint_upper = constraint_upper
-        self.objective_name = objective_name
-        self.log = get_log(log, object_name='optimization')
+    def __init__(self) -> None:
+        self._optimization_dict={'type': 'Optimization',
+                                         'des_vars': {},
+                                         'constraints': {},
+                                         'objective_name': None}
 
-        if len(self.des_var_names) != len(self.des_var_lower):
-            self.log.error("des_var_lower must match length of des_var_names")
-            raise ValueError("des_var_lower must match length of des_var_names")
-        if len(self.des_var_names) != len(self.des_var_upper):
-            self.log.error("des_var_upper must match length of des_var_names")
-            raise ValueError("des_var_upper must match length of des_var_names")
-        if len(self.constraint_names) != len(self.constraint_lower):
-            self.log.error("constraint_lower must match length of constraint_names")
-            raise ValueError("constraint_lower must match length of constraint_names")
-        if len(self.constraint_names) != len(self.constraint_upper):
-            self.log.error("constraint_upper must match length of constraint_names")
-            raise ValueError("constraint_upper must match length of constraint_names")
     def _to_dict(self):
-        self.log.debug('write to dict')
-        return {
-            "type": "Optimization",
-            "des_var_names": self.des_var_names,
-            "des_var_lower": self.des_var_lower,
-            "des_var_upper": self.des_var_upper,
-            "constraint_names": self.constraint_names,
-            "constraint_lower": self.constraint_lower,
-            "constraint_upper": self.constraint_upper,
-            "objective_name": self.objective_name
-        }
+        #if user accidentally calls, won't modify the actual optimization dict
+        return copy.deepcopy(self._optimization_dict)
+
     @classmethod
     def _from_dict(cls, data: dict) -> 'Optimization':
-        log.debug('optimization from dict')
-        return cls(
-            data["des_var_names"],
-            data["des_var_lower"],
-            data["des_var_upper"],
-            data["constraint_names"],
-            data["constraint_lower"],
-            data["constraint_upper"],
-            data["objective_name"]
-        )
+        obj = cls()
+        obj._optimization_dict = {"type": "Optimization",
+                                   "des_vars": data['des_vars'],
+                                   "constraints": data['constraints'],
+                                   "objective_name": data['objective_name']
+                                   }
+        return obj
+
+    def add_design_var(self, name: str, lower: list|None=None, upper:list|None=None, indices: list|None=None):
+        self._optimization_dict['des_vars'][name] = {'lower': lower,
+                                               'upper': upper,
+                                               'indices': indices}
+
+    def add_constraint(self, name: str, lower: list|None=None, upper: list|None=None, indices=None):
+        self._optimization_dict['constraints'][name] = {'lower': lower,
+                                                        'upper': upper,
+                                                        'indices': indices}
+    def add_objective(self, name: str):
+        self._optimization_dict['objective_name'] = name
 class ParameterSweep:
+    log = get_log(log, object_name='parameter sweep')
     def __init__(self, param_name_to_value_list: Dict[str, Any], child:Union['ParameterSweep', Optimization]=None) -> None:
         self.child = child
         self.length: int = None
         self.param_name_to_value_list = param_name_to_value_list
-        self.log = get_log(log, object_name='parameter sweep')
+        self.log = ParameterSweep.log
         self.log.debug('initialize')
         for name, value_list in self.param_name_to_value_list.items():
             if not isinstance(value_list, list):
@@ -108,7 +86,7 @@ class ParameterSweep:
         }
     @classmethod
     def _from_dict(cls, data):
-        log.debug('parameter sweep from dict')
+        cls.log.debug('parameter sweep from dict')
         child_dict = data["child"]
         if child_dict is None:
             child = None
@@ -117,13 +95,15 @@ class ParameterSweep:
         elif child_dict['type'] == "Optimization":
             child = Optimization._from_dict(child_dict)
         return ParameterSweep(data["param_name_to_value_list"], child=child)
+
 class Control:
+    log = get_log(log, object_name='control')
     def __init__(self, title: str = "Default Title", author: str = "Default Author", description: str = "Default Description") -> None:
         self.title = title
         self.author = author
         self.description = description
         self.trade_studies = {}
-        self.log = get_log(log, object_name='control')
+        self.log = Control.log
 
     def add_trade(self, trade_name:str, trade:Union[ParameterSweep, Optimization]) -> None:
         self.log.debug(f'add trade: {trade_name}')
@@ -138,7 +118,7 @@ class Control:
         }
     @classmethod
     def _from_dict(cls, data: dict) -> 'Control':
-        log.debug('control from dict')
+        cls.log.debug('control from dict')
         control = cls(
             title=data["title"],
             author=data["author"],
@@ -156,6 +136,7 @@ class Control:
         return control
 
 if __name__ == "__main__":
+    #TODO: Update this to use the new Optimization class
     opt = Optimization(
         des_var_names=["wing_span", "wing_area"],
         des_var_lower=[10.0, 20.0],

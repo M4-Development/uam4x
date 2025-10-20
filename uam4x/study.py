@@ -5,14 +5,15 @@ import json
 import os
 import copy
 from uam4x.log import get_log
-
+from uam4x.utils import log
 from uam4x.utils import convert_numpy_to_python
 
 class _Overwrite():
+    log = get_log(log, object_name='overwrite')
     def __init__(self, param_state:dict) -> None:
         self.param_state = param_state
         self.name_to_value = copy.copy(param_state)
-        self.log = get_log(log, object_name='overwrite')
+        self.log = _Overwrite.log
 
     def add_item(self, name, value):
         self.log.debug(f'add item: {name}')
@@ -57,6 +58,7 @@ class _Overwrite():
         return results
 
 class Study:
+    log = get_log(log, object_name='study')
     def __init__(self, log_dir = None) -> None:
 
         if log_dir:
@@ -64,7 +66,7 @@ class Study:
                 log.close_file()
             filename_log = os.path.join(log_dir,'log.txt')
             log.set_filename_log(filename_log=filename_log)
-        self.log = get_log(log, object_name= 'study')
+        self.log = Study.log
         self.vehicles = VehicleManager()
         self.solution = Solution()
         self.control = Control()
@@ -93,7 +95,7 @@ class Study:
         }
     @classmethod
     def _from_dict(cls, data: dict, work_dir = None) -> 'Study':
-        log.debug('study from dict')
+        cls.log.debug('study from dict')
         study = Study(log_dir=work_dir)
         for vname, vdata in data["vehicles"].items():
             study.add_vehicle(Vehicle._from_dict(vdata))
@@ -123,7 +125,7 @@ class Study:
     @classmethod
     def from_json(cls, json_path: str) -> 'Study':
         """Create a Study instance from a JSON file."""
-        log.debug('create study from json')
+        cls.log.debug('create study from json')
         work_dir = os.path.dirname(json_path)
         with open(json_path, 'r') as f:
             data = json.load(f)
@@ -274,6 +276,7 @@ class Study:
         return all_names['vehicle_names'] + all_names['step_inputs'] + all_names['step_outputs']
 
 class Variants:
+    log = get_log(log, object_name='variants')
     def __init__(self, dir: str) -> None:
         self.dir = dir
         self.variants = {}
@@ -281,7 +284,7 @@ class Variants:
         if not os.path.exists(variants_dir):
                 os.mkdir(variants_dir)
 
-        self.log = get_log(log, object_name='variants')
+        self.log = Variants.log
 
     def add_variant(self, name, func_list:list):
         self.log.debug(f"add variant {name}")
@@ -335,6 +338,7 @@ if __name__ == "__main__":
     solution.add_tracked_output("step1.outputs.wing_weight")
     solution.add_tracked_output("step2.outputs.total_weight")
 
+    #TODO: Update this to use the new Optimization class
     # Define a control with a sweep and an optimization child
     opt = Optimization(
         des_var_names=["x", "y"],

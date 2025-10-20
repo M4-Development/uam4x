@@ -8,11 +8,11 @@ from typing import Dict, List, Any, Optional, Callable
 import json
 import os
 import importlib.util
-from uam4x.utils import check_and_get_config
 import inspect
 import sys
 
-
+from uam4x.log import get_log
+from uam4x.utils import log
 # Global node registry
 _node_registry = {}
 
@@ -23,7 +23,7 @@ class Node:
     A node represents a function that takes a Study object and modifies it.
     Nodes are the building blocks of variants and can be registered and discovered.
     """
-
+    log = get_log(log, object_name='node')
     def __init__(self, name: str, description: str = "", function: Callable = None):
         """
         Initialize a node.
@@ -37,6 +37,7 @@ class Node:
         function : Callable, optional
             The function that implements this node
         """
+        self.log = Node.log
         self.name = name
         self.description = description
         self.function = function
@@ -168,7 +169,7 @@ def register_node(name: str = None, description: str = ""):
 
         # Validate the node signature
         if not node.validate_signature():
-            print(f"WARNING: Node '{node_name}' does not have a valid signature. "
+            log.warning(f"Node '{node_name}' does not have a valid signature. "
                   f"Expected: def {node_name}(study: Study)")
 
         # Register the node
@@ -222,7 +223,7 @@ def register_node(name: str = None, description: str = ""):
 
             # Update NODES section
             if node_name in clean_config['NODES'] and clean_config['NODES'][node_name] != module_origin:
-                print(f"WARNING: Node '{node_name}' already registered\nOverwriting existing data")
+                log.warning(f"Node '{node_name}' already registered\nOverwriting existing data")
 
             clean_config['NODES'][node_name] = module_origin
 
@@ -231,7 +232,7 @@ def register_node(name: str = None, description: str = ""):
                 json.dump(clean_config, configfile, indent=4)
 
         except Exception as e:
-            print(f"WARNING: Failed to update configuration file: {e}")
+            log.warning(f"Failed to update configuration file: {e}")
             # Continue execution even if config update fails
 
         return func

@@ -3,10 +3,10 @@ from uam4x.log import get_log
 from uam4x.utils import log
 
 class VehicleManager(list):
-
+    log = get_log(log, object_name='vehicle manager')
     def __init__(self):
         self._vehicles = []
-        self.log = get_log(log, object_name='vehicle manager')
+        self.log = VehicleManager.log
         self.log.debug('initialize')
 
     def add_vehicle(self, vehicle):
@@ -33,6 +33,7 @@ class VehicleManager(list):
         return self._vehicles.__iter__()
 
 class Vehicle:
+    log = get_log(log, object_name='vehicle')
     def __init__(self, name, components=None):
         """
         Parameters
@@ -44,7 +45,7 @@ class Vehicle:
         """
         self._name = name
         self._components = components if components is not None else []
-        self.log = get_log(log, object_name=f'vehicle: {name} ')
+        self.log = Vehicle.log
         self.log.debug(f'initialize')
 
     @property
@@ -114,7 +115,7 @@ class Vehicle:
         }
     @classmethod
     def _from_dict(cls, data: dict) -> 'Vehicle':
-        log.debug('vehicle from dict')
+        cls.log.debug('vehicle from dict')
         v = Vehicle(data["name"] )
         for cdata in data["components"]:
             v.add_component(Component._from_dict(cdata))

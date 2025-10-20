@@ -1,7 +1,7 @@
 from cpylog import SimpleLogger, _write
 import time
-from uam4x.dev_info import DEV
 
+DEV = True
 
 def get_log(log=None, filename_log=None, object_name=None):
     """

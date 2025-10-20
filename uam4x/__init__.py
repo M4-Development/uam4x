@@ -4,7 +4,6 @@ from uam4x.solution import register_plugin, Plugin, _plugin_registry
 from uam4x.utils import check_and_get_config, log
 from uam4x.node import register_node, Node, _node_registry
 import os
-import json
 
 import importlib.util
 import sys

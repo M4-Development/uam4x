@@ -8,13 +8,16 @@ from collections.abc import Sequence
 from numbers import  Real
 from itertools import  product
 from uam4x.log import get_log
+from uam4x.utils import log
+import numpy as np
 
 class Solution:
+    log = get_log(log, object_name='solution')
     def __init__(self) -> None:
         self.tracked_outputs = []
         self.links = []
         self.steps = {}
-        self.log = get_log(log, object_name='solution' )
+        self.log = Solution.log
         self.log.debug(f'initialize')
 
     def add_link(self, independent:str, dependent:str):
@@ -64,7 +67,7 @@ class Solution:
         self.log.debug(f'add tracked output: {output}')
         if output in self.tracked_outputs:
             self.log.error(f"output already being tracked: {output}")
-            raise FrameworkError(f"output already being tracked: {output}")
+            raise RuntimeError(f"output already being tracked: {output}")
         self.tracked_outputs.append(output)
 
     def remove_tracked_output(self, output:str):
@@ -103,7 +106,7 @@ class Solution:
     @classmethod
     def _from_dict(cls, data: dict) -> 'Solution':
         sol = cls()
-        log.debug('solution from dict')
+        cls.log.debug('solution from dict')
         # Reconstruct steps, mapping plugin name to class if possible
         for step_name, step_data in data["steps"].items():
             plugin_name = step_data["plugin"]
@@ -114,6 +117,7 @@ class Solution:
         return sol
 
 class Plugin():
+    log = get_log(log, object_name='Plugin base class')
     def __init__(self) -> None:
         self._declare_partials = False
         self._check_partials_options = False
@@ -124,17 +128,16 @@ class Plugin():
         self.plugin_input_names = {}
         self.plugin_output_names = {}
         self.partial_2d_list = []
-        self.log = get_log(log, object_name='Plugin base class')
+        self.log = Plugin.log
 
     def setup_plugin(self, plugin_options:dict):
         self.log.debug('setup plugin')
-        pass
 
     def run_plugin(self, links:dict, work_dir:str):
         self.log.debug('run plugin')
-        pass
 
-    def declare_partials_plugin(self, of: str|Sequence[str], wrt: str|Sequence[str], method='fd', step=None, form=None):
+    def declare_partials_plugin(self, of: str|Sequence[str], wrt: str|Sequence[str], method='fd', step=None, form=None,
+                                rows: list|np.ndarray|None=None, cols: list|np.ndarray| None=None):
         '''
         User can declare partials as many times as they want here, and this is
         stored in a dictionary which will eventually be consolidated into a single
@@ -180,7 +183,8 @@ class Plugin():
                                  f'Instead, leave step blank or set it equal to None')
 
         self.partials_counter += 1
-        self.initial_partials.append({'of': of,'wrt': wrt,'method': method, 'step': step, 'form': form})
+        self.initial_partials.append({'of': of,'wrt': wrt,'method': method, 'step': step, 'form': form,
+                                      'rows': rows,'cols': cols,})
 
 
 
@@ -246,7 +250,9 @@ class Plugin():
             for in_name, out_name in product(ofs, wrts):
                 self.comprehensive_partials_dict[(in_name, out_name)] =  {'method': data['method'],
                                                                                      'form': data['form'],
-                                                                                     'step':data['step'] }
+                                                                                     'step':data['step'] ,
+                                                                                     'rows': data['rows'],
+                                                                                     'cols': data['cols'],}
 
         return self.comprehensive_partials_dict
 
@@ -269,7 +275,6 @@ class Plugin():
 
     def compute_partials_plugin(self, links: dict):
         self.log.debug('compute partials plugin')
-        pass
 
     def set_check_partials_options(self, form='forward', step=None):
         self.log.debug('set check partials options')
@@ -277,23 +282,29 @@ class Plugin():
         self.check_form = form
         self.check_step = step
 
-    def declare_input(self, name, var_type, value=None, shape=None, shape_by_conn=False):
-        self.log.debug(f'declare input: {name}')
+    def declare_input(self, name, var_type, value=None, shape: tuple|None=None, shape_by_conn: bool=False, copy_shape: str|None=None):
         if '~' in  name:
             self.log.error('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
-        self.plugin_input_names[name] = {'type': var_type, 'value': value,'shape': shape,'shape_by_conn': shape_by_conn}
+        self.plugin_input_names[name] = {'type': var_type,
+                                         'value': value,
+                                         'shape': shape,
+                                         'shape_by_conn': shape_by_conn,
+                                         'copy_shape': copy_shape}
 
-    def declare_output(self, name, var_type, value=None, shape=None, shape_by_conn=False):
-        self.log.debug(f'declare output: {name}')
+    def declare_output(self, name, var_type, value=None, shape: tuple|None=None, shape_by_conn: bool=False, copy_shape: str|None=None):
         if '~' in  name:
             self.log.error('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
-        self.plugin_output_names[name] = {'type': var_type,'value': value, 'shape': shape,'shape_by_conn': shape_by_conn}
+        self.plugin_output_names[name] = {'type': var_type,
+                                          'value': value,
+                                          'shape': shape,
+                                          'shape_by_conn': shape_by_conn,
+                                          'copy_shape': copy_shape}
 
 
 def register_plugin(cls):
@@ -316,7 +327,7 @@ def register_plugin(cls):
             module_origin = os.path.join(os.getcwd(), cls.__module__ + '.py')
 
     if plugin_name in _config['PLUGINS'] and _config['PLUGINS'][plugin_name] != module_origin:
-        print(f"WARNING: Plugin '{plugin_name}' already registered\nOverwritting existing data")
+        log.warning(f"Plugin '{plugin_name}' already registered\nOverwritting existing data")
 
     _config['PLUGINS'][plugin_name] = module_origin
     with open(config_path, 'w') as configfile:

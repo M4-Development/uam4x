@@ -2,10 +2,9 @@ from uam4x.study import Study
 import os
 from uam4x.openmdao_optimization import Optimization
 import copy
-import traceback
-from uam4x.log import *
+from uam4x.log import get_log
 from uam4x.utils import log
-from uam4x.custom_errors import *
+from uam4x.custom_errors import PluginException
 
 from uam4x.utils import check_continuous, get_param_type
 
@@ -41,7 +40,7 @@ class Engine:
     work_dir : str
         Working directory for execution outputs.
     """
-
+    log = get_log(log, object_name='engine')
     def __init__(self, study:Study, work_dir, num_processes=1) -> None:
         self.study = study
         self.num_processes = num_processes
@@ -50,7 +49,7 @@ class Engine:
         self.current_sweep_values = {}
         self.work_dir = work_dir
         os.makedirs(self.work_dir, exist_ok=True)
-        self.log = get_log(log, object_name='engine')
+        self.log = Engine.log
 
 
     def check_partials(self, trade_name, form='forward', step=1.e-6):
@@ -507,43 +506,14 @@ class Engine:
             If any design variable is not of continuous type.
         """
         # add desvars
-        self.log.debug('check discrete variables')
-        for name, lower, upper in zip(
-            state['des_var_names'],
-            state['des_var_lower'],
-            state['des_var_upper'],
-            ):
-
+        for name in  state['des_vars']:
             des_var_type = get_param_type(name,self.study, plugins)
             if not check_continuous(des_var_type):
                 self.log.error(f'The design variable: {name} is of type {des_var_type}. Only floats allowed as design variables')
                 raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
                                 f'Only floats allowed as design variables')
     def check_constraints(self, plugins, state):
-        """
-        Validate constraints for optimization.
-
-        Checks that all constraints are of continuous type (float)
-        as required for gradient-based optimization.
-
-        Parameters
-        ----------
-        plugins : dict
-            Dictionary of plugin instances to validate.
-        state : dict
-            State dictionary containing constraint information.
-
-        Raises
-        ------
-        TypeError
-            If any constraint is not of continuous type.
-        """
-        self.log.debug('check constraints')
-        for name, lower, upper in zip(
-            state['constraint_names'],
-            state['constraint_lower'],
-            state['constraint_upper'],
-        ):
+        for name in  state['constraints']:
             constraint_type = get_param_type(name,self.study, plugins)
             is_continuous = check_continuous(constraint_type)
             if not is_continuous:

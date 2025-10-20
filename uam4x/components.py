@@ -34,17 +34,17 @@ class Parameter:
     description : str, optional
         Description of the parameter.
     """
-
+    log = get_log(log, object_name=f'parameter')
     def __init__(self, name: str, default_value, dtype, unit_type: UnitType = None, unit: Enum = None, description: str = ""):
         from uam4x.units import UnitType
         self.name = name
         self.dtype = dtype
-        self.log = get_log(log, object_name=f'parameter: {name}')
+        self.log = Parameter.log
         if not isinstance(default_value, dtype):
             self.log.error(f"Parameter '{name}' must be of type {dtype.__name__}, got {type(default_value).__name__}")
             raise TypeError(f"Parameter '{name}' must be of type {dtype.__name__}, got {type(default_value).__name__}")
         self._value = default_value
-    
+
         self.unit_type = unit_type if unit_type is not None else UnitType.NONE
         self.unit = unit if unit is not None else ""
         self.description = description
@@ -156,7 +156,7 @@ class Parameter:
         -------
         Parameter
         """
-        log.debug('Deserialize a parameter from a dictionary')
+        cls.log.debug('Deserialize a parameter from a dictionary')
         dtype = type_string_to_type(data["dtype"])
         if dtype == np.ndarray:
             value = np.array(data["value"])
@@ -182,12 +182,12 @@ class Mode:
     component : Component, optional
         The parent component.
     """
-
+    log = get_log(log, object_name=f'mode')
     def __init__(self, name: str, component: "Component"):
         self.name = name
         self._overrides = {}
         self.component = component  # Reference to parent component for inheritance
-        self.log = get_log(log, object_name=f'mode: {name}')
+        self.log = Mode.log
 
     def set_parameter(self, name: str, value):
         """
@@ -339,13 +339,13 @@ class Component:
     name : str
         Name of the component.
     """
-
+    log = get_log(log, object_name=f'component')
     def __init__(self, name: str):
         self.name = name
         self._parameters = {}
         self._modes = {}
         self._is_setup = True
-        self.log = get_log(log, object_name= f'component: {name} ')
+        self.log = Component.log
         self.setup()
         self._is_setup = False
         setattr(self, 'baseline', self)
@@ -355,7 +355,6 @@ class Component:
         Override in subclasses to add parameters using add_parameter().
         """
         self.log.debug(f'Override in subclasses to add parameters using add_parameter()')
-        pass
 
     def add_parameter(self, name: str, default_value, dtype, unit_type=None, unit=None, description=""):
         """
@@ -549,7 +548,7 @@ class Component:
         -------
         Component
         """
-        log.debug('Deserialize a component from a dictionary')
+        cls.log.debug('Deserialize a component from a dictionary')
         # Parameters
         comp_type = data["component_type"]
         comp_class = get_commponent_class(comp_type)

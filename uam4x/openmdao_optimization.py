@@ -8,13 +8,14 @@ from uam4x.log import get_log
 from uam4x.utils import log
 
 class Optimization:
+    log = get_log(log, object_name='optimization')
     def __init__(self, study:Study, state, plugins, out_dir,check_partials=False) -> None:
         self.study = study
         self.state = state
         self.plugins = plugins
         self.out_dir = out_dir
         self.check_partials = check_partials
-        self.log = get_log(log, object_name='optimization')
+        self.log = Optimization.log
 
     def run_problem(self):
         problem = om.Problem()
@@ -55,35 +56,41 @@ class Optimization:
             problem.model.connect(independent.replace(".", "~"), dependent.replace(".", "~"))
 
         # add desvars
-        for name, lower, upper in zip(
-            self.state['des_var_names'],
-            self.state['des_var_lower'],
-            self.state['des_var_upper'],
-        ):
+        for name, data in  self.state['des_vars'].items():
             dv_type = get_param_type(name, self.study)
+            lower, upper = data['lower'], data['upper']
+            indices = data['indices']
             if dv_type == np.ndarray:
                 lower = np.array(lower)
                 upper = np.array(upper)
             else:
                 lower = dv_type(lower)
                 upper = dv_type(upper)
-            problem.model.add_design_var(name.replace(".", "~"), lower, upper)
+            problem.model.add_design_var(name.replace(".", "~"), lower, upper, indices=indices)
 
         # add constraints
-        for name, lower, upper in zip(
-            self.state['constraint_names'],
-            self.state['constraint_lower'],
-            self.state['constraint_upper'],
-        ):
+        for name, data in  self.state['constraints'].items():
 
             const_type = get_param_type(name, self.study, self.plugins)
+            lower,upper = data['lower'], data['upper']
+            indices = data['indices']
             if const_type == np.ndarray:
                 lower = np.array(lower)
                 upper = np.array(upper)
+                #assumes an earlier check that shapes match (need to add)
+                if not lower.shape or not upper.shape:
+                    lower = float(lower)
+                    upper = float(upper)
+                else:
+                    if lower.ndim == 1 and  lower.shape[0] == 1:
+                        lower = float(lower)
+                    if upper.ndim == 1 and  upper.shape[0] == 1:
+                        upper = float(upper)
+
             else:
                 lower = const_type(lower)
                 upper = const_type(upper)
-            problem.model.add_constraint(name.replace(".", "~"), lower, upper)
+            problem.model.add_constraint(name.replace(".", "~"), lower, upper, indices)
 
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
@@ -93,13 +100,13 @@ class Optimization:
         problem.run_driver()
 
         if not self.check_partials:
-            for tracked_output in self.study.solution.tracked_outputs + self.state['des_var_names']:
+            for tracked_output in self.study.solution.tracked_outputs + list(self.state['des_vars'].keys()):
                 self.study._add_overwrite(self.state, tracked_output, problem.get_val(tracked_output.replace(".", "~"))[0])
 
         return problem
 
 class OpenmdaoPreComp(om.IndepVarComp):
-
+    log = get_log(log, object_name='OpenmdaoPreComp')
     def initialize(self):
         self.log = get_log(log, object_name='OpenmdaoPreComp')
         self.log.debug('initialize')
@@ -118,9 +125,9 @@ class OpenmdaoPreComp(om.IndepVarComp):
                 self.add_output(param_name.replace(".", "~"), val=value)
 
 class UniversalOpenmdaoComp(om.ExplicitComponent):
-
+    log = get_log(log, object_name='UniversalOpenmdaoComp')
     def initialize(self):
-        self.log = get_log(log, object_name='UniversalOpenmdaoComp')
+        self.log = UniversalOpenmdaoComp.log
         self.log.debug('initialize')
         self.options.declare("plugin")
         self.options.declare("input_names")
@@ -141,10 +148,14 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             self.set_check_partial_options(wrt=['*'], form=self.plugin.check_form, step=self.plugin.check_step)
 
         for input_name in self.input_names:
+            plugin_name = input_name.split('.')[0]
             name = '.'.join(input_name.split('.')[1:])
             input_type = self.plugin.plugin_input_names[name]['type']
             input_shape = self.plugin.plugin_input_names[name]['shape']
             input_shape_by_conn = self.plugin.plugin_input_names[name]['shape_by_conn']
+            input_copy_shape = self.plugin.plugin_input_names[name]['copy_shape']
+            if input_copy_shape is not None:
+                input_copy_shape = plugin_name.replace('.', '~') + input_copy_shape.replace('.', '~')
             if not check_continuous(input_type):
                 if input_type is int:
                     temp = 1
@@ -153,13 +164,17 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 self.add_discrete_input(input_name.replace(".", "~"), temp)
             else:
                 cont_input = True
-                self.add_input(input_name.replace(".", "~"), shape=input_shape, shape_by_conn=input_shape_by_conn)
+                self.add_input(input_name.replace(".", "~"), shape=input_shape, shape_by_conn=input_shape_by_conn, copy_shape=input_copy_shape)
 
         for output_name in self.output_names:
+            plugin_name = output_name.split('.')[0]
             name = '.'.join(output_name.split('.')[1:])
             output_type = self.plugin.plugin_output_names[name]['type']
             output_shape = self.plugin.plugin_output_names[name]['shape']
             output_shape_by_conn = self.plugin.plugin_output_names[name]['shape_by_conn']
+            output_copy_shape =  self.plugin.plugin_output_names[name]['copy_shape']
+            if output_copy_shape is not None:
+                output_copy_shape = plugin_name.replace('.', '~') + '~' + output_copy_shape.replace('.', '~')
             if not check_continuous(output_type):
                 if output_type is int:
                     temp = 1
@@ -168,7 +183,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 self.add_discrete_output(output_name.replace(".", "~"), temp)
             else:
                 cont_output = True
-                self.add_output(output_name.replace(".", "~"), shape=output_shape,shape_by_conn=output_shape_by_conn)
+                self.add_output(output_name.replace(".", "~"), shape=output_shape,shape_by_conn=output_shape_by_conn, copy_shape=output_copy_shape)
 
         if cont_input and cont_output:
             partials = self.plugin.build_partials(self.input_names, self.output_names)

@@ -3,7 +3,12 @@ import json
 
 import numpy as  np
 
-from uam4x.log import *
+from uam4x.log import FileLogger
+
+import sys
+DEV = True
+if hasattr(sys, '_MEIPASS'):  # this indicates we are in the pyinstaller exe
+    DEV = False
 
 log = FileLogger(filename_log=None)
 
@@ -108,6 +113,3 @@ def convert_numpy_to_python(value):
         return {k: convert_numpy_to_python(x) for  k, x in value.items()}
 
     return value
-
-
-
