@@ -2,7 +2,7 @@ from typing import Callable
 import os
 import json
 import importlib.util
-from uam4x.utils import check_and_get_config
+from uam4x.utils import check_and_get_config, check_numpy_shape, check_if_scalar, is_numpy_array, normalize_shape
 _plugin_registry = {}
 from collections.abc import Sequence
 from numbers import  Real
@@ -282,29 +282,46 @@ class Plugin():
         self.check_form = form
         self.check_step = step
 
-    def declare_input(self, name, var_type, value=None, shape: tuple|None=None, shape_by_conn: bool=False, copy_shape: str|None=None):
+    @staticmethod
+    def check_declared_IO(name, var_type, value, shape):
         if '~' in  name:
             self.log.error('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
+        
+        if shape is  not None:
+            
+            if var_type is not np.ndarray:
+                raise ValueError(f'{name} has declared type: {var_type} but a shape argument was provided\n'
+                                 f'only np.ndarray types are allowed to have shapes')
+            else:
+                if not check_numpy_shape(shape):
+                    raise ValueError(f'The shape must be declared as a tuple of integers or as a\n'
+                                 f'single integer or as NoneType. The shape of {name} is {shape} which is invalid')
+            
+                shape = normalize_shape(shape)
+                if value is  not None:
+                    if check_if_scalar(value):
+                        pass
+                    elif value.shape != shape:
+                        raise ValueError(f'If the value of an array is not declared as a scalar, then the shape must match\n'
+                                         f'the declared shape. The variable {name} has declared shape {shape} and actual shape {value.shape}')
+        return shape
+        
+                    
+                    
+    def declare_input(self, name, var_type, value=None, shape: int|tuple|None=None):
+        shape = self.check_declared_IO(name, var_type, value, shape)
         self.plugin_input_names[name] = {'type': var_type,
                                          'value': value,
-                                         'shape': shape,
-                                         'shape_by_conn': shape_by_conn,
-                                         'copy_shape': copy_shape}
+                                         'shape': shape}
 
-    def declare_output(self, name, var_type, value=None, shape: tuple|None=None, shape_by_conn: bool=False, copy_shape: str|None=None):
-        if '~' in  name:
-            self.log.error('Tildes (~) are not allowed in variable names\n'
-                             f'The following name is not allowed: {name}')
-            raise ValueError('Tildes (~) are not allowed in variable names\n'
-                             f'The following name is not allowed: {name}')
+    def declare_output(self, name, var_type, value=None, shape: int|tuple|None=None):
+        shape = self.check_declared_IO(name, var_type, value, shape)
         self.plugin_output_names[name] = {'type': var_type,
                                           'value': value,
-                                          'shape': shape,
-                                          'shape_by_conn': shape_by_conn,
-                                          'copy_shape': copy_shape}
+                                          'shape': shape}
 
 
 def register_plugin(cls):

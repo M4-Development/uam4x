@@ -60,12 +60,13 @@ class Optimization:
             dv_type = get_param_type(name, self.study)
             lower, upper = data['lower'], data['upper']
             indices = data['indices']
+            
+            # additional array wrapping here for floats, lists already wrapped
             if dv_type == np.ndarray:
-                #np.arrays are dealt with in
-                #execution_engine.py (shape checked)
-                #they are already of correct type from the
-                #control.py from_dict function                
-                pass
+                if lower is  not None:
+                    lower = np.array(lower)
+                if upper is  not None:
+                    upper = np.array(upper)
             else:
                 if lower is  not None:
                     lower = dv_type(lower)
@@ -79,12 +80,13 @@ class Optimization:
             const_type = get_param_type(name, self.study, self.plugins)
             lower,upper = data['lower'], data['upper']
             indices = data['indices']
+            
+            # additional array wrapping here for floats, lists already wrapped            
             if const_type == np.ndarray:
-                #np.arrays are dealt with in
-                #execution_engine.py (shape checked)
-                #they are already of correct type from the
-                #control.py from_dict function
-                pass    
+                if lower is not None:
+                    lower = np.array(lower)
+                if upper is  not None:
+                    upper = np.array(upper)
             else:
                 if lower is  not None:
                     lower = const_type(lower)

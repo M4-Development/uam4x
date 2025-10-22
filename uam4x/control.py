@@ -3,18 +3,24 @@ import copy
 from uam4x.log import get_log
 from uam4x.utils import log
 import numpy as np
+from uam4x.utils import check_continuous, is_numpy_array, value_to_type_name
 
 class Optimization:
     def __init__(self) -> None:
-        self._optimization_dict={'type': 'Optimization',
-                                         'des_vars': {},
-                                         'constraints': {},
-                                         'objective_name': None}
+        self.type = 'Optimization'
+        self.des_vars = {}
+        self.constraints = {}
+        self.objective_name = ''
 
     def _to_dict(self):
-        #if user accidentally calls, won't modify the actual optimization dict
-        return copy.deepcopy(self._optimization_dict)
-
+        save_dict = {
+            'type': self.type,
+            'des_vars': self.des_vars,
+            'constraints': self.constraints,
+            'objective_name': self.objective_name
+        }
+        return save_dict
+    
     @classmethod
     def _from_dict(cls, data: dict) -> 'Optimization':
         obj = cls()
@@ -30,25 +36,67 @@ class Optimization:
                 des_var_vals['lower'] = np.array(des_var_vals['lower'])
             if isinstance(des_var_vals['upper'], list):
                 des_var_vals['upper'] = np.array(des_var_vals['upper'])
-                
-        obj._optimization_dict = {"type": "Optimization", 
-                                   "des_vars": data['des_vars'],
-                                   "constraints": data['constraints'],
-                                   "objective_name": data['objective_name']
-                                   }
+        
+        obj.type = data['type']
+        obj.des_vars = data['des_vars']
+        obj.constraints = data['constraints']
+        obj.objective_name = data['objective_name']
         return obj
     
-    def add_design_var(self, name: str, lower: np.ndarray|list|None=None, upper:np.ndarray|list|None=None, indices: list|None=None):
-        self._optimization_dict['des_vars'][name] = {'lower': lower,
-                                               'upper': upper,
-                                               'indices': indices}
-
-    def add_constraint(self, name: str, lower: list|None=None, upper: list|None=None, indices=None):
-        self._optimization_dict['constraints'][name] = {'lower': lower,
-                                                        'upper': upper,
-                                                        'indices': indices}
+    def add_design_var(self, name: str, lower: np.ndarray|float|np.floating|None=None,
+                       upper:np.ndarray|float|np.floating|None=None, indices: list|None=None):
+        
+        self.check_upper_lower(name, 'Design Variable', lower=lower, upper=upper, indices=indices)      
+        self.des_vars[name] = {
+            'lower': lower,
+            'upper': upper,
+            'indices': indices
+        }
+        
+    def add_constraint(self, name: str, lower: np.ndarray|float|np.floating|None=None,
+                       upper: np.ndarray|float|np.floating|None=None, indices=None):
+        
+        self.check_upper_lower(name, const_or_dv='Constraint', lower=lower, upper=upper, indices=indices)        
+        self.constraints[name] = {
+            'lower': lower,
+            'upper': upper,
+            'indices': indices,
+        }
+    
+    @staticmethod
+    def check_upper_lower(name: str, const_or_dv, lower: np.ndarray|float|np.floating|None=None, upper: np.ndarray|float|np.floating|None=None,
+                          indices: list|np.ndarray|None=None):
+        
+        # At least one bound must be declared on a constraint
+        
+        if lower is  None and  upper is  None and  const_or_dv == 'Constraint':
+            raise ValueError(f'At least one constraint must be declared. The constraint {name}\n'
+                             f'does not have at least a lower or upper bound declared.')        
+       
+        # Check continuity within our paradigm (here user would not be able to declare constraints as lists, ints etc.)
+        #without, relies on MDAO to consolidate mismatch e.g declared as array but some weird list is provided. 
+        if lower is not None and  not check_continuous(lower):
+            raise TypeError(f'The lower bound for {name} is not continuos.\n'
+                            f'Only floats and arrays are accepted.')
+        if upper is not None and  not check_continuous(upper):
+            raise TypeError(f'The upper bound for {name} is not continuos.\n'
+                            f'Only floats and arrays are accepted.')        
+        
+        elif lower is not None and  upper is  not None:
+            if type(lower) != type(upper):
+                raise TypeError(f'Upper and lower bounds must be of the same type. The {const_or_dv}:{name}\n'
+                                f'has a lower bound of type {value_to_type_name(lower)}\n'
+                                f'and an upper bound of type {value_to_type_name(upper)}\n')
+            
+            # Note, if one is an np.ndarray the other must be as well
+            if is_numpy_array(lower) and  is_numpy_array(upper):
+                if lower.shape != upper.shape:
+                    raise ValueError(f'Constraint shapes must match.The {const_or_dv} {name}\n'
+                                     f'has lower shape: {lower.shape} and upper shape {upper.shape}.')        
+    
     def add_objective(self, name: str):
-        self._optimization_dict['objective_name'] = name
+        self.objective_name = name
+        
 class ParameterSweep:
     log = get_log(log, object_name='parameter sweep')
     def __init__(self, param_name_to_value_list: Dict[str, Any], child:Union['ParameterSweep', Optimization]=None) -> None:
@@ -150,16 +198,12 @@ class Control:
         return control
 
 if __name__ == "__main__":
-    #TODO: Update this to use the new Optimization class
-    opt = Optimization(
-        des_var_names=["wing_span", "wing_area"],
-        des_var_lower=[10.0, 20.0],
-        des_var_upper=[15.0, 30.0],
-        constraint_names=["drag"],
-        constraint_lower=[0.1],
-        constraint_upper=[0.5],
-        objective_name="weight"
-    )
+    opt = Optimization()
+    opt.add_design_var(name="wing_span", lower=10.0, upper=15.0)
+    opt.add_design_var(name="wing_area", lower=20.0, upper=30.0)
+    opt.add_constraint('drag', lower=0.1, upper=0.5)
+    opt.add_objective('weight')
+
     param_sweep = ParameterSweep(
         param_name_to_value_list={
             "aspect_ratio": [10.0, 12.5, 15.0],

@@ -5,8 +5,7 @@ import json
 import os
 import copy
 from uam4x.log import get_log
-from uam4x.utils import log
-from uam4x.utils import convert_numpy_to_python
+from uam4x.utils import convert_numpy_to_python, get_param_type,log
 
 class _Overwrite():
     log = get_log(log, object_name='overwrite')
@@ -340,15 +339,12 @@ if __name__ == "__main__":
 
     #TODO: Update this to use the new Optimization class
     # Define a control with a sweep and an optimization child
-    opt = Optimization(
-        des_var_names=["x", "y"],
-        des_var_lower=[0.0, 0.0],
-        des_var_upper=[10.0, 10.0],
-        constraint_names=["c1"],
-        constraint_lower=[0.0],
-        constraint_upper=[5.0],
-        objective_name="obj"
-    )
+    opt = Optimization()
+    opt.add_design_var(name='x', lower=0.0, upper=10.0)
+    opt.add_design_var(name='y', lower=0.0, upper=10.0)
+    opt.add_constraint(name='c1', lower=0.0, upper=5.0)
+    opt.add_objective('obj')
+
     sweep = ParameterSweep(
         param_name_to_value_list={
             "param1": [1, 2, 3],
@@ -419,5 +415,5 @@ if __name__ == "__main__":
 
     from execution_engine import Engine
     engine = Engine(study, "test_work")
-    print(engine.get_param_type("vehicles.TestVehicle.left_wing.happy.span",[]))
-    print(engine.get_param_type("vehicles.TestVehicle.left_wing.span",[]))
+    print(get_param_type("vehicles.TestVehicle.left_wing.happy.span",study))
+    print(get_param_type("vehicles.TestVehicle.left_wing.span",study))

@@ -46,9 +46,9 @@ def check_and_get_config(conf_path):
 
 def check_continuous(val_or_type):
     #Handle values (e.g 1, 2.0, np.array([0.0,0.0,...]),np.array([0,0,...]))
-    if (isinstance(val_or_type, (float, np.floating))):
+    if is_float(val_or_type):
         return True
-    elif isinstance(val_or_type, np.ndarray):
+    elif is_numpy_array(val_or_type):
         return np.issubdtype(val_or_type.dtype, np.floating)
     #Handle types
     if isinstance(val_or_type, type) and (val_or_type == float or issubclass(val_or_type, (np.floating, np.ndarray))):
@@ -62,7 +62,7 @@ def check_if_scalar(val_or_type):
     to be used primarily for checking upper and
     lower bounds for constraints and des vars
     '''
-    if isinstance(val_or_type, (Real)) and not isinstance(val_or_type, (bool, np.bool_)):
+    if isinstance(val_or_type, (Real)) and not is_bool(val_or_type):
         return True
     if isinstance(val_or_type, type) and (issubclass(val_or_type, (Real, np.integer, np.floating)) and val_or_type not in (np.bool_,bool)):
         return True
@@ -127,3 +127,69 @@ def convert_numpy_to_python(value):
         return {k: convert_numpy_to_python(x) for  k, x in value.items()}
 
     return value
+    
+
+def check_numpy_shape(shape):
+    #Integer shapes are allowed
+    if is_bool(shape):
+        return False    
+    elif is_integer(shape):
+        return shape >= 0
+    elif is_tuple(shape):
+        for dim in  shape:
+            if is_bool(dim):
+                return False
+            if not is_integer(dim):
+                return False
+            if dim < 0:
+                return False
+        return True
+    
+    
+    return False
+
+def normalize_shape(shape):
+    '''
+    Given a shape intended for a numpy array
+    if the provided shape is a tuple, then
+    the returns original value, if it is an int
+    then it returns the canonical (N,) form shown
+    by numpy when shape is requested
+    
+    NOTE: ASSUMES check_numpy_shape has been run on the shape
+    already. 
+    '''
+    if is_tuple(shape):
+        return shape
+    if is_integer(shape):
+        return (int(shape), )
+# Nicer type checkers
+
+def is_bool(value):
+    return isinstance(value, (bool, np.bool_))
+
+def is_integer(value):
+    return isinstance(value, (int, np.integer))
+
+def is_float(value):
+    return isinstance(value, (float, np.floating))
+
+def is_tuple(value):
+    return isinstance(value, tuple)
+
+def is_numpy_array(value):
+    return isinstance(value, np.ndarray)
+
+#Get type name from a value
+def value_to_type_name(value):
+    
+    value_type = type(value)
+    if hasattr(value_type, '__name__'):
+        return value_type.__name__
+    elif str(value_type) is  not None:
+        return str(value_type)
+    else:
+        return None
+        
+    
+    

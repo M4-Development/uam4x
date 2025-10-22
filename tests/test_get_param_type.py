@@ -5,6 +5,7 @@ from uam4x.study import Study, Variants
 import os
 from uam4x.execution_engine import Engine
 from uam4x.solution import Plugin, register_plugin
+from uam4x.utils import get_param_type
 
 
 def create_sample_problem(study: Study):
@@ -71,12 +72,10 @@ class TestPlug(Plugin):
         # declare inputs
         Plugin.declare_input(self,"testin_cont", float, 0.0)
         Plugin.declare_input(self,"testin_discrete", int, 1)
-        self.declare_discrete("testin_discrete")
 
         # declare outputs
         Plugin.declare_output(self,"testout_cont", float, 0.0)
         Plugin.declare_output(self,"testout_discrete", int, 1)
-        self.declare_discrete("testout_discrete")
 
     def run_plugin(self, links:dict, work_dir:str):
         results = {}
@@ -104,18 +103,18 @@ def test_get_param_type(study:Study):
             plugins[step_name] = plugin
 
     # check get_param_type functionality
-    assert eng.get_param_type('vehicles.mtr.wing.span',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('vehicles.mtr.wing.area',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('vehicles.mtr.wing.sweep',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('vehicles.mtr.aircraft.wpass',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('vehicles.mtr.aircraft.npass',plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('vehicles.mtr.rotor.nblade',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('vehicles.mtr.rotor.vflight.tilt',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('vehicles.mtr.rotor.cruise.tilt',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('test_plug.testin_cont',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('test_plug.testin_discrete',plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('test_plug.testout_cont',plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert eng.get_param_type('test_plug.testout_discrete',plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.wing.span',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.wing.area',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.wing.sweep',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.aircraft.wpass',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.aircraft.npass',study, plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.rotor.nblade',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.rotor.vflight.tilt',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.rotor.cruise.tilt',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('test_plug.testin_cont',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('test_plug.testin_discrete',study, plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('test_plug.testout_cont',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('test_plug.testout_discrete',study, plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
 
 
 
