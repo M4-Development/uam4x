@@ -82,7 +82,7 @@ class FileLogger(SimpleLogger):
         self.capture_level_min = "DEBUG"
         # self.capture_level_min = "WARNING"
         self.capture_log = []
-        # self.gui_log = None
+        self.gui_log = None
         self.min_filelog_level = "DEBUG"
         self.min_console_level = "INFO"
         self.next_actor_name = None
@@ -90,17 +90,17 @@ class FileLogger(SimpleLogger):
                                          log_func=self.log_function_handler)
 
 
-    # def set_gui_log(self, handler):
-    #     """
-    #     Sets the gui_log handler
+    def set_gui_log(self, handler):
+        """
+        Sets the gui_log handler
 
-    #     Parameters
-    #     ----------
-    #     handler : CustomConsoleHandler
-    #         A custom console handler
+        Parameters
+        ----------
+        handler : CustomConsoleHandler
+            A custom console handler
 
-    #     """
-    #     self.gui_log = handler
+        """
+        self.gui_log = handler
 
     def set_next_actor_name(self, actor_name):
         """
@@ -211,15 +211,8 @@ class FileLogger(SimpleLogger):
             msg2 = "%s - %s - %s - %s\n" % (asctime, "uam4x", typ, msg)
         # msg2 = "%s - %s - %s - %s\n" % (asctime, "uam4x", typ, msg)
 
-
-        # from .html_utils import str_to_html
-        # try:
-        #     str_to_html(typ, filename, lineno, msg2)
-        # except:
-        #     print(typ, filename, lineno, msg2, type(msg2))
-        #     raise
-        # if self.gui_log:
-        #     self.gui_log.emit(msg2)
+        if self.gui_log:
+            self.gui_log.emit(msg2)
         _write(typ, name, msg2, self.encoding)
 
 

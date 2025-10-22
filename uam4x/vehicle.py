@@ -80,7 +80,6 @@ class Vehicle:
             raise NameError(msg)
     @property
     def name(self):
-        self.log.debug('get name')
         return self._name
 
     @name.setter
@@ -97,7 +96,6 @@ class Vehicle:
 
     @property
     def components(self):
-        self.log.debug('get component')
         return self._components
 
     def add_component(self, component):

@@ -290,8 +290,6 @@ class Study:
         step_inputs = []
         step_outputs = []
 
-        self.log.debug('Get all possible vehicle names and step input/output names.')
-
         # Get all vehicle parameter names
         for vehicle in self.vehicles:
             vehicle_name = vehicle.name
@@ -347,7 +345,6 @@ class Study:
         Returns:
             list: List of all possible vehicle names and step input/output names.
         """
-        self.log.debug('Get all possible vehicle names and step input/output names.')
         all_names = self.get_all_names_by_category()
         return all_names['vehicle_names'] + all_names['step_inputs'] + all_names['step_outputs']
     
