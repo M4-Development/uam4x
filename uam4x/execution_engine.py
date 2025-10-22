@@ -3,10 +3,10 @@ import os
 from uam4x.openmdao_optimization import Optimization
 import copy
 from uam4x.log import get_log
-from uam4x.utils import log
 from uam4x.custom_errors import PluginException
 
-from uam4x.utils import check_continuous, get_param_type
+import numpy as  np
+from uam4x.utils import check_continuous, get_param_type, check_if_scalar,log
 
 class Engine:
     """
@@ -506,20 +506,78 @@ class Engine:
             If any design variable is not of continuous type.
         """
         # add desvars
-        for name in  state['des_vars']:
+        for name,data in  state['des_vars'].items():
             des_var_type = get_param_type(name,self.study, plugins)
             if not check_continuous(des_var_type):
                 self.log.error(f'The design variable: {name} is of type {des_var_type}. Only floats allowed as design variables')
                 raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
                                 f'Only floats allowed as design variables')
+            self.check_upper_lower(des_var_type, data['lower'], data['upper'], 'Design Variable') 
+            
+            
     def check_constraints(self, plugins, state):
-        for name in  state['constraints']:
+        for name,data in  state['constraints'].items():
             constraint_type = get_param_type(name,self.study, plugins)
-            is_continuous = check_continuous(constraint_type)
-            if not is_continuous:
-                self.log.error(f'The constraint: {name} is of type {constraint_type}. Only floats allowed as constraints')
+            if not check_continuous(constraint_type):
                 raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
                                 f'Only floats allowed as constraints')
+            self.check_upper_lower(constraint_type, data['lower'], data['upper'], 'Constraint') 
+ 
+ 
+    @staticmethod
+    def check_upper_lower(var_type,  data_lower, data_upper, name):
+        '''
+        Check if desvars/constraints upper and lower bounds have been
+        declared according to paradigm
+        Allow:
+        1.) Blank declarations (e.g only an upper limit, or no limits)
+        2.) Np.ndarrays but declared as scalars (broadcasting)
+        3.) Np.ndarrays if inputted as arrays must have same shape
+        4.) No mixing (scalars and numpy arrays)
+        '''
+        if var_type is  np.ndarray:
+            # If the type has been declared as an ndarray, then
+            # ndarrays and scalars (broadcasting) are okay
+            # if both are None, this is fine (unbounded)
+            
+            if data_lower is not None and data_upper is  not None:
+                #if the upper and lower are declared as scalars, this is fine
+                
+                if check_if_scalar(data_lower) and check_if_scalar(data_upper):
+                    return
+                #since both are not None already, check mismatch declarations for
+                # scalar types
+                
+                if check_if_scalar(data_lower) and not check_if_scalar(data_upper):
+                    raise ValueError(f'For type:{var_type} scalars\n'
+                                     f'are allowed for {name} upper and lower bounds\n'
+                                     f'in the instance when broadcasting is appropriate\n'
+                                     f'but both the upper and lower bounds must be scalars\n'
+                                     f'The upper bound: {data_upper} is not a scalar')
+                
+                if not check_if_scalar(data_lower) and  check_if_scalar(data_upper):
+                    raise ValueError(f'For type:{var_type} scalars\n'
+                                     f'are allowed for {name} upper and lower bounds\n'
+                                     f'in the instance when broadcasting is appropriate\n'
+                                     f'but both the upper and lower bounds must be scalars\n'
+                                     f'The lower bound: {data_lower} is not a scalar')
+                #Now since all instances of scalars have been tested, move to array checking
+                if data_lower.shape != data_upper.shape:
+                    raise ValueError(f'{name} shapes must match\n'
+                               f'The {name} lower has shape: {data_lower.shape}\n'
+                               f'The {name} upper has shape: {data_upper.shape}')
+        else:
+            # now since check_continuous has been run, we know
+            # values are already acceptable types in theory but
+            # need to check for scalars being declared as arrays or some
+            # other unwanted type
+            if data_lower is not None and data_upper is  not None:
+                if not (check_if_scalar(data_lower) or  check_if_scalar(data_upper)):
+                    raise ValueError(f'{name} was declared as {var_type} which is a scalar\n'
+                                 f'but {name} upper is {data_lower}\n'
+                                 f'and {name} lower is {data_upper}\n')
+            
+            
     def check_objective(self, plugins, state):
         """
         Validate objective function for optimization.

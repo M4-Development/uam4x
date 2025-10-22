@@ -4,6 +4,7 @@ import json
 import numpy as  np
 
 from uam4x.log import FileLogger
+from numbers import Real
 
 import sys
 DEV = True
@@ -53,6 +54,19 @@ def check_continuous(val_or_type):
     if isinstance(val_or_type, type) and (val_or_type == float or issubclass(val_or_type, (np.floating, np.ndarray))):
         return True
 
+    return False
+
+def check_if_scalar(val_or_type):
+    '''
+    Checks if a provided value or type is a scalar
+    to be used primarily for checking upper and
+    lower bounds for constraints and des vars
+    '''
+    if isinstance(val_or_type, (Real)) and not isinstance(val_or_type, (bool, np.bool_)):
+        return True
+    if isinstance(val_or_type, type) and (issubclass(val_or_type, (Real, np.integer, np.floating)) and val_or_type not in (np.bool_,bool)):
+        return True
+    
     return False
 
 def type_string_to_type(type_name:str):

@@ -36,8 +36,8 @@ class Optimization:
 
         #make plugin steps
         for step_name in self.study.solution.steps:
-            input_names = set([step_name + '.' + input_name for input_name in set(self.plugins[step_name].plugin_input_names.keys())])
-            output_names = set([step_name + '.' + output_name for output_name in set(self.plugins[step_name].plugin_output_names.keys())])
+            input_names = set([step_name + '.' + input_name for input_name in self.plugins[step_name].plugin_input_names.keys()])
+            output_names = set([step_name + '.' + output_name for output_name in self.plugins[step_name].plugin_output_names.keys()])
             comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(), promotes=['*'])
             # comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(self.log), promotes=['*'])
             comp.options["plugin"] = self.plugins[step_name]
@@ -61,12 +61,17 @@ class Optimization:
             lower, upper = data['lower'], data['upper']
             indices = data['indices']
             if dv_type == np.ndarray:
-                lower = np.array(lower)
-                upper = np.array(upper)
+                #np.arrays are dealt with in
+                #execution_engine.py (shape checked)
+                #they are already of correct type from the
+                #control.py from_dict function                
+                pass
             else:
-                lower = dv_type(lower)
-                upper = dv_type(upper)
-            problem.model.add_design_var(name.replace(".", "~"), lower, upper, indices=indices)
+                if lower is  not None:
+                    lower = dv_type(lower)
+                if upper is  not None:
+                    upper = dv_type(upper)
+            problem.model.add_design_var(name.replace(".", "~"), lower=lower, upper=upper, indices=indices)
 
         # add constraints
         for name, data in  self.state['constraints'].items():
@@ -75,22 +80,17 @@ class Optimization:
             lower,upper = data['lower'], data['upper']
             indices = data['indices']
             if const_type == np.ndarray:
-                lower = np.array(lower)
-                upper = np.array(upper)
-                #assumes an earlier check that shapes match (need to add)
-                if not lower.shape or not upper.shape:
-                    lower = float(lower)
-                    upper = float(upper)
-                else:
-                    if lower.ndim == 1 and  lower.shape[0] == 1:
-                        lower = float(lower)
-                    if upper.ndim == 1 and  upper.shape[0] == 1:
-                        upper = float(upper)
-
+                #np.arrays are dealt with in
+                #execution_engine.py (shape checked)
+                #they are already of correct type from the
+                #control.py from_dict function
+                pass    
             else:
-                lower = const_type(lower)
-                upper = const_type(upper)
-            problem.model.add_constraint(name.replace(".", "~"), lower, upper, indices)
+                if lower is  not None:
+                    lower = const_type(lower)
+                if upper is  not None:
+                    upper = const_type(upper)            
+            problem.model.add_constraint(name.replace(".", "~"), lower=lower, upper=upper, indices=indices)
 
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
@@ -192,9 +192,9 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 of = self.step_name + '~' + pair[0].replace('.', '~')
                 wrt = self.step_name + '~' + pair[1].replace('.', '~')
                 method = data['method']
-                step = data['step']
-                form = data['form']
-                self.declare_partials(of=of, wrt=wrt, method=method, step=step, form=form)
+                step,form = data['step'], data['form']
+                rows,cols = data['rows'], data['cols']
+                self.declare_partials(of=of, wrt=wrt, method=method, step=step, form=form, rows=rows, cols=cols)
 
 
     def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
@@ -203,8 +203,8 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         for name, value in inputs.items():
             plugin_name = name.replace("~", ".")
             plugin_name = ".".join(plugin_name.split(".")[1:])
-            if not self.plugin.plugin_input_names[plugin_name]['type'] == np.ndarray:
-                value = value[0]
+            if not self.plugin.plugin_input_names[plugin_name]['type'] is np.ndarray:
+                value = self.plugin.plugin_input_names[plugin_name]['type'](value)
             self.plugin_dict[plugin_name] = value
         for name, value in discrete_inputs.items():
             plugin_name = name.replace("~", ".")

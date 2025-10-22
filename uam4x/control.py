@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Union
 import copy
 from uam4x.log import get_log
 from uam4x.utils import log
+import numpy as np
 
 class Optimization:
     def __init__(self) -> None:
@@ -17,14 +18,27 @@ class Optimization:
     @classmethod
     def _from_dict(cls, data: dict) -> 'Optimization':
         obj = cls()
-        obj._optimization_dict = {"type": "Optimization",
+        # if upper/lower for DV or constraints are lists, must be
+        #desired to be arrays, so convert. 
+        for constraint, constraint_vals in data['constraints'].items():
+            if isinstance(constraint_vals['lower'], list):
+                constraint_vals['lower'] = np.array(constraint_vals['lower'])
+            if isinstance(constraint_vals['upper'], list):
+                constraint_vals['upper'] = np.array(constraint_vals['upper'])
+        for des_var, des_var_vals in data['des_vars'].items():
+            if isinstance(des_var_vals['lower'], list):
+                des_var_vals['lower'] = np.array(des_var_vals['lower'])
+            if isinstance(des_var_vals['upper'], list):
+                des_var_vals['upper'] = np.array(des_var_vals['upper'])
+                
+        obj._optimization_dict = {"type": "Optimization", 
                                    "des_vars": data['des_vars'],
                                    "constraints": data['constraints'],
                                    "objective_name": data['objective_name']
                                    }
         return obj
-
-    def add_design_var(self, name: str, lower: list|None=None, upper:list|None=None, indices: list|None=None):
+    
+    def add_design_var(self, name: str, lower: np.ndarray|list|None=None, upper:np.ndarray|list|None=None, indices: list|None=None):
         self._optimization_dict['des_vars'][name] = {'lower': lower,
                                                'upper': upper,
                                                'indices': indices}
