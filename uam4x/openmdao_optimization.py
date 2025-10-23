@@ -154,10 +154,6 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             name = '.'.join(input_name.split('.')[1:])
             input_type = self.plugin.plugin_input_names[name]['type']
             input_shape = self.plugin.plugin_input_names[name]['shape']
-            input_shape_by_conn = self.plugin.plugin_input_names[name]['shape_by_conn']
-            input_copy_shape = self.plugin.plugin_input_names[name]['copy_shape']
-            if input_copy_shape is not None:
-                input_copy_shape = plugin_name.replace('.', '~') + input_copy_shape.replace('.', '~')
             if not check_continuous(input_type):
                 if input_type is int:
                     temp = 1
@@ -166,17 +162,14 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 self.add_discrete_input(input_name.replace(".", "~"), temp)
             else:
                 cont_input = True
-                self.add_input(input_name.replace(".", "~"), shape=input_shape, shape_by_conn=input_shape_by_conn, copy_shape=input_copy_shape)
+                self.add_input(input_name.replace(".", "~"), shape=input_shape)
 
         for output_name in self.output_names:
             plugin_name = output_name.split('.')[0]
             name = '.'.join(output_name.split('.')[1:])
             output_type = self.plugin.plugin_output_names[name]['type']
             output_shape = self.plugin.plugin_output_names[name]['shape']
-            output_shape_by_conn = self.plugin.plugin_output_names[name]['shape_by_conn']
-            output_copy_shape =  self.plugin.plugin_output_names[name]['copy_shape']
-            if output_copy_shape is not None:
-                output_copy_shape = plugin_name.replace('.', '~') + '~' + output_copy_shape.replace('.', '~')
+            
             if not check_continuous(output_type):
                 if output_type is int:
                     temp = 1
@@ -185,7 +178,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 self.add_discrete_output(output_name.replace(".", "~"), temp)
             else:
                 cont_output = True
-                self.add_output(output_name.replace(".", "~"), shape=output_shape,shape_by_conn=output_shape_by_conn, copy_shape=output_copy_shape)
+                self.add_output(output_name.replace(".", "~"), shape=output_shape)
 
         if cont_input and cont_output:
             partials = self.plugin.build_partials(self.input_names, self.output_names)

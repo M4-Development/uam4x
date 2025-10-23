@@ -307,6 +307,10 @@ class Plugin():
                     elif value.shape != shape:
                         raise ValueError(f'If the value of an array is not declared as a scalar, then the shape must match\n'
                                          f'the declared shape. The variable {name} has declared shape {shape} and actual shape {value.shape}')
+                    
+        if shape is None and  value is  None and  var_type is np.ndarray:
+            raise ValueError(f'Arrays must have either the shape or value defined (or both). The variable\n'
+                             f'{name} has no shape or value.')
         return shape
         
                     

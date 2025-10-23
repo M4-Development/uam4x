@@ -46,7 +46,7 @@ class Optimization:
     def add_design_var(self, name: str, lower: np.ndarray|float|np.floating|None=None,
                        upper:np.ndarray|float|np.floating|None=None, indices: list|None=None):
         
-        self.check_upper_lower(name, 'Design Variable', lower=lower, upper=upper, indices=indices)      
+        self.check_upper_lower(name, 'design variable', lower=lower, upper=upper, indices=indices)      
         self.des_vars[name] = {
             'lower': lower,
             'upper': upper,
@@ -56,7 +56,7 @@ class Optimization:
     def add_constraint(self, name: str, lower: np.ndarray|float|np.floating|None=None,
                        upper: np.ndarray|float|np.floating|None=None, indices=None):
         
-        self.check_upper_lower(name, const_or_dv='Constraint', lower=lower, upper=upper, indices=indices)        
+        self.check_upper_lower(name, const_or_dv='constraint', lower=lower, upper=upper, indices=indices)        
         self.constraints[name] = {
             'lower': lower,
             'upper': upper,
@@ -69,7 +69,7 @@ class Optimization:
         
         # At least one bound must be declared on a constraint
         
-        if lower is  None and  upper is  None and  const_or_dv == 'Constraint':
+        if lower is  None and  upper is  None and  const_or_dv == 'constraint':
             raise ValueError(f'At least one constraint must be declared. The constraint {name}\n'
                              f'does not have at least a lower or upper bound declared.')        
        
@@ -77,22 +77,28 @@ class Optimization:
         #without, relies on MDAO to consolidate mismatch e.g declared as array but some weird list is provided. 
         if lower is not None and  not check_continuous(lower):
             raise TypeError(f'The lower bound for {name} is not continuos.\n'
-                            f'Only floats and arrays are accepted.')
+                            f'Only floats and floating point arrays are accepted.')
         if upper is not None and  not check_continuous(upper):
             raise TypeError(f'The upper bound for {name} is not continuos.\n'
-                            f'Only floats and arrays are accepted.')        
+                            f'Only floats and floating point arrays are accepted.')        
         
         elif lower is not None and  upper is  not None:
             if type(lower) != type(upper):
                 raise TypeError(f'Upper and lower bounds must be of the same type. The {const_or_dv}:{name}\n'
-                                f'has a lower bound of type {value_to_type_name(lower)}\n'
-                                f'and an upper bound of type {value_to_type_name(upper)}\n')
+                                f'has a lower bound of type {value_to_type_name(lower)} and an upper bound of type {value_to_type_name(upper)}\n')
             
             # Note, if one is an np.ndarray the other must be as well
             if is_numpy_array(lower) and  is_numpy_array(upper):
                 if lower.shape != upper.shape:
-                    raise ValueError(f'Constraint shapes must match.The {const_or_dv} {name}\n'
-                                     f'has lower shape: {lower.shape} and upper shape {upper.shape}.')        
+                    raise ValueError(f'{const_or_dv} shapes must match.The {const_or_dv} {name}\n'
+                                     f'has lower shape: {lower.shape} and upper shape {upper.shape}.')
+                if np.any(upper-lower<0):
+                    raise ValueError(f'{const_or_dv} upper bounds must be greater than or equal to the lower bounds.\n'
+                                     f'The following {const_or_dv} {name} has lower={lower} and upper={upper}.')
+            else:
+                if upper - lower < 0:
+                    raise ValueError(f'{const_or_dv} upper bounds must be greater than or equal to the lower bounds.\n'
+                                     f'The following {const_or_dv} {name} has lower={lower} and upper={upper}.')                    
     
     def add_objective(self, name: str):
         self.objective_name = name

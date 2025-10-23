@@ -51,7 +51,7 @@ class _Overwrite():
             if (
                 name in self.param_state
                 or name in tracked_outputs
-                or ('des_var_names' in self.param_state and name in self.param_state['des_var_names'])
+                or ('des_vars' in self.param_state and name in self.param_state['des_vars'])
             ):
                 results[name] = value
         return results
