@@ -9,6 +9,9 @@ setup(
     url='http://www.m4-engineering.com',
     include_package_data=True,
     install_requires=[
+        'numpy>=2.2.6',
+        'pytest>=8.4.2',
+        'openmdao>=3.39.0'
     ],
     description='M4 Engineering developed UAM design space exploration framework with embedded version control',
 )
