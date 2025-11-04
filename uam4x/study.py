@@ -5,8 +5,8 @@ import json
 import os
 import copy
 from uam4x.log import get_log
-from uam4x.utils import convert_numpy_to_python, get_param_type,log
-
+from uam4x.utils import convert_numpy_to_python, get_param_type,log, is_numpy_array, parse_index, handle_brackets
+from operator import  attrgetter
 class _Overwrite():
     log = get_log(log, object_name='overwrite')
     def __init__(self, param_state:dict) -> None:
@@ -135,6 +135,11 @@ class Study:
         output_names = []
         self.log.debug(f'get plugin input and output names for {step_name}')
         for (independent, dependent) in self.solution.links:
+            # remove indices from index based links
+            if '[' in  independent:
+                independent, _ = handle_brackets(independent)
+            if '[' in dependent:
+                dependent, _ = handle_brackets(dependent)
             if dependent.split('.')[0] == step_name:
                 input_names.append(dependent)
             if independent.split('.')[0] == step_name:
@@ -161,23 +166,20 @@ class Study:
         Retrieve a value from the study using a dotted path string, e.g.:
         'vehicles.multi_objective_vehicle.wing1.aspect_ratio'
         """
-        self.log.debug(f'get the value of {dotted_path}')
-        parts = dotted_path.split('.')
-        obj = self
-        for part in parts:
-            # Try dict access first (for vehicles, parameters, etc.)
-            if isinstance(obj, dict) and part in obj:
-                obj = obj[part]
-            # Try attribute access
-            elif hasattr(obj, part):
-                obj = getattr(obj, part)
-            else:
-                self.log.error(f"Cannot access '{part}' in path '{dotted_path}'")
-                raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
-        # If it's a Parameter, return its value
-        if hasattr(obj, 'value'):
-            return obj.value
-        return obj
+        self.log.debug(f'get the value of {dotted_path}')        
+        inds = None
+        if '[' in  dotted_path:
+            #Functionality exists that checks for brackets in: step name (plugins)
+            # vehicles names, component names, mode names, and parameter names. which [ is not allowed
+            # are all not allowed.
+            #This handles and has checks for the brackets. 
+            dotted_path, inds = handle_brackets(dotted_path)
+        
+        value = attrgetter(dotted_path)(self)
+        if inds is not None:
+            value = value[inds]
+        return value
+
     def _add_overwrite(self, state, name, value):
         self.log.debug(f'add overwrite: {name}')
         temp_over = _Overwrite(state)
@@ -323,7 +325,7 @@ if __name__ == "__main__":
     left_wing.span = 5.
     left_wing.add_mode("happy")
     left_wing.happy.span = 10.
-    right_wing = Wing("right_wing")
+    right_wing = Wing("right_wing") 
     v.add_component(left_wing)
     v.add_component(right_wing)
 
@@ -417,3 +419,6 @@ if __name__ == "__main__":
     engine = Engine(study, "test_work")
     print(get_param_type("vehicles.TestVehicle.left_wing.happy.span",study))
     print(get_param_type("vehicles.TestVehicle.left_wing.span",study))
+    
+    
+    

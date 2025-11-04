@@ -43,9 +43,9 @@ class Vehicle:
         components : list, optional
             List of components that define the vehicle (default: empty list)
         """
-        self._name = name
+        self.log = Vehicle.log        
+        self.name = name
         self._components = components if components is not None else []
-        self.log = Vehicle.log
         self.log.debug(f'initialize')
 
     @property
@@ -58,6 +58,9 @@ class Vehicle:
         if not isinstance(value, str):
             self.log.error("Name must be a string.")
             raise ValueError("Name must be a string.")
+        if '[' in  value or  ']' in  value:
+            self.log.error(f'vehicles cannot have the character "[" or "]" in them')            
+            raise ValueError(f'vehicles cannot have the character "[" or "]" in them')        
         self._name = value
 
     @property
@@ -129,7 +132,6 @@ if __name__ == "__main__":
 
     # Create a vehicle
     v = Vehicle("DemoVehicle")
-
     # Create two wings
     wing1 = Wing("left_wing")
     wing2 = Wing("right_wing")

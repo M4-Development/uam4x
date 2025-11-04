@@ -342,6 +342,9 @@ class Component:
     log = get_log(log, object_name=f'component')
     def __init__(self, name: str):
         self.name = name
+        if '[' in  name:
+            self.log.error(f'components cannot have the character "[" in them')            
+            raise ValueError(f'components cannot have the character "[" in them')         
         self._parameters = {}
         self._modes = {}
         self._is_setup = True
@@ -380,6 +383,9 @@ class Component:
         if not self._is_setup:
             self.log.error("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
             raise RuntimeError("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
+        if '[' in  name or ']' in  name:
+            self.log.error(f'parameters cannot have the character "[" or "]" in them')            
+            raise ValueError(f'parameters cannot have the character "[" or "]" in them')            
         self._parameters[name] = Parameter(name, default_value, dtype, unit_type=unit_type, unit=unit, description=description)
         # Dynamically add property to the instance for this parameter
         def getter(self):
@@ -438,6 +444,9 @@ class Component:
         if not isinstance(mode_name, str):
             self.log.error("add_mode only accepts a string as the mode name.")
             raise TypeError("add_mode only accepts a string as the mode name.")
+        if '[' in mode_name or  ']' in  mode_name:
+            self.log.error(f'modes cannot have the character "[" or "]" in them')            
+            raise ValueError(f'modes cannot have the character "[" or "]" in them')
         mode = Mode(mode_name, self)
         self._modes[mode.name] = mode
         setattr(self, mode.name, mode)

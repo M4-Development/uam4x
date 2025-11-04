@@ -3,7 +3,7 @@ from uam4x.study import Study
 import os
 import shutil
 import numpy as np
-from uam4x.utils import check_continuous, get_param_type
+from uam4x.utils import check_continuous, get_param_type, handle_brackets
 from uam4x.log import get_log
 from uam4x.utils import log
 
@@ -53,7 +53,12 @@ class Optimization:
 
         # Add connections
         for independent, dependent in self.study.solution.links:
-            problem.model.connect(independent.replace(".", "~"), dependent.replace(".", "~"))
+            
+            # parse slices where applicable here:
+            inds = None
+            if '[' in  independent:
+                independent, inds = handle_brackets(independent)
+            problem.model.connect(independent.replace(".", "~"), dependent.replace(".", "~"), src_indices=inds)
 
         # add desvars
         for name, data in  self.state['des_vars'].items():
@@ -103,7 +108,11 @@ class Optimization:
 
         if not self.check_partials:
             for tracked_output in self.study.solution.tracked_outputs + list(self.state['des_vars'].keys()):
-                self.study._add_overwrite(self.state, tracked_output, problem.get_val(tracked_output.replace(".", "~"))[0])
+                if '[' in  tracked_output:
+                    no_ind_tracked_output, inds = handle_brackets(tracked_output)
+                    self.study._add_overwrite(self.state, tracked_output, problem.get_val(no_ind_tracked_output.replace(".", "~"))[inds])
+                else:  
+                    self.study._add_overwrite(self.state, tracked_output, problem.get_val(tracked_output.replace(".", "~"))[0])
 
         return problem
 

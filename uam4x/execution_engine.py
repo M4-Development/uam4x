@@ -6,7 +6,7 @@ from uam4x.log import get_log
 from uam4x.custom_errors import PluginException
 
 import numpy as  np
-from uam4x.utils import check_continuous, get_param_type, check_if_scalar,log
+from uam4x.utils import check_continuous, get_param_type, check_if_scalar,log, parse_index, handle_brackets
 
 class Engine:
     """
@@ -413,6 +413,7 @@ class Engine:
         self.log.debug('check model')
         self.check_links_to_plugins(plugins)
         self.check_link_types(plugins)
+        self.check_link_indices(plugins)
         if state['optimization']: #TODO can this not exist?
             self.check_desvars(plugins, state)
             self.check_constraints(plugins, state)
@@ -440,7 +441,7 @@ class Engine:
         for step_name in self.study.solution.steps:
             # Check that links matched declared plugin I/O
             input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
-
+            
             #check coherance of declared I/O from plugin and from branching script
             for input_name in  input_names:
                 name = '.'.join(input_name.split('.')[1:])
@@ -451,6 +452,10 @@ class Engine:
                                      f"Check your plugin's setup() step for I/O declaration")
             for output_name in  output_names:
                 name = '.'.join(output_name.split('.')[1:])
+                if '[' in  name:
+                    #any time where indexes are specified in the link, this is required to be
+                    # an index specification, nothing to do with the variable name. 
+                    name, _ = handle_brackets(name)                
                 if name not  in plugins[step_name].plugin_output_names:
                     self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                      f"Check your plugin's setup() step for I/O declaration")
@@ -479,15 +484,90 @@ class Engine:
         for link in  self.study.solution.links:
             output_link = link[0]
             input_link = link[1]
+            indexes_specified = False
+            if '[' in  output_link:
+                output_link, _ = handle_brackets(output_link)
+                indexes_specified = True
             output_type = get_param_type(output_link, self.study, plugins)
             input_type = get_param_type(input_link,self.study, plugins)
-            if output_type != input_type:
+            #Since only float arrays are allowed, always assumed that the elements of the arrays are floats
+            if indexes_specified and output_type != np.ndarray:
+                raise ValueError(f'Indexes may only be specified for arrays. The link: {link[1]} is not valid')
+            if indexes_specified and  output_type == np.ndarray and  input_type == float:
+                pass
+            elif output_type != input_type:
                 bad_links.append((output_link,output_type, input_link, input_type))
 
         if bad_links:
             msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
             self.log.error(msg)
             raise TypeError(msg)
+        
+                
+    def check_link_indices(self, plugins):
+        '''
+        check source/destination for:
+        valid indexing for source and destination
+        '''
+        for link in  self.study.solution.links:
+            if link[0].split('.')[0] == 'vehicles':
+                category = 'parameter'
+            else:
+                category = 'plugin_out'
+            
+            #checks exist to limit [] for links only as index specification
+            if '[' in link[0]:
+                _, inds = handle_brackets(link[0])
+                # Handle the source side
+                if category == 'parameter':
+                    try:
+                        a = self.study.get_value(link[0])
+                        src_shape = a.shape
+                    except:
+                        raise ValueError(f'The indices in {link[0]} provided are not a valid means to index\n')
+                else:
+                    out_plugin_name, out_var_name = link[0].split('.')[0], handle_brackets('.'.join(link[0].split('.')[1:]))[0]
+                    src_var_dict = copy.deepcopy(plugins[out_plugin_name].plugin_output_names[out_var_name])
+                    a = src_var_dict['value']
+                    a_shape = src_var_dict['shape']
+                    if a is not None:
+                        try:
+                            a[inds]
+                            src_shape = a[inds].shape
+                        except:
+                            raise ValueError('')
+                    elif a_shape is  not None:
+                        try:
+                            np.ones(shape=a_shape)[inds]
+                            src_shape = np.ones(shape=a_shape)[inds].shape
+                        except:
+                            raise ValueError('')
+                    else:
+                        #Note, this should already be caught for arrays in plugin declaration
+                        raise ValueError('Developer: Check error catching capaibilities in plugin declaration')
+                    
+                # Handle the destination side (always a plugin), guard against memory access of actual dictionary
+                in_plugin_name, in_var_name = link[1].split('.')[0], '.'.join(link[1].split('.')[1:])
+                dest_var_dict = copy.deepcopy(plugins[in_plugin_name].plugin_input_names[in_var_name])
+                b = dest_var_dict['value']
+                b_shape = dest_var_dict['shape']
+                b_type = dest_var_dict['type']
+                
+                src_size = 1 if src_shape == () else int(np.prod(src_shape))
+                #float case
+                if src_size ==1  and  b_type == float:
+                        pass
+                elif b is not None:
+                    if src_shape != b.shape:
+                        raise ValueError(f'The source indices must match the target shape. The input {link[0]} with indices {src_link_split[-1]}.\n'
+                                         f'The size of the source indices is {src_shape} and the destination has shape {b.shape}')                    
+
+                elif b_shape is  not None:
+                    if src_shape != b_shape:
+                        raise ValueError(f'The source indices must match the target shape. The input {link[0]} with indices {src_link_split[-1]}.\n'
+                                         f'The size of the source indices is {src_shape} and the destination has shape {b_shape}')
+                    
+            
 
     def check_desvars(self, plugins, state):
         """
@@ -680,6 +760,8 @@ class Engine:
             if link_input_plugin in  self.study.solution.steps and  link_output_plugin in  self.study.solution.steps:
                 #not checking output since it should be the same as input
                 link_input_var_name =  '.'.join(input_name.split('.')[1:])
+                if '[' in  link_input_var_name:
+                    link_input_var_name, _ = handle_brackets(link_input_var_name)
                 input_type = plugins[link_input_plugin].plugin_output_names[link_input_var_name]['type']
                 if not check_continuous(input_type):
                     self.log.error(f"Links between optimization components must be continuous (of type float). Check I/O declarations in plugin: {link_input_plugin}. Variable in violation: {input_name}")

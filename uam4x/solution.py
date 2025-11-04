@@ -22,6 +22,12 @@ class Solution:
 
     def add_link(self, independent:str, dependent:str):
         self.log.debug(f'add link. independent link: {independent}, dependent link: {dependent}')
+        
+        # need slicing here dependent cannot 
+        if  dependent.split('.')[-1].startswith('['):
+            raise ValueError(f'Only independent variables can have indices specified. The independent variable {dependent}\n'
+                             f'has slices indices specified.')
+        
         link = [independent, dependent]
         if link not in self.links:
             self.links.append(link)
@@ -41,6 +47,9 @@ class Solution:
         if not isinstance(plugin_class, Callable):
             self.log.error("add_step: plugin_class should be a callable (class).")
             raise TypeError("plugin_class should be a callable (class).")
+        if '[' in  step_name or  ']' in  step_name:
+            self.log.error(f'steps cannot have the character "[" or "]" in them')            
+            raise ValueError(f'steps cannot have the character "[" or "]" in them')         
         # plugin_name should be a string, not a class
         if step_name is None:
             step_name = "step" + str(len(self.steps)+1)
@@ -284,10 +293,10 @@ class Plugin():
 
     @staticmethod
     def check_declared_IO(name, var_type, value, shape):
-        if '~' in  name:
-            self.log.error('Tildes (~) are not allowed in variable names\n'
+        if '~' in  name or  '[' in  name or  ']' in  name:
+            self.log.error('Tildes (~), square brackets "[","]" are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
-            raise ValueError('Tildes (~) are not allowed in variable names\n'
+            raise ValueError('Tildes (~), square brackets "[","]" are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
         
         if shape is  not None:
