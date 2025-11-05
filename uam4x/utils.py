@@ -298,7 +298,7 @@ def parse_simple(string):
     '''
     
     '''
-    indices = re.findall('[-]?\d+', string)
+    indices = re.findall(r'[-]?\d+', string)
     indices = [int(num) for  num in  indices]
     if len(indices) == 1:
         return indices[0]
@@ -307,7 +307,7 @@ def parse_simple(string):
 
 def parse_fancy(string):
     
-    indices = re.findall('[-]?\d+', string)
+    indices = re.findall(r'[-]?\d+', string)
     return [int(num) for  num in  indices]
 
 def parse_slice(string):
