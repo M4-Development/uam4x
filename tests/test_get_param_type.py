@@ -7,6 +7,9 @@ from uam4x.execution_engine import Engine
 from uam4x.solution import Plugin, register_plugin
 from uam4x.utils import get_param_type
 
+@pytest.fixture
+def study():
+    return Study()
 
 def create_sample_problem(study: Study):
     """
@@ -33,7 +36,7 @@ def create_sample_problem(study: Study):
 
     # rotor
     rotor = Rotor("rotor")
-    rotor.set_parameter("nblade", 8.0)
+    rotor.set_parameter("nblade", 8)
     vflight_rotor = rotor.add_mode('vflight')
     vflight_rotor.set_parameter('tilt', 90.)
     cruise_rotor = rotor.add_mode('cruise')
@@ -54,7 +57,8 @@ def setup_solution(study:Study):
     study : Study
         The study to add the solution to
     """
-
+    register_plugin(TestPlug)
+    
     # Define and add test plugin
     study.solution.add_step(TestPlug,"test_plug",{})
 
@@ -62,12 +66,14 @@ def setup_solution(study:Study):
     study.solution.add_link("vehicles.mtr.wing.span", "test_plug.testin_cont")
     study.solution.add_link("vehicles.mtr.aircraft.npass", "test_plug.testin_discrete")
 
+
 @register_plugin
 class TestPlug(Plugin):
     """
     test plugin to check get_param_type functionality for plugin links/components
 
     """
+    __test__ = False
     def setup_plugin(self, plugin_options):
         # declare inputs
         Plugin.declare_input(self,"testin_cont", float, 0.0)
@@ -81,8 +87,7 @@ class TestPlug(Plugin):
         results = {}
         results['testout_cont'] = 0.06
         results['testout_discrete'] = 6
-        return results
-
+        return results 
 
 def test_get_param_type(study:Study):
     """
@@ -93,7 +98,16 @@ def test_get_param_type(study:Study):
     study : Study
         The study to the sample problem to
     """
-
+    
+   
+    # setup problem
+    THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+    VARIANTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "variants")
+    turbo_electric_variant = [create_sample_problem, setup_solution]
+    framework = Variants(THIS_DIR)
+    framework.add_variant('test_variants', turbo_electric_variant)
+    studies = framework.generate_variants()
+    variant_path = os.path.join(VARIANTS_DIR, "test_variants", "data.json")    
     study = Study.from_json(variant_path)
     eng = Engine(study, os.path.join(VARIANTS_DIR, "test_variants", "work"))
     plugins = {}
@@ -108,7 +122,7 @@ def test_get_param_type(study:Study):
     assert get_param_type('vehicles.mtr.wing.sweep',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
     assert get_param_type('vehicles.mtr.aircraft.wpass',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
     assert get_param_type('vehicles.mtr.aircraft.npass',study, plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
-    assert get_param_type('vehicles.mtr.rotor.nblade',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
+    assert get_param_type('vehicles.mtr.rotor.nblade',study, plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
     assert get_param_type('vehicles.mtr.rotor.vflight.tilt',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
     assert get_param_type('vehicles.mtr.rotor.cruise.tilt',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
     assert get_param_type('test_plug.testin_cont',study, plugins) == float, f"expected float, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
@@ -117,18 +131,6 @@ def test_get_param_type(study:Study):
     assert get_param_type('test_plug.testout_discrete',study, plugins) == int, f"expected int, got {eng.get_param_type('vehicles.mtr.wing.span',plugins)}"
 
 
-
-if __name__ == '__main__':
-
-    # setup problem
-    THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-    VARIANTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "variants")
-    turbo_electric_variant = [create_sample_problem, setup_solution]
-    framework = Variants(THIS_DIR)
-    framework.add_variant('test_variants', turbo_electric_variant)
-    studies = framework.generate_variants()
-    variant_path = os.path.join(VARIANTS_DIR, "test_variants", "data.json")
-    study = Study.from_json(variant_path)
-
-    # run test
+if __name__ == "__main__":
+    study = Study()
     test_get_param_type(study)

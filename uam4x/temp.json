@@ -1,0 +1,53 @@
+{
+    "name": "wing1",
+    "component_type": "Wing",
+    "parameters": {
+        "area": {
+            "name": "area",
+            "value": 0.0,
+            "dtype": "float",
+            "unit_type": "area",
+            "unit": "",
+            "description": "Wing area"
+        },
+        "span": {
+            "name": "span",
+            "value": 10.0,
+            "dtype": "float",
+            "unit_type": "length",
+            "unit": "m",
+            "description": "Wing span"
+        },
+        "chord": {
+            "name": "chord",
+            "value": 2.0,
+            "dtype": "float",
+            "unit_type": "length",
+            "unit": null,
+            "description": "Wing chord"
+        },
+        "sweep": {
+            "name": "sweep",
+            "value": 25.0,
+            "dtype": "float",
+            "unit_type": "angle",
+            "unit": null,
+            "description": "Wing sweep angle"
+        },
+        "aspect_ratio": {
+            "name": "aspect_ratio",
+            "value": 1.0,
+            "dtype": "float",
+            "unit_type": "angle",
+            "unit": "",
+            "description": "Wing sweep angle"
+        }
+    },
+    "modes": {
+        "unswept": {
+            "overrides": {
+                "sweep": 0.0
+            }
+        }
+    }
+}

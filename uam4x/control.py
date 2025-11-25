@@ -202,7 +202,6 @@ class Control:
             control.add_trade(k, trade)
 
         return control
-
 if __name__ == "__main__":
     opt = Optimization()
     opt.add_design_var(name="wing_span", lower=10.0, upper=15.0)

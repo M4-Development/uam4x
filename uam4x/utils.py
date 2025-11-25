@@ -8,6 +8,7 @@ from numbers import Real
 from operator import  itemgetter, attrgetter
 
 import sys
+
 DEV = True
 if hasattr(sys, '_MEIPASS'):  # this indicates we are in the pyinstaller exe
     DEV = False
@@ -109,6 +110,8 @@ def get_param_type(dotted_path: str, study, plugins= None):
             obj = plugin.plugin_input_names[part]['type']
         elif part in  plugin.plugin_output_names:
             obj = plugin.plugin_output_names[part]['type']
+        else:
+            raise KeyError(f'Provided path is not an input/output to the plugin {plugin_name}')
 
     return obj
 
@@ -162,15 +165,16 @@ def normalize_shape(shape):
     '''
     if is_tuple(shape):
         return shape
-    if is_integer(shape):
-        return (int(shape), )
+
+    return (int(shape), )
 # Nicer type checkers
 
 def is_bool(value):
     return isinstance(value, (bool, np.bool_))
 
 def is_integer(value):
-    return isinstance(value, (int, np.integer))
+
+    return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
 
 def is_float(value):
     return isinstance(value, (float, np.floating))
@@ -210,7 +214,7 @@ def is_valid_square_brackets(string):
     if not stack:
         return True
     else:
-        ValueError(f'Brackets are inalid in indexing string: {string}')
+        raise ValueError(f'Brackets are inalid in indexing string: {string}')
     
 def is_valid_index(string: str):
     '''
@@ -400,10 +404,3 @@ def handle_brackets(dotted_path):
         
     return dotted_path, inds
         
-if __name__ == '__main__':
-    
-    print(parse_index('[1,2,3]'))             # → (1,2,3)
-    print(parse_index('[[6,7],3:-4:2,4]'))  # → [[6,7], slice(3,-4,2), (4,)]
-    print(parse_index('[::-1]'))               # → (slice(None,None,-1),)
-    print(parse_index('[4:3:2]'))              # → (slice(4,3,2),)
-    print(parse_index('[[1,2],[3,4]]'))        # → [[1,2],[3,4]]

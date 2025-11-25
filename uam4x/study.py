@@ -7,6 +7,11 @@ import copy
 from uam4x.log import get_log
 from uam4x.utils import convert_numpy_to_python, get_param_type,log, is_numpy_array, parse_index, handle_brackets
 from operator import  attrgetter
+import  sys
+import platform
+from importlib.metadata import distributions
+from pathlib import  Path
+import subprocess
 class _Overwrite():
     log = get_log(log, object_name='overwrite')
     def __init__(self, param_state:dict) -> None:
@@ -70,9 +75,39 @@ class Study:
         self.solution = Solution()
         self.control = Control()
         self._overwrites = []
+        self.environment = self.get_environment_info()
+
+    @staticmethod
+    def get_environment_info():
+        '''
+        Fully defines environment
+        '''
+
+        machine_dict = {
+            'os_system': platform.system(),
+            'os_release': platform.release(),
+            'os_version': platform.version(),
+            'platform': platform.platform(),
+            'machine': platform.machine(),
+            'processor': platform.processor(),
+        }
+        
+        code = "import sys; print(sys.executable)"
+        out = subprocess.check_output(["python", "-c", code]).decode().strip()
+               
+        python_dict = { 'python_spec': sys.version,
+            "python_executable": str(Path(out))}
+        
+        environ_dict = {dist.name: dist.version for dist in distributions()}
+        
+        return {
+            'Machine': machine_dict,
+            'Python': python_dict,
+            'Packages': environ_dict,
+        }
 
     def add_trade(self, trade_name:str, trade) -> None:
-        self.log.debug(f'add trade: {name}')
+        self.log.debug(f'add trade: {trade_name}')
         self.control.add_trade(trade_name, trade)
 
     def add_vehicle(self, vehicle) -> None:
@@ -87,6 +122,7 @@ class Study:
         """Convert the study to a dictionary representation."""
         self.log.debug('write to dict')
         return {
+            "environment": convert_numpy_to_python(self.environment),
             "control": convert_numpy_to_python(self.control._to_dict()),
             "vehicles": convert_numpy_to_python({v.name: convert_numpy_to_python(v._to_dict()) for v in self.vehicles}),
             "solution": convert_numpy_to_python(self.solution._to_dict()),
@@ -102,13 +138,18 @@ class Study:
         study.control = Control._from_dict(data["control"])
         return study
 
-    def save_to_json(self, json_path: str):
+    def save_to_json(self, json_path: str, commit=False):
         """Save the study to a JSON file."""
         self.log.debug('save to json')
         data = self._to_dict()
 
         with open(json_path, 'w') as f:
             json.dump(data, f, indent=4)
+        import pygit2    
+        if commit:
+            repo_path = pygit2.discover_repository(json_path)
+            pygit2.Repository(repo_path)
+            
 
     def load_from_json(self, json_path: str):
         """Load the study from a JSON file."""
@@ -138,8 +179,6 @@ class Study:
             # remove indices from index based links
             if '[' in  independent:
                 independent, _ = handle_brackets(independent)
-            if '[' in dependent:
-                dependent, _ = handle_brackets(dependent)
             if dependent.split('.')[0] == step_name:
                 input_names.append(dependent)
             if independent.split('.')[0] == step_name:
@@ -190,7 +229,7 @@ class Study:
         temp_over.add_item(name, value)
         self._overwrites.append(temp_over)
 
-    def get_plugin_inputs(self, step_name, state):
+    def get_plugin_link_inputs(self, step_name, state):
         self.log.debug(f'get plugin inputs for {step_name}')
         inputs = {}
         for (independent, dependent) in self.solution.links:
@@ -201,7 +240,7 @@ class Study:
 
     def get_all_names_by_category(self):
         """
-        Get all possible vehicle names and step input/output names.
+        Get all possible vehicle names and step input/output names that are links.
 
         Returns
         -------
@@ -227,7 +266,7 @@ class Study:
 
                 # Add mode parameters
                 for mode_name, mode in component._modes.items():
-                    for param_name in component._parameters.keys():
+                    for param_name in mode._parameters.keys():
                         vehicle_names.append(f"vehicles.{vehicle_name}.{component.name}.{mode_name}.{param_name}")
 
         # Get step input and output names from links

@@ -218,7 +218,7 @@ class Engine:
             work_dir = os.path.join(out_dir, step_name)
             os.makedirs(work_dir, exist_ok=True)
 
-            plugin_inputs = self.study.get_plugin_inputs(step_name, state)
+            plugin_inputs = self.study.get_plugin_link_inputs(step_name, state)
             results = plugin.run_plugin(plugin_inputs, work_dir)
             self.update_state_from_results(state, results, step_name)
 
@@ -452,10 +452,10 @@ class Engine:
                                      f"Check your plugin's setup() step for I/O declaration")
             for output_name in  output_names:
                 name = '.'.join(output_name.split('.')[1:])
-                if '[' in  name:
-                    #any time where indexes are specified in the link, this is required to be
-                    # an index specification, nothing to do with the variable name. 
-                    name, _ = handle_brackets(name)                
+                #if '[' in  name:
+                    ##any time where indexes are specified in the link, this is required to be
+                    ## an index specification, nothing to do with the variable name. 
+                    #name, _ = handle_brackets(name)                
                 if name not  in plugins[step_name].plugin_output_names:
                     self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                      f"Check your plugin's setup() step for I/O declaration")
@@ -493,7 +493,7 @@ class Engine:
             #Since only float arrays are allowed, always assumed that the elements of the arrays are floats
             if indexes_specified and output_type != np.ndarray:
                 raise ValueError(f'Indexes may only be specified for arrays. The link: {link[1]} is not valid')
-            if indexes_specified and  output_type == np.ndarray and  input_type == float:
+            if indexes_specified and  output_type == np.ndarray and  check_continuous(input_type) and input_type != np.ndarray:
                 pass
             elif output_type != input_type:
                 bad_links.append((output_link,output_type, input_link, input_type))
@@ -559,12 +559,12 @@ class Engine:
                         pass
                 elif b is not None:
                     if src_shape != b.shape:
-                        raise ValueError(f'The source indices must match the target shape. The input {link[0]} with indices {src_link_split[-1]}.\n'
+                        raise ValueError(f'The source indices must match the target shape. The input {link[0]} with indices {link[0].split(".")[-1]}.\n'
                                          f'The size of the source indices is {src_shape} and the destination has shape {b.shape}')                    
 
                 elif b_shape is  not None:
                     if src_shape != b_shape:
-                        raise ValueError(f'The source indices must match the target shape. The input {link[0]} with indices {src_link_split[-1]}.\n'
+                        raise ValueError(f'The source indices must match the target shape. The input {link[0]} with indices {link[0].split(".")[-1]}.\n'
                                          f'The size of the source indices is {src_shape} and the destination has shape {b_shape}')
                     
             
@@ -627,12 +627,12 @@ class Engine:
             var_shape = None
         else:
             step_plugin = plugins[base_name]
-            if var_name in  step_plugin.plugin_output_names:
+            if rest_name in  step_plugin.plugin_output_names:
                 var_shape = step_plugin.plugin_output_names[rest_name]['shape']
                 var_value = step_plugin.plugin_output_names[rest_name]['value']
-            elif var_name in  step_plugin.plugin_input_names:
-                var_shape = step_plugin.plugin_input_names[rest_name]['shape']
-                var_shape = step_plugin.plugin_input_names[rest_name]['value']
+            #elif rest_name in  step_plugin.plugin_input_names:
+                #var_shape = step_plugin.plugin_input_names[rest_name]['shape']
+                #var_shape = step_plugin.plugin_input_names[rest_name]['value']
         # Checks on allowables for arrays        
         if var_type is  np.ndarray:
             # If the type has been declared as an ndarray, then
@@ -656,7 +656,7 @@ class Engine:
             # First check here is if value is declared
             if data_lower is  not None and  not check_if_scalar(data_lower):
                 #scalars allowed for broadcasting
-                if not check_if_scalar(var_value):
+                if not check_if_scalar(var_value) and var_value is not None:
                     
                     if data_lower.shape != var_value.shape:
                         raise ValueError(f'If arrays are declared as bounds for {dv_or_const}\n'
@@ -671,13 +671,13 @@ class Engine:
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
                                          f'the value/declared shape in the vehicle component parameter or \n'
                                          f'plugin input output is accepted.\n'
-                                         f'The {dv_or_const} {var_name} lower has shape {data_lower.shape} but must have shape {var_value.shape}')
+                                         f'The {dv_or_const} {var_name} lower has shape {data_lower.shape} but must have shape {var_shape}')
                     
             # For plugin inputs/outputs, shape vs. declared value (when applicable) already checked
             # First check here is if value is declared
             if data_upper is  not None and  not check_if_scalar(data_upper):
                 #scalars allowed for broadcasting
-                if not check_if_scalar(var_value):
+                if not check_if_scalar(var_value) and  var_value is  not None:
                     if data_upper.shape != var_value.shape:
                         raise ValueError(f'If arrays are declared as bounds for {dv_or_const}\n'
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
@@ -690,7 +690,7 @@ class Engine:
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
                                          f'the value/declared shape in the vehicle component parameter or \n'
                                          f'plugin input output is accepted.\n'
-                                         f'The {dv_or_const} {var_name} upper has shape {data_upper.shape} but must have shape {var_value.shape}')                                    
+                                         f'The {dv_or_const} {var_name} upper has shape {data_upper.shape} but must have shape {var_shape}')                                    
         else:
             # now since check_continuous has been run, we know
             # values are already acceptable types in theory but
@@ -728,7 +728,7 @@ class Engine:
         if not is_continuous:
             self.log.error(f'The objective: {state["objective_name"]} is of type {objective_type}. Only floats allowed as objectives')
             raise TypeError(f'The objective: {state["objective_name"]} is of type {objective_type}\n'
-                            f'Only floats allowed as objectives')
+                            f'Only continuous variables allowed as objectives')
 
     def check_optimization_discrete(self, plugins, state):
         """

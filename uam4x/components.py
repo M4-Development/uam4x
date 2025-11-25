@@ -98,16 +98,16 @@ class Parameter:
             raise TypeError(f"Value for parameter '{self.name}' must be of type {self.dtype.__name__}, got {type(v).__name__}")
         self._value = v
 
-    def check_type(self):
-        """
-        Check if the value matches the dtype.
+    #def check_type(self):
+        #"""
+        #Check if the value matches the dtype.
 
-        Returns
-        -------
-        bool
-        """
-        self.log.debug(f'check type')
-        return isinstance(self.value, self.dtype)
+        #Returns
+        #-------
+        #bool
+        #"""
+        #self.log.debug(f'check type')
+        #return isinstance(self.value, self.dtype)
 
     def _to_dict(self) -> dict:
         """
@@ -123,16 +123,16 @@ class Parameter:
         unit_type = self.unit_type
         if hasattr(unit_type, '__name__'):
             unit_type = unit_type.__name__
-        elif not isinstance(unit_type, str):
-            unit_type = str(unit_type) if unit_type is not None else None
+        #elif not isinstance(unit_type, str):
+            #unit_type = str(unit_type) if unit_type is not None else None
 
         unit = self.unit
-        if hasattr(unit, 'value'):
-            unit = unit.value
-        elif hasattr(unit, '__name__'):
-            unit = unit.__name__
-        elif not isinstance(unit, str):
-            unit = str(unit) if unit is not None else None
+        #if hasattr(unit, 'value'):
+            #unit = unit.value
+        #if hasattr(unit, '__name__'):
+            #unit = unit.__name__
+        #elif not isinstance(unit, str):
+            #unit = str(unit) if unit is not None else None
 
         return {
             "name": self.name,
@@ -171,7 +171,7 @@ class Parameter:
             description=data["description"],
         )
 
-class Mode:
+class _Mode:
     """
     Represents a mode for a component, allowing parameter overrides.
 
@@ -187,7 +187,7 @@ class Mode:
         self.name = name
         self._overrides = {}
         self.component = component  # Reference to parent component for inheritance
-        self.log = Mode.log
+        self.log = _Mode.log
 
     def set_parameter(self, name: str, value):
         """
@@ -248,7 +248,7 @@ class Mode:
         # Only called if attribute not found in normal places
         if item in self._overrides:
             return self._overrides[item]
-        if self.component and hasattr(self.component, item) and not isinstance(getattr(self.component, item), Mode) and not callable(getattr(self.component, item)):
+        if self.component and hasattr(self.component, item) and not isinstance(getattr(self.component, item), _Mode) and not callable(getattr(self.component, item)):
             return getattr(self.component, item)
         self.log.error(f"'{self.__class__.__name__}' object has no attribute '{item}'")
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
@@ -352,6 +352,7 @@ class Component:
         self.setup()
         self._is_setup = False
         setattr(self, 'baseline', self)
+        self._parent = None
 
     def setup(self):
         """
@@ -413,15 +414,15 @@ class Component:
         if name in self._parameters:
             param = self._parameters[name]
             param.value = value
-            if unit is not None:
-                unit_type = param.unit_type
-                if unit_type and unit_type in UNIT_TYPE_TO_UNIT_CLASS:
-                    unit_class = UNIT_TYPE_TO_UNIT_CLASS[unit_type]
-                    # Accept both class attribute and value
-                    if unit not in unit_class.__dict__.values():
-                        self.log.error(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
-                        raise ValueError(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
-                param.unit = unit
+            
+            unit_type = param.unit_type
+            if unit_type and unit_type in UNIT_TYPE_TO_UNIT_CLASS:
+                unit_class = UNIT_TYPE_TO_UNIT_CLASS[unit_type]
+                # Accept both class attribute and value
+                if unit not in unit_class.__dict__.values():
+                    self.log.error(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
+                    raise ValueError(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
+            param.unit = unit
         else:
             self.log.error(f"Parameter '{name}' not defined for {self.__class__.__name__}.")
             raise AttributeError(f"Parameter '{name}' not defined for {self.__class__.__name__}.")
@@ -447,7 +448,7 @@ class Component:
         if '[' in mode_name or  ']' in  mode_name:
             self.log.error(f'modes cannot have the character "[" or "]" in them')            
             raise ValueError(f'modes cannot have the character "[" or "]" in them')
-        mode = Mode(mode_name, self)
+        mode = _Mode(mode_name, self)
         self._modes[mode.name] = mode
         setattr(self, mode.name, mode)
         return mode
@@ -502,7 +503,8 @@ class Component:
             {'main': ..., mode_name: ...} for all parameters and all modes.
         """
         self.log.debug('check all parameter types')
-        result = {'main': {name: param.check_type() for name, param in self._parameters.items()}}
+        #result = {'main': {name: param.check_type() for name, param in self._parameters.items()}}
+        result = {}
         for mode_name, mode in self._modes.items():
             mode_result = {}
             for pname, override_value in mode._overrides.items():
@@ -624,7 +626,7 @@ class Rotor(Component):
         self.add_parameter("vtip", 550., float, unit_type=UnitType.SPEED, description="Rotor tip speed")
         self.add_parameter("tilt", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor tilt")
         self.add_parameter("radius", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor radius")
-        self.add_parameter("nblade", 2.0, float, description="Number of blades")
+        self.add_parameter("nblade", 2, int, description="Number of blades")
         self.add_parameter("rpm", 1000.0, float, unit_type=UnitType.FREQUENCY if hasattr(UnitType, 'FREQUENCY') else None, description="Rotor RPM")
         self.add_parameter("blade_chord", 0.1, float, unit_type=UnitType.LENGTH, description="Blade chord length")
         self.add_parameter("collective_pitch", 0.0, float, unit_type=UnitType.ANGLE, description="Collective pitch angle (deg)")

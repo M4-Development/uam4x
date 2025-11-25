@@ -10,6 +10,8 @@ from itertools import  product
 from uam4x.log import get_log
 from uam4x.utils import log
 import numpy as np
+import inspect
+import hashlib
 
 class Solution:
     log = get_log(log, object_name='solution')
@@ -24,9 +26,9 @@ class Solution:
         self.log.debug(f'add link. independent link: {independent}, dependent link: {dependent}')
         
         # need slicing here dependent cannot 
-        if  dependent.split('.')[-1].startswith('['):
-            raise ValueError(f'Only independent variables can have indices specified. The independent variable {dependent}\n'
-                             f'has slices indices specified.')
+        if  '[' in dependent:
+            raise ValueError(rf'Only independent variables can have indices specified. The independent variable {dependent}\n'
+                             rf'has slices indices specified.')
         
         link = [independent, dependent]
         if link not in self.links:
@@ -47,13 +49,18 @@ class Solution:
         if not isinstance(plugin_class, Callable):
             self.log.error("add_step: plugin_class should be a callable (class).")
             raise TypeError("plugin_class should be a callable (class).")
-        if '[' in  step_name or  ']' in  step_name:
+        if step_name is  not None and  ('[' in  step_name or  ']' in  step_name):
             self.log.error(f'steps cannot have the character "[" or "]" in them')            
             raise ValueError(f'steps cannot have the character "[" or "]" in them')         
         # plugin_name should be a string, not a class
         if step_name is None:
             step_name = "step" + str(len(self.steps)+1)
-        step_info = {"plugin": plugin_class, "plugin_options": plugin_options}
+        #get hash of plugin
+        src = inspect.getsource(plugin_class)
+        h = hashlib.sha256()
+        h.update(src.encode("utf-8"))
+            
+        step_info = {"plugin": plugin_class, "plugin_options": plugin_options, 'plugin_hash':h.hexdigest()}
         self.steps[step_name] = step_info
 
     def remove_step(self, step_name):
@@ -70,7 +77,7 @@ class Solution:
                 for option_name, info in plugin_options.items():
                     current_options[option_name] = info
             else:
-                plugin_options = {}
+                step['plugin_options'] = {}
 
     def add_tracked_output(self, output:str):
         self.log.debug(f'add tracked output: {output}')
@@ -81,12 +88,15 @@ class Solution:
 
     def remove_tracked_output(self, output:str):
         self.log.debug(f'remove tracked output: {output}')
-        self.tracked_outputs.remove(output)
+        if output in  self.tracked_outputs:
+            self.tracked_outputs.remove(output)
 
     def add_plugin_option(self, step_name:str, option_name:str, option_value):
         self.log.debug(f'add plugin option {option_name} to step {step_name}')
         if step_name in self.steps:
             step = self.steps[step_name]
+            if option_name in  step['plugin_options']:
+                print(f'{option_name} already a plugin option. Overwriting value: {step["plugin_options"][option_name]}')
             step["plugin_options"][option_name] = option_value
 
     def remove_plugin_option(self, step_name:str, option_name:str):
@@ -104,7 +114,8 @@ class Solution:
             plugin_name = plugin_class.__name__
             steps_serialized[step_name] = {
                 "plugin": plugin_name,
-                "plugin_options": step_info["plugin_options"]
+                "plugin_options": step_info["plugin_options"],
+                "plugin_hash": step_info["plugin_hash"],
             }
         return {
             "steps": steps_serialized,
@@ -136,14 +147,20 @@ class Plugin():
         self.method_to_partial = {}
         self.plugin_input_names = {}
         self.plugin_output_names = {}
-        self.partial_2d_list = []
+        self.plugin_templates = []
         self.log = Plugin.log
+    
+    def __str__(self):
+        return f'{self.__class__.__name__}'
 
     def setup_plugin(self, plugin_options:dict):
         self.log.debug('setup plugin')
 
     def run_plugin(self, links:dict, work_dir:str):
         self.log.debug('run plugin')
+        
+    def get_external_versions(self, file_paths: []):
+        self.log.debug('get external version')
 
     def declare_partials_plugin(self, of: str|Sequence[str], wrt: str|Sequence[str], method='fd', step=None, form=None,
                                 rows: list|np.ndarray|None=None, cols: list|np.ndarray| None=None):
@@ -293,10 +310,14 @@ class Plugin():
 
     @staticmethod
     def check_declared_IO(name, var_type, value, shape):
+        if not isinstance(var_type, type):
+            raise TypeError(f'Declared type must be a type. {name} has declared type {var_type} which is not a type.')
+
+        
         if '~' in  name or  '[' in  name or  ']' in  name:
-            self.log.error('Tildes (~), square brackets "[","]" are not allowed in variable names\n'
-                             f'The following name is not allowed: {name}')
-            raise ValueError('Tildes (~), square brackets "[","]" are not allowed in variable names\n'
+            #self.log.error(r'Tildes (~), square brackets "[","]" are not allowed in variable names\n'
+                             #rf'The following name is not allowed: {name}')
+            raise ValueError(f'Tildes (~), square brackets "[","]" are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
         
         if shape is  not None:
@@ -316,10 +337,15 @@ class Plugin():
                     elif value.shape != shape:
                         raise ValueError(f'If the value of an array is not declared as a scalar, then the shape must match\n'
                                          f'the declared shape. The variable {name} has declared shape {shape} and actual shape {value.shape}')
-                    
-        if shape is None and  value is  None and  var_type is np.ndarray:
-            raise ValueError(f'Arrays must have either the shape or value defined (or both). The variable\n'
-                             f'{name} has no shape or value.')
+        else:
+            
+            if value is  None and  var_type is np.ndarray:
+                raise ValueError(f'Arrays must have either the shape or value defined (or both). The variable\n'
+                                 f'{name} has no shape or value.')
+            if value is not None and check_if_scalar(value) and var_type is  np.ndarray:
+                raise ValueError(f'If array value is declared with scalar, shape must be declared for broadcasting.\n'
+                                 f'The variable {name} has value: {value} and type: {var_type} but no shape declared.')
+        
         return shape
         
                     
@@ -335,7 +361,9 @@ class Plugin():
         self.plugin_output_names[name] = {'type': var_type,
                                           'value': value,
                                           'shape': shape}
-
+    def declare_template(self,path):
+        self.plugin_templates.append(path)
+        
 
 def register_plugin(cls):
     plugin_name = cls.__name__

@@ -1,3 +1,23 @@
+requirements.yml
+
+# SQLite databases and journals
+*.sqlite
+*.sqlite-journal
+
+# CSS assets in tests
+tests/assets/*.css
+
+# Pytest config in this repo
+tests/conftest.py
+
+# HTML reports
+*.html
+
+# Log files named like log.txt or *log*.txt
+*log*.txt
+
+#vscode
+.vscode/settings.json
 # Wing ide user-specific
 *.wpu
 *.wpr
