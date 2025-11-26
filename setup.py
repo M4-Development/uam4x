@@ -11,7 +11,11 @@ setup(
     install_requires=[
         'numpy>=2.2.6',
         'pytest>=8.4.2',
-        'openmdao>=3.39.0'
+        'openmdao>=3.39.0',
+        'cpylog',
+        'pytest-cov',
+        "pytest",
+        "pytest-html"
     ],
     description='M4 Engineering developed UAM design space exploration framework with embedded version control',
 )
