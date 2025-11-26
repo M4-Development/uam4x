@@ -5,7 +5,6 @@ from uam4x.vehicle import Vehicle
 from uam4x.components import  Component, Wing, register_component
 from uam4x.solution import Plugin, register_plugin, Solution
 import pytest
-from uam4x_openvsp.plugin import OpenvspPlugin
 from uam4x.control import Optimization, ParameterSweep
 import numpy as np
 import os
