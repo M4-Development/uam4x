@@ -15,7 +15,8 @@ setup(
         'cpylog',
         'pytest-cov',
         "pytest",
-        "pytest-html"
+        "pytest-html",
+        'pygit2'
     ],
     description='M4 Engineering developed UAM design space exploration framework with embedded version control',
 )

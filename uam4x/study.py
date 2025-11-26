@@ -12,6 +12,8 @@ import platform
 from importlib.metadata import distributions
 from pathlib import  Path
 import subprocess
+import pygit2    
+
 class _Overwrite():
     log = get_log(log, object_name='overwrite')
     def __init__(self, param_state:dict) -> None:
@@ -145,7 +147,6 @@ class Study:
 
         with open(json_path, 'w') as f:
             json.dump(data, f, indent=4)
-        import pygit2    
         if commit:
             repo_path = pygit2.discover_repository(json_path)
             pygit2.Repository(repo_path)
