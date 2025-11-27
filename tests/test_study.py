@@ -137,33 +137,37 @@ def test_Overwrite_equality(sample_param_state):
     
 def test_Overwrite_tracked_outputs(sample_param_state):
     OW = _Overwrite(sample_param_state)
-    
+
     additional_output_dict = {
         'steelers': 67.,
         'packers': 420.,
         'eagles': 360.,
-        
     }
-    
-        
-    results = OW.tracked_outputs(additional_output_dict)
-    
-    assert 'steelers' not in  results
-    
+
+    # No extra template hashes for this unit test
+    template_hashes = {}
+
+    # Before adding items, only original param_state keys should be present
+    results = OW.tracked_outputs(additional_output_dict, template_hashes)
+    assert 'steelers' not in results
+    assert 'packers' not in results
+    assert 'eagles' not in results
+
+    # After adding items, keys which are in `tracked_outputs` should show up
     OW.add_items(additional_output_dict)
-    
-    results = OW.tracked_outputs(additional_output_dict)
-    
-    assert 'steelers' in  results
+
+    results = OW.tracked_outputs(additional_output_dict, template_hashes)
+
+    # Now the additional items should appear
+    assert 'steelers' in results
+    assert 'packers' in results
+    assert 'eagles' in results
+
+    # Existing behavior checks still hold
     assert results["calc_objective.wing_weight"] == 88.92178070843795
     assert 'constraints' in results
     assert "vehicles.multi_objective_vehicle.weighting_factor.weighting_factor" in results
-    
-    
-#test get value with overwrites
 
-
-#test get value
 
     
 
@@ -272,17 +276,19 @@ def test_Study_instance():
     
     
 def test_Study_get_environment():
-     
     s = Study()
-    env = s.environment
-    
+    s._capture_environment()
+
+    # New location of the environment info
+    assert 'environment' in s._runtime_meta_data
+    env = s._runtime_meta_data['environment']
+
     assert isinstance(env, dict)
-    assert set(env.keys()) == {'Machine', 'Python','Packages'}
-    
+    assert set(env.keys()) == {'Machine', 'Python', 'Packages'}
+
     machine = env['Machine']
-    
+
     # Machine info has expected keys
-    machine = env["Machine"]
     for key in ["os_system", "os_release", "os_version", "platform", "machine", "processor"]:
         assert key in machine
         assert isinstance(machine[key], str)
@@ -298,7 +304,7 @@ def test_Study_get_environment():
     for name, version in list(pkgs.items())[:10]:  # sample a few
         assert isinstance(name, str)
         assert isinstance(version, str)
-        
+
         
 def test_Study_add_trade():
     sample_param_dict = {'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],

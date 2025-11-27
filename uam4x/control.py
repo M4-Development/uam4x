@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Any, Dict, List, Union
 import copy
 from uam4x.log import get_log

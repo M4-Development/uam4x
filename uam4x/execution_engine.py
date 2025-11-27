@@ -4,9 +4,11 @@ from uam4x.openmdao_optimization import Optimization
 import copy
 from uam4x.log import get_log
 from uam4x.custom_errors import PluginException
-
+import inspect
+import hashlib
 import numpy as  np
 from uam4x.utils import check_continuous, get_param_type, check_if_scalar,log, parse_index, handle_brackets
+from collections import  defaultdict
 
 class Engine:
     """
@@ -92,7 +94,7 @@ class Engine:
             self.log.debug(f'setup {step_name} plugin')
             plugin = step_info["plugin"]()
             plugin.setup_plugin(step_info["plugin_options"])
-            plugins[step_name] = plugin
+
             
         # May need to refactor this, but def want a check here. 
         self.check_model(plugins, sample_state)
@@ -153,6 +155,7 @@ class Engine:
         else:
             out_dir = os.path.join(self.work_dir)
 
+        external_executable_to_versioning_data = {}
         if not plugins:
             plugins = {}
             for step_name, step_info in self.study.solution.steps.items():
@@ -160,11 +163,23 @@ class Engine:
                 plugin = step_info["plugin"]()
                 plugin.setup_plugin(step_info["plugin_options"])
                 plugins[step_name] = plugin
+                if plugin._executable_to_data and not 'step_external_executable_data' in self.study._runtime_meta_data:
+                    #copying here because i don't want to carry and accidentally modify state
+                    external_executable_to_versioning_data[step_name] = copy.deepcopy(plugin._executable_to_data)
+                
+            if external_executable_to_versioning_data:
+                self.study._add_runtime_external_executable_data(external_executable_to_versioning_data)
+        
+        
+        #TBD: are plugins ever provided? if so, additional logic needed here for the external stuff
+                    
+                
 
         if check:
             self.check_model(plugins, state)
 
         os.makedirs(out_dir, exist_ok=True)
+        
         if state['optimization']:
             self.run_optimization(state, plugins, out_dir)
         else:
@@ -280,6 +295,25 @@ class Engine:
         plugins = None
         failed_states = []
         successful_states = []
+        # populate environment at execution time
+        self.study._capture_environment()
+        # hash plugins at runtime
+        plugin_name_to_hash = {}
+        for step_name, step_info in self.study.solution.steps.items():
+            self.log.debug(f'setup {step_name} plugin')
+            plugin_class = step_info["plugin"]
+            #get the hash
+            src = inspect.getsource(plugin_class)
+            h = hashlib.sha256()
+            h.update(src.encode("utf-8"))
+            plug_hash = h.hexdigest()
+            plugin_name_to_hash[step_name] = plug_hash
+            if self.study.solution.steps[step_name]['plugin_hash'] != plug_hash:
+                log.warning(f"Plugin '{plugin_class.__name__}' contains a different checksum from the one generated at branching script. Check plugin code for changes")
+                
+        self.study._add_runtime_plugin_checksums(plugin_name_to_hash)
+            
+     
         for i, state in enumerate(tradestudy.get_states()):
 
             try:
@@ -452,10 +486,10 @@ class Engine:
                                      f"Check your plugin's setup() step for I/O declaration")
             for output_name in  output_names:
                 name = '.'.join(output_name.split('.')[1:])
-                #if '[' in  name:
-                    ##any time where indexes are specified in the link, this is required to be
-                    ## an index specification, nothing to do with the variable name. 
-                    #name, _ = handle_brackets(name)                
+                if '[' in  name:
+                    #any time where indexes are specified in the link, this is required to be
+                    # an index specification, nothing to do with the variable name. 
+                    name, _ = handle_brackets(name)                
                 if name not  in plugins[step_name].plugin_output_names:
                     self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                      f"Check your plugin's setup() step for I/O declaration")

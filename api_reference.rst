@@ -6,8 +6,9 @@ This section contains the complete API reference for UAM4X.
 Core Modules
 ------------
 
-.. toctree::
-   :maxdepth: 2
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
 
    uam4x
    uam4x.study

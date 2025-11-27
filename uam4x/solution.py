@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Callable
 import os
 import json
@@ -17,6 +18,7 @@ class Solution:
     log = get_log(log, object_name='solution')
     def __init__(self) -> None:
         self.tracked_outputs = []
+        self._template_file_paths = []
         self.links = []
         self.steps = {}
         self.log = Solution.log
@@ -43,6 +45,19 @@ class Solution:
     def get_step_names(self):
         self.log.debug(f'get step names')
         return [step_name for step_name in self.steps]
+    
+    def _make_step_info(self, plugin_class, plugin_options, plugin_hash=None):
+        if plugin_hash is None:
+            src = inspect.getsource(plugin_class)
+            h = hashlib.sha256()
+            h.update(src.encode("utf-8"))
+            plugin_hash = h.hexdigest()
+
+        return {
+            "plugin": plugin_class,
+            "plugin_options": plugin_options,
+            "plugin_hash": plugin_hash,
+        }
 
     def add_step(self, plugin_class, step_name=None, plugin_options:dict={}):
         self.log.debug(f'add step: {step_name}')
@@ -55,13 +70,10 @@ class Solution:
         # plugin_name should be a string, not a class
         if step_name is None:
             step_name = "step" + str(len(self.steps)+1)
-        #get hash of plugin
-        src = inspect.getsource(plugin_class)
-        h = hashlib.sha256()
-        h.update(src.encode("utf-8"))
-            
-        step_info = {"plugin": plugin_class, "plugin_options": plugin_options, 'plugin_hash':h.hexdigest()}
+        
+        step_info = self._make_step_info(plugin_class, plugin_options)
         self.steps[step_name] = step_info
+    
 
     def remove_step(self, step_name):
         self.log.debug(f'remove step: {step_name}')
@@ -131,7 +143,12 @@ class Solution:
         for step_name, step_data in data["steps"].items():
             plugin_name = step_data["plugin"]
             plugin_class = get_plugin_class(plugin_name)
-            sol.add_step(plugin_class, step_name, step_data["plugin_options"])
+            plugin_options = step_data["plugin_options"]
+            plugin_hash = step_data["plugin_hash"]
+    
+            step_info = sol._make_step_info(plugin_class, plugin_options, plugin_hash)
+            sol.steps[step_name] = step_info            
+            
         sol.tracked_outputs = data["tracked_outputs"]
         sol.links = data["links"]
         return sol
@@ -147,8 +164,10 @@ class Plugin():
         self.method_to_partial = {}
         self.plugin_input_names = {}
         self.plugin_output_names = {}
-        self.plugin_templates = []
+        self._plugin_templates = []
         self.log = Plugin.log
+        self._template_to_checksum = {}
+        self._executable_to_data = {}
     
     def __str__(self):
         return f'{self.__class__.__name__}'
@@ -159,8 +178,6 @@ class Plugin():
     def run_plugin(self, links:dict, work_dir:str):
         self.log.debug('run plugin')
         
-    def get_external_versions(self, file_paths: []):
-        self.log.debug('get external version')
 
     def declare_partials_plugin(self, of: str|Sequence[str], wrt: str|Sequence[str], method='fd', step=None, form=None,
                                 rows: list|np.ndarray|None=None, cols: list|np.ndarray| None=None):
@@ -362,7 +379,31 @@ class Plugin():
                                           'value': value,
                                           'shape': shape}
     def declare_template(self,path):
-        self.plugin_templates.append(path)
+        '''
+        Should be run during execution engine
+        stores the template files e.g .bdf in a dictionary
+        '''
+        if path in  self._template_to_checksum:
+            raise KeyError(f'The path: {path} is already in the template dictionary')
+        self._plugin_templates.append(path)
+        if os.path.exists(path):
+            with open(path, 'rb') as  f:
+                data = f.read()
+                h = hashlib.sha256(data).hexdigest()
+        else:
+            h = 'file_does_not_exist_at_setup'
+        self._template_to_checksum[str(path)] = h
+        
+    def add_executable_data(self, path, description):
+        '''
+        Allows user to version/provide data about the executable used
+        should be used in the setup portion of the plugin.
+        Allows for custom scripting within the plugin setup.
+        User should pair the path with either a string or dictionary
+        of data but ultimately up to the user, should be JSONable though. 
+        '''
+        self._executable_to_data[path] = description
+           
         
 
 def register_plugin(cls):

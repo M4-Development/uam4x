@@ -51,7 +51,7 @@ class _Overwrite():
             same = False
         return same
 
-    def tracked_outputs(self, tracked_outputs):
+    def tracked_outputs(self, tracked_outputs, template_hashes):
         self.log.debug('tracked outputs')
         results = {}
         for name, value in self.name_to_value.items():
@@ -59,6 +59,7 @@ class _Overwrite():
                 name in self.param_state
                 or name in tracked_outputs
                 or ('des_vars' in self.param_state and name in self.param_state['des_vars'])
+                or name in  template_hashes
             ):
                 results[name] = value
         return results
@@ -77,10 +78,16 @@ class Study:
         self.solution = Solution()
         self.control = Control()
         self._overwrites = []
-        self.environment = self.get_environment_info()
-
-    @staticmethod
-    def get_environment_info():
+        self._runtime_meta_data = {}
+        
+    
+    def _add_runtime_plugin_checksums(self, plugin_to_checksum):
+        self._runtime_meta_data['step_plugin_hashes'] = plugin_to_checksum
+    
+    def _add_runtime_external_executable_data(self, external_executable_to_data):
+        self._runtime_meta_data['step_external_executable_data'] = external_executable_to_data
+        
+    def _capture_environment(self):
         '''
         Fully defines environment
         '''
@@ -102,11 +109,14 @@ class Study:
         
         environ_dict = {dist.name: dist.version for dist in distributions()}
         
-        return {
+        self._runtime_meta_data['environment'] = {
             'Machine': machine_dict,
             'Python': python_dict,
             'Packages': environ_dict,
         }
+        
+    #def _add_runtime_plugin_hash(self, name, h):
+        
 
     def add_trade(self, trade_name:str, trade) -> None:
         self.log.debug(f'add trade: {trade_name}')
@@ -123,13 +133,18 @@ class Study:
     def _to_dict(self) -> dict:
         """Convert the study to a dictionary representation."""
         self.log.debug('write to dict')
-        return {
-            "environment": convert_numpy_to_python(self.environment),
+        
+        study_dict = { 
             "control": convert_numpy_to_python(self.control._to_dict()),
             "vehicles": convert_numpy_to_python({v.name: convert_numpy_to_python(v._to_dict()) for v in self.vehicles}),
             "solution": convert_numpy_to_python(self.solution._to_dict()),
-            "results": convert_numpy_to_python([overwrite.tracked_outputs(self.solution.tracked_outputs) for overwrite in self._overwrites])
+            'results': convert_numpy_to_python([overwrite.tracked_outputs(self.solution.tracked_outputs, self.solution._template_file_paths) for overwrite in self._overwrites]),
+            "execution_meta_data": convert_numpy_to_python(self._runtime_meta_data),
         }
+        
+            
+        return study_dict
+        
     @classmethod
     def _from_dict(cls, data: dict, work_dir = None) -> 'Study':
         cls.log.debug('study from dict')
