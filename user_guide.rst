@@ -57,6 +57,27 @@ Components are the building blocks of aircraft in UAM4X:
    aircraft.add_component(rotor)
 
 
+Using the Node Registry
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The node registry allows you to register and use workflow functions:
+
+.. code-block:: python
+
+   from uam4x.node import register_node
+   from uam4x.study import Study
+
+   @register_node(description="Set up a basic aircraft")
+   def setup_aircraft(study: Study):
+       """Set up a basic aircraft configuration."""
+       vehicle = Vehicle("basic_aircraft")
+       wing = Wing("main_wing")
+       wing.set_parameter("span", 10.0)
+       vehicle.add_component(wing)
+       study.add_vehicle(vehicle)
+
+   # The function is now registered and can be used in workflows
+
 Working with Variants
 ~~~~~~~~~~~~~~~~~~~~~
 

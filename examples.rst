@@ -76,6 +76,44 @@ This example demonstrates multi-objective optimization:
        return study
 
 
+Node-Based Workflow
+-------------------
+
+This example shows how to use the node registry for workflow management:
+
+.. code-block:: python
+
+   from uam4x.node import register_node
+   from uam4x.study import Study
+   from uam4x.components import Wing, Rotor
+
+   @register_node(description="Set up a tiltrotor aircraft")
+   def setup_tiltrotor(study: Study):
+       """Set up a tiltrotor aircraft configuration."""
+       vehicle = Vehicle("tiltrotor")
+
+       # Add wing
+       wing = Wing("main_wing")
+       wing.set_parameter("span", 12.0)
+       wing.set_parameter("chord", 1.2)
+       vehicle.add_component(wing)
+
+       # Add rotors
+       for i in range(2):
+           rotor = Rotor(f"rotor_{i+1}")
+           rotor.set_parameter("diameter", 6.0)
+           rotor.set_parameter("blades", 3)
+           vehicle.add_component(rotor)
+
+       study.add_vehicle(vehicle)
+
+   @register_node(description="Configure analysis parameters")
+   def configure_analysis(study: Study):
+       """Configure analysis parameters for the study."""
+       study.set_parameter("analysis.mach", 0.3)
+       study.set_parameter("analysis.altitude", 1000.0)
+       study.set_parameter("analysis.angle_of_attack", 2.0)
+
 Plugin Development
 ------------------
 

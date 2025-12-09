@@ -22,13 +22,13 @@ UAM4X is a comprehensive framework for Urban Air Mobility (UAM) aircraft design,
 * Multi-objective optimization
 * Study management and variant handling
 * Plugin system for extensibility
-* Node-based workflow management
 
 Key Features
 ------------
 
 * **Component System**: Modular aircraft components (wings, rotors, aircraft, etc.)
 * **Plugin Architecture**: Extensible plugin system for analysis tools
+* **Node Registry**: Workflow management through registered nodes
 * **Study Management**: Comprehensive study and variant management
 * **GUI Interface**: User-friendly graphical interface for workflow management
 
