@@ -4,24 +4,35 @@ from uam4x.vehicle import Vehicle, VehicleManager
 import json
 import os
 import copy
+from uam4x.log import get_log
+from uam4x.utils import log
+from uam4x.dev_info import DEV
+# DEV = False
+if DEV:
+    log.set_min_console_level("DEBUG")
+
 
 class _Overwrite():
     def __init__(self, param_state:dict) -> None:
         self.param_state = param_state
         self.name_to_value = copy.copy(param_state)
+        self.log = get_log(log, object_name='overwrite')
 
     def add_item(self, name, value):
+        self.log.debug(f'add item: {name}')
         if name in self.name_to_value:
-            print(f"WARNING key already has value: {name}")
+            self.log.warning(f"key already has value: {name}")
         self.name_to_value[name] = value
 
     def add_items(self, name_to_value):
+        self.log.debug('add items')
         for name in name_to_value:
             if name in self.name_to_value:
-                print(f"WARNING key already has value: {name}")
+                self.log.warning(f'key already has value: {name}')
             self.name_to_value[name] = name_to_value[name]
 
     def get_item(self, name):
+        self.log.debug(f'get item: {name}')
         return self.name_to_value[name]
 
     def __contains__(self, item):
@@ -38,6 +49,7 @@ class _Overwrite():
         return same
 
     def tracked_outputs(self, tracked_outputs):
+        self.log.debug('tracked outputs')
         results = {}
         for name, value in self.name_to_value.items():
             if (
@@ -49,24 +61,34 @@ class _Overwrite():
         return results
 
 class Study:
-    def __init__(self) -> None:
+    def __init__(self, log_dir = None) -> None:
+
+        if log_dir:
+            if log.open_file:
+                log.close_file()
+            filename_log = os.path.join(log_dir,'log.txt')
+            log.set_filename_log(filename_log=filename_log)
+        self.log = get_log(log, object_name= 'study')
         self.vehicles = VehicleManager()
         self.solution = Solution()
         self.control = Control()
         self._overwrites = []
 
     def add_trade(self, trade_name:str, trade) -> None:
+        self.log.debug(f'add trade: {name}')
         self.control.add_trade(trade_name, trade)
 
     def add_vehicle(self, vehicle) -> None:
+        self.log.debug(f'add vehicle: {vehicle.name}')
         return self.vehicles.add_vehicle(vehicle)
 
-
     def get_vehicle(self, vehicle_name: str):
+        self.log.debug(f'get vehicle: {vehicle_name}')
         return self.vehicles.get_vehicle(vehicle_name)
 
     def _to_dict(self) -> dict:
         """Convert the study to a dictionary representation."""
+        self.log.debug('write to dict')
         return {
             "control": self.control._to_dict(),
             "vehicles": {v.name: v._to_dict() for v in self.vehicles},
@@ -74,8 +96,9 @@ class Study:
             "results": [overwrite.tracked_outputs(self.solution.tracked_outputs) for overwrite in self._overwrites]
         }
     @classmethod
-    def _from_dict(cls, data: dict) -> 'Study':
-        study = Study()
+    def _from_dict(cls, data: dict, work_dir = None) -> 'Study':
+        log.debug('study from dict')
+        study = Study(log_dir=work_dir)
         for vname, vdata in data["vehicles"].items():
             study.add_vehicle(Vehicle._from_dict(vdata))
         study.solution = Solution._from_dict(data["solution"])
@@ -84,12 +107,15 @@ class Study:
 
     def save_to_json(self, json_path: str):
         """Save the study to a JSON file."""
+        self.log.debug('save to json')
         data = self._to_dict()
+
         with open(json_path, 'w') as f:
             json.dump(data, f, indent=4)
 
     def load_from_json(self, json_path: str):
         """Load the study from a JSON file."""
+        self.log.debug('load from json')
         with open(json_path, 'r') as f:
             data = json.load(f)
         study = self._from_dict(data)
@@ -101,13 +127,16 @@ class Study:
     @classmethod
     def from_json(cls, json_path: str) -> 'Study':
         """Create a Study instance from a JSON file."""
+        log.debug('create study from json')
+        work_dir = os.path.dirname(json_path)
         with open(json_path, 'r') as f:
             data = json.load(f)
-        return cls._from_dict(data)
+        return cls._from_dict(data, work_dir)
 
     def get_plugin_input_and_output_names(self, step_name):
         input_names = []
         output_names = []
+        self.log.debug(f'get plugin input and output names for {step_name}')
         for (independent, dependent) in self.solution.links:
             if dependent.split('.')[0] == step_name:
                 input_names.append(dependent)
@@ -119,6 +148,7 @@ class Study:
         return set(input_names), set(output_names)
 
     def _get_value_with_overwrites(self, name, state):
+        self.log.debug('get value with overwrites')
         temp_over = _Overwrite(state)
         if name in state:
             return temp_over.get_item(name)
@@ -134,6 +164,7 @@ class Study:
         Retrieve a value from the study using a dotted path string, e.g.:
         'vehicles.multi_objective_vehicle.wing1.aspect_ratio'
         """
+        self.log.debug(f'get the value of {dotted_path}')
         parts = dotted_path.split('.')
         obj = self
         for part in parts:
@@ -144,12 +175,14 @@ class Study:
             elif hasattr(obj, part):
                 obj = getattr(obj, part)
             else:
+                self.log.error(f"Cannot access '{part}' in path '{dotted_path}'")
                 raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
         # If it's a Parameter, return its value
         if hasattr(obj, 'value'):
             return obj.value
         return obj
     def _add_overwrite(self, state, name, value):
+        self.log.debug(f'add overwrite: {name}')
         temp_over = _Overwrite(state)
         for overwrite in self._overwrites:
             if temp_over == overwrite:
@@ -159,6 +192,7 @@ class Study:
         self._overwrites.append(temp_over)
 
     def get_plugin_inputs(self, step_name, state):
+        self.log.debug(f'get plugin inputs for {step_name}')
         inputs = {}
         for (independent, dependent) in self.solution.links:
             dependent_split = dependent.split('.')
@@ -181,6 +215,8 @@ class Study:
         vehicle_names = []
         step_inputs = []
         step_outputs = []
+
+        self.log.debug('Get all possible vehicle names and step input/output names.')
 
         # Get all vehicle parameter names
         for vehicle in self.vehicles:
@@ -237,6 +273,7 @@ class Study:
         Returns:
             list: List of all possible vehicle names and step input/output names.
         """
+        self.log.debug('Get all possible vehicle names and step input/output names.')
         all_names = self.get_all_names_by_category()
         return all_names['vehicle_names'] + all_names['step_inputs'] + all_names['step_outputs']
 
@@ -244,14 +281,23 @@ class Variants:
     def __init__(self, dir: str) -> None:
         self.dir = dir
         self.variants = {}
+        variants_dir = os.path.join(self.dir,'variants')
+        if not os.path.exists(variants_dir):
+                os.mkdir(variants_dir)
+
+        self.log = get_log(log, object_name='variants')
 
     def add_variant(self, name, func_list:list):
+        self.log.debug(f"add variant {name}")
         self.variants[name] = func_list
 
     def generate_variants(self,):
+        self.log.debug('generate variants')
         studies = []
+
         for name, func_list in self.variants.items():
             variants_dir = os.path.join(self.dir, "variants")
+
             if not os.path.exists(variants_dir):
                 os.mkdir(variants_dir)
 
@@ -259,7 +305,7 @@ class Variants:
             if not os.path.exists(this_variant_dir):
                 os.mkdir(this_variant_dir)
 
-            study = Study()
+            study = Study(log_dir=variants_dir)
             for func in func_list:
                 func(study)
             json_path = os.path.join(this_variant_dir, 'data.json')

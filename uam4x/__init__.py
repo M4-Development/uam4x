@@ -1,7 +1,7 @@
 
 from uam4x.components import register_component, Component, _component_registry
 from uam4x.solution import register_plugin, Plugin, _plugin_registry
-from uam4x.utils import check_and_get_config
+from uam4x.utils import check_and_get_config, log
 import os
 import json
 
@@ -27,9 +27,9 @@ for _comp_name, _python_file_path in _config['COMPONENTS'].items():
             _spec.loader.exec_module(_module)
             _component_registry[_comp_name] = getattr(_module,_comp_name)
         except FileNotFoundError:
-            print(f"WARNING: Component load error ({_comp_name}). Could not find path {_python_file_path}")
+            log.warning(f"Component load error ({_comp_name}). Could not find path {_python_file_path}")
         except AttributeError:
-            print(f"WARNING: Component load error. Could not find {_comp_name} in {_python_file_path}")
+            log.warning(f"Component load error. Could not find {_comp_name} in {_python_file_path}")
     # Built-in components are already loaded via "from uam4x.components import ..." at the top
 
 
@@ -43,6 +43,6 @@ for _plugin_name, _python_file_path in _config['PLUGINS'].items():
         _spec.loader.exec_module(_module)
         _plugin_registry[_plugin_name] = getattr(_module,_plugin_name)
     except FileNotFoundError:
-        print(f"WARNING: Plugin load error ({_plugin_name}). Could not find path {_python_file_path}")
+        log.warning(f"Plugin load error ({_plugin_name}). Could not find path {_python_file_path}")
     except AttributeError:
-        print(f"WARNING: Plugin load error. Could not find {_plugin_name} in {_python_file_path}")
+        log.warning(f"Plugin load error. Could not find {_plugin_name} in {_python_file_path}")

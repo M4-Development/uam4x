@@ -2,6 +2,10 @@ from uam4x.study import Study
 import os
 from uam4x.openmdao_optimization import Optimization
 import copy
+import traceback
+from uam4x.log import *
+from uam4x.utils import log
+from uam4x.custom_errors import *
 
 from uam4x.utils import check_continuous, get_param_type
 
@@ -46,6 +50,8 @@ class Engine:
         self.current_sweep_values = {}
         self.work_dir = work_dir
         os.makedirs(self.work_dir, exist_ok=True)
+        self.log = get_log(log, object_name='engine')
+
 
     def check_partials(self, trade_name, form='forward', step=1.e-6):
         """
@@ -70,7 +76,7 @@ class Engine:
         RuntimeError
             If circular solution sequence is detected.
         """
-
+        self.log.debug('check partials')
         #Standard setup:
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
@@ -83,6 +89,7 @@ class Engine:
 
         plugins = {}
         for step_name, step_info in self.study.solution.steps.items():
+            self.log.debug(f'setup {step_name} plugin')
             plugin = step_info["plugin"]()
             plugin.setup_plugin(step_info["plugin_options"])
             plugins[step_name] = plugin
@@ -137,6 +144,7 @@ class Engine:
         If iteration is provided, outputs will be saved to 'out_{iteration}'
         subdirectory. Otherwise, outputs go to the main work directory.
         """
+        self.log.debug('run solution')
         if not iteration is None:
             out_dir = os.path.join(self.work_dir, f"out_{iteration}")
         else:
@@ -145,6 +153,7 @@ class Engine:
         if not plugins:
             plugins = {}
             for step_name, step_info in self.study.solution.steps.items():
+                self.log.debug(f'setup {step_name} plugin')
                 plugin = step_info["plugin"]()
                 plugin.setup_plugin(step_info["plugin_options"])
                 plugins[step_name] = plugin
@@ -174,6 +183,7 @@ class Engine:
         out_dir : str
             Output directory for optimization results.
         """
+        self.log.debug('run optimization')
         cwd = os.getcwd()
         os.chdir(out_dir)
         opt = Optimization(self.study, state, plugins, out_dir)
@@ -198,7 +208,9 @@ class Engine:
         out_dir : str
             Output directory for analysis results.
         """
+        self.log.debug('run single point')
         for step_name, step_info in self.study.solution.steps.items():
+            self.log.debug(f'run single point: {step_name}')
             plugin = plugins[step_name]
             work_dir = os.path.join(out_dir, step_name)
             os.makedirs(work_dir, exist_ok=True)
@@ -224,7 +236,9 @@ class Engine:
         step_name : str
             Name of the step that produced the results.
         """
+        self.log.debug('update state from results')
         for name, value in results.items():
+            self.log.debug(f'update state from results: {name}')
             self.study._add_overwrite(state, step_name + "." + name, value)
 
     def run_tradestudy(self, trade_name, num_processesors=None, commit=False):
@@ -249,6 +263,7 @@ class Engine:
         The num_processesors parameter is currently not implemented.
         All states are executed sequentially.
         """
+        self.log.debug(f'run tradestudy: {trade_name}')
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
         # plugins = self.init_plugins()
@@ -260,8 +275,35 @@ class Engine:
         #     else:
         #         pass
         plugins = None
+        failed_states = []
+        successful_states = []
         for i, state in enumerate(tradestudy.get_states()):
-            self.run_solution(state, plugins, i)
+
+            try:
+                self.run_solution(state, plugins,  iteration=i)
+                self.log.info(f'state successful: {state}')
+                successful_states.append(state)
+            except PluginException as e:
+                tb = e.__traceback__  # get traceback object from exception
+                while tb.tb_next:
+                    tb = tb.tb_next  # go to the last traceback frame (where error originated)
+
+                lineno = tb.tb_lineno
+                filename = tb.tb_frame.f_code.co_filename
+                self.log.error(f"{type(e).__name__}: state failed - {state}")
+                failed_states.append(state)
+            except Exception as e:
+                tb = e.__traceback__  # get traceback object from exception
+                while tb.tb_next:
+                    tb = tb.tb_next  # go to the last traceback frame (where error originated)
+
+                lineno = tb.tb_lineno
+                filename = tb.tb_frame.f_code.co_filename
+                self.log.error(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
+                raise RuntimeError(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
+
+        # self.log.info(f'succesful states: {successful_states}')
+        # self.log.info(f'failed states: {failed_states}')
 
     def sort_steps(self):
         """
@@ -281,6 +323,7 @@ class Engine:
         This method modifies the study.solution._steps dictionary
         to reflect the sorted execution order.
         """
+        self.log.debug(f'sort steps')
         step_names = self.study.solution.get_step_names()
         new_step_order = []
         num_steps = 0
@@ -301,6 +344,7 @@ class Engine:
                     num_steps += 1
                     changes = True
         if not changes:
+            self.log.error("Circular Solution Sequence Detected!")
             raise RuntimeError("Circular Solution Sequence Detected!")
         else:
             self.study.solution._steps = dict(new_step_order)
@@ -363,6 +407,7 @@ class Engine:
         TypeError
             If parameter types are incompatible.
         """
+        self.log.debug('check model')
         self.check_links_to_plugins(plugins)
         self.check_link_types(plugins)
         if state['optimization']: #TODO can this not exist?
@@ -388,6 +433,7 @@ class Engine:
         ValueError
             If input or output names are not declared in plugins.
         """
+        self.log.debug(f'check links to plugins')
         for step_name in self.study.solution.steps:
             # Check that links matched declared plugin I/O
             input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
@@ -396,11 +442,15 @@ class Engine:
             for input_name in  input_names:
                 name = '.'.join(input_name.split('.')[1:])
                 if name not  in plugins[step_name].plugin_input_names:
+                    self.log.error(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                     f"Check your plugin's setup() step for I/O declaration")
                     raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                      f"Check your plugin's setup() step for I/O declaration")
             for output_name in  output_names:
                 name = '.'.join(output_name.split('.')[1:])
                 if name not  in plugins[step_name].plugin_output_names:
+                    self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                     f"Check your plugin's setup() step for I/O declaration")
                     raise ValueError(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                      f"Check your plugin's setup() step for I/O declaration")
 
@@ -421,6 +471,7 @@ class Engine:
         TypeError
             If linked parameters have incompatible types.
         """
+        self.log.debug('check link types')
         bad_links = []
         for link in  self.study.solution.links:
             output_link = link[0]
@@ -432,6 +483,7 @@ class Engine:
 
         if bad_links:
             msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
+            self.log.error(msg)
             raise TypeError(msg)
 
     def check_desvars(self, plugins, state):
@@ -454,6 +506,7 @@ class Engine:
             If any design variable is not of continuous type.
         """
         # add desvars
+        self.log.debug('check discrete variables')
         for name, lower, upper in zip(
             state['des_var_names'],
             state['des_var_lower'],
@@ -462,6 +515,7 @@ class Engine:
 
             des_var_type = get_param_type(name,self.study, plugins)
             if not check_continuous(des_var_type):
+                self.log.error(f'The design variable: {name} is of type {des_var_type}. Only floats allowed as design variables')
                 raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
                                 f'Only floats allowed as design variables')
     def check_constraints(self, plugins, state):
@@ -483,6 +537,7 @@ class Engine:
         TypeError
             If any constraint is not of continuous type.
         """
+        self.log.debug('check constraints')
         for name, lower, upper in zip(
             state['constraint_names'],
             state['constraint_lower'],
@@ -491,6 +546,7 @@ class Engine:
             constraint_type = get_param_type(name,self.study, plugins)
             is_continuous = check_continuous(constraint_type)
             if not is_continuous:
+                self.log.error(f'The constraint: {name} is of type {constraint_type}. Only floats allowed as constraints')
                 raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
                                 f'Only floats allowed as constraints')
     def check_objective(self, plugins, state):
@@ -512,9 +568,11 @@ class Engine:
         TypeError
             If the objective is not of continuous type.
         """
+        self.log.debug('check objective')
         objective_type = get_param_type(state["objective_name"], self.study, plugins)
         is_continuous = check_continuous(objective_type)
         if not is_continuous:
+            self.log.error(f'The objective: {state["objective_name"]} is of type {objective_type}. Only floats allowed as objectives')
             raise TypeError(f'The objective: {state["objective_name"]} is of type {objective_type}\n'
                             f'Only floats allowed as objectives')
 
@@ -538,6 +596,7 @@ class Engine:
         TypeError
             If any optimization link uses discrete variables.
         """
+        self.log.debug('Check for discrete I/O passing')
         # Check for discrete I/O passing
         for link in  self.study.solution.links:
             input_name = link[0]
@@ -549,6 +608,7 @@ class Engine:
                 link_input_var_name =  '.'.join(input_name.split('.')[1:])
                 input_type = plugins[link_input_plugin].plugin_output_names[link_input_var_name]['type']
                 if not check_continuous(input_type):
+                    self.log.error(f"Links between optimization components must be continuous (of type float). Check I/O declarations in plugin: {link_input_plugin}. Variable in violation: {input_name}")
                     raise TypeError(f"Links between optimization components must be continuous (of type float)\n"
                                     f"Check I/O declarations in plugin: {link_input_plugin}\n"
                                         f"Variable in violation: {input_name}")

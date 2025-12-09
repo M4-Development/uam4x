@@ -1,4 +1,4 @@
-
+from uam4x.utils import log
 # UnitType as class with string attributes
 class UnitType:
     NONE = "none"

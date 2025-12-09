@@ -3,6 +3,9 @@ import json
 
 import numpy as  np
 
+from uam4x.log import *
+
+log = FileLogger(filename_log=None)
 
 TYPE_MAP = {
     "int": int,
@@ -22,6 +25,7 @@ def check_and_get_config(conf_path):
         try:
             _config = json.load(configfile)
         except json.decoder.JSONDecodeError:
+            log.error(f"Could not load parse json at {conf_path}. Please correct or delete the file.")
             raise IOError(f"Could not load parse json at {conf_path}. Please correct or delete the file.")
     if 'COMPONENTS' not in _config:
         _config['COMPONENTS'] = {}
@@ -43,7 +47,7 @@ def check_continuous(val_or_type):
     #Handle types
     if isinstance(val_or_type, type) and (val_or_type == float or issubclass(val_or_type, (np.floating, np.ndarray))):
         return True
-    
+
     return False
 
 def type_string_to_type(type_name:str):
@@ -74,6 +78,7 @@ def get_param_type(dotted_path: str, study, plugins= None):
                 else:
                     obj = getattr(obj, part)
             else:
+                log.error(f"Cannot access '{part}' in path '{dotted_path}'")
                 raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
     elif plugins:
         plugin_name = dotted_path.split('.')[0]
@@ -85,5 +90,5 @@ def get_param_type(dotted_path: str, study, plugins= None):
             obj = plugin.plugin_output_names[part]['type']
 
     return obj
-    
-    
+
+

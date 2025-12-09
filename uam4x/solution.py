@@ -7,28 +7,37 @@ _plugin_registry = {}
 from collections.abc import Sequence
 from numbers import  Real
 from itertools import  product
+from uam4x.log import get_log
+from uam4x.utils import log
 
 class Solution:
     def __init__(self) -> None:
         self.tracked_outputs = []
         self.links = []
         self.steps = {}
+        self.log = get_log(log, object_name='solution' )
+        self.log.debug(f'initialize')
 
     def add_link(self, independent:str, dependent:str):
+        self.log.debug(f'add link. independent link: {independent}, dependent link: {dependent}')
         link = [independent, dependent]
         if link not in self.links:
             self.links.append(link)
 
     def remove_link(self, independent:str, dependent:str):
+        self.log.debug(f'remove link. independent link: {independent}, dependent link: {dependent}')
         link = [independent, dependent]
         if link in self.links:
             self.links.remove(link)
 
     def get_step_names(self):
+        self.log.debug(f'get step names')
         return [step_name for step_name in self.steps]
 
     def add_step(self, plugin_class, step_name=None, plugin_options:dict={}):
+        self.log.debug(f'add step: {step_name}')
         if not isinstance(plugin_class, Callable):
+            self.log.error("add_step: plugin_class should be a callable (class).")
             raise TypeError("plugin_class should be a callable (class).")
         # plugin_name should be a string, not a class
         if step_name is None:
@@ -37,10 +46,12 @@ class Solution:
         self.steps[step_name] = step_info
 
     def remove_step(self, step_name):
+        self.log.debug(f'remove step: {step_name}')
         if step_name in self.steps:
             self.steps.pop(step_name)
 
     def edit_step(self, step_name, plugin_options:dict=None):
+        self.log.debug(f'edit step: {step_name}')
         if step_name in self.steps:
             step = self.steps[step_name]
             if plugin_options is not None:
@@ -51,25 +62,31 @@ class Solution:
                 plugin_options = {}
 
     def add_tracked_output(self, output:str):
+        self.log.debug(f'add tracked output: {output}')
         if output in self.tracked_outputs:
-            raise RuntimeError(f"output already being tracked: {output}")
+            self.log.error(f"output already being tracked: {output}")
+            raise FrameworkError(f"output already being tracked: {output}")
         self.tracked_outputs.append(output)
 
     def remove_tracked_output(self, output:str):
+        self.log.debug(f'remove tracked output: {output}')
         self.tracked_outputs.remove(output)
 
     def add_plugin_option(self, step_name:str, option_name:str, option_value):
+        self.log.debug(f'add plugin option {option_name} to step {step_name}')
         if step_name in self.steps:
             step = self.steps[step_name]
             step["plugin_options"][option_name] = option_value
 
     def remove_plugin_option(self, step_name:str, option_name:str):
+        self.log.debug(f'remove plugin option {option_name} to step {step_name}')
         if step_name in self.steps:
             step = self.steps[step_name]
             step["plugin_options"].pop(option_name)
 
     def _to_dict(self) -> dict:
         # Serialize steps, converting plugin class to its name
+        self.log.debug(f'write to dict')
         steps_serialized = {}
         for step_name, step_info in self.steps.items():
             plugin_class = step_info["plugin"]
@@ -87,6 +104,7 @@ class Solution:
     @classmethod
     def _from_dict(cls, data: dict) -> 'Solution':
         sol = cls()
+        log.debug('solution from dict')
         # Reconstruct steps, mapping plugin name to class if possible
         for step_name, step_data in data["steps"].items():
             plugin_name = step_data["plugin"]
@@ -108,14 +126,18 @@ class Plugin():
         self.plugin_input_names = {}
         self.plugin_output_names = {}
         self.partial_2d_list = []
+        self.log = get_log(log, object_name='Plugin base class')
 
     def declare_discrete(self, name):
+        self.log.debug('declare discrete')
         self.discrete_names.append(name)
 
     def setup_plugin(self, plugin_options:dict):
+        self.log.debug('setup plugin')
         pass
 
     def run_plugin(self, links:dict, work_dir:str):
+        self.log.debug('run plugin')
         pass
 
     def declare_partials_plugin(self, of: str|Sequence[str], wrt: str|Sequence[str], method='fd', step=None, form=None):
@@ -124,7 +146,7 @@ class Plugin():
         stored in a dictionary which will eventually be consolidated into a single
         partials dictionary.
         '''
-
+        self.log.debug('declare partials plugin')
         # Check type of input, if string, wrap with list
         if type(of) == str:
             of = [of]
@@ -134,23 +156,32 @@ class Plugin():
 
         # Error checking
         if method not in ['fd', 'exact']:
+            self.log.error(f'Cannot use methods other than exact or fd, user used method: {method}')
             raise ValueError(f'Cannot use methods other than exact or fd, user used method: {method}')
 
         if method == 'fd':
             if step is  not None:
                 if not isinstance(step, Real):
+                    self.log.error(f'Step size must be a real number. The step size {step} is not valid')
                     raise ValueError(f'Step size must be a real number. The step size {step} is not valid')
                 if step <= 0:
+                    self.log.error(f'Step size must be greater than zero. The step size {step} is not valid')
                     raise ValueError(f'Step size must be greater than zero. The step size {step} is not valid')
             if form is not None:
                 if form not in ['forward', 'backward', 'central']:
+                    self.log.error('Only allowed finite difference forms are: forward,\n'
+                                     f'backward, and central. The form: {form} is not valid')
                     raise ValueError('Only allowed finite difference forms are: forward,\n'
                                      f'backward, and central. The form: {form} is not valid')
         else:
             if step is  not None:
+                self.log.error(f'User specified {method} method, which does not take in a step.\n'
+                                 f'Instead, leave step blank or set it equal to None')
                 raise ValueError(f'User specified {method} method, which does not take in a step.\n'
                                  f'Instead, leave step blank or set it equal to None')
             if form is  not None:
+                self.log.error(f'User specified {method} method, which does not take in a form.\n'
+                                 f'Instead, leave step blank or set it equal to None')
                 raise ValueError(f'User specified {method} method, which does not take in a form.\n'
                                  f'Instead, leave step blank or set it equal to None')
 
@@ -164,6 +195,7 @@ class Plugin():
         Builds a comprehensive dictionary of partials
         seperated by method (note only fd and exact allowed so far)
         '''
+        self.log.debug('build partials')
 
         # Validate names
         # Collect declared names
@@ -190,10 +222,16 @@ class Plugin():
 
         #Note the empty set is a subset of all other sets
         if not partial_ins.issubset(local_input_names):
+            self.log.error(f'Inputs and partials do not match:\n'
+                             f'Inputs: {input_names}\n'
+                             f'Partial inputs: {partial_ins}\n')
             raise ValueError(f'Inputs and partials do not match:\n'
                              f'Inputs: {input_names}\n'
                              f'Partial inputs: {partial_ins}\n')
         if not partial_outs.issubset(local_output_names):
+            self.log.error(f'Outputs and partials do not match:\n'
+                             f'Outputs: {output_names}\n'
+                             f'Partial outputs: {partial_outs}\n')
             raise ValueError(f'Outputs and partials do not match:\n'
                              f'Outputs: {output_names}\n'
                              f'Partial outputs: {partial_outs}\n')
@@ -219,7 +257,7 @@ class Plugin():
         return self.comprehensive_partials_dict
 
     def categorize_partials(self):
-
+        self.log.debug('catagorize partials')
         method_to_partial = {'fd': [],'exact': []}
         for pair, data in  self.comprehensive_partials_dict.items():
             if data['method'] == 'fd':
@@ -236,21 +274,29 @@ class Plugin():
 
 
     def compute_partials_plugin(self, links: dict):
+        self.log.debug('compute partials plugin')
         pass
 
     def set_check_partials_options(self, form='forward', step=None):
+        self.log.debug('set check partials options')
         self._check_partials_options = True
         self.check_form = form
         self.check_step = step
 
     def declare_input(self, name, var_type, value=None):
+        self.log.debug(f'declare input: {name}')
         if '~' in  name:
+            self.log.error('Tildes (~) are not allowed in variable names\n'
+                             f'The following name is not allowed: {name}')
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
         self.plugin_input_names[name] = {'type': var_type, 'value': value}
 
     def declare_output(self, name, var_type, value=None):
+        self.log.debug(f'declare output: {name}')
         if '~' in  name:
+            self.log.error('Tildes (~) are not allowed in variable names\n'
+                             f'The following name is not allowed: {name}')
             raise ValueError('Tildes (~) are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
         self.plugin_output_names[name] = {'type': var_type,'value': value}
@@ -258,6 +304,7 @@ class Plugin():
 
 def register_plugin(cls):
     plugin_name = cls.__name__
+    log.debug(f'register plugin {plugin_name}')
 
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
     _config = check_and_get_config(config_path)
@@ -289,10 +336,12 @@ def get_plugin_class(plugin_name):
         msg = f"Plugin '{plugin_name}' was not registered. Please check the following:\n"
         msg += f"\t1. Did you register the plugin using the @register_plugin?\n"
         msg += f"\t2. Were there Plugin Load Errors when you imported uam4x?\n"
+        log.error(msg)
         raise ImportError(msg)
     return _plugin_registry[plugin_name]
 
 def get_plugin_names():
     """Get a list of all registered plugin names."""
+    log.debug('get plugin names')
     return list(_plugin_registry.keys())
 

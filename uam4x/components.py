@@ -1,5 +1,6 @@
 import os
-
+from uam4x.log import get_log
+from uam4x.utils import log
 
 from uam4x.units import (
     UnitType, LengthUnit, AngleUnit, MassUnit, TimeUnit, ForceUnit, TemperatureUnit, PressureUnit, EnergyUnit, PowerUnit, VolumeUnit, AreaUnit, SpeedUnit, AccelerationUnit
@@ -37,7 +38,9 @@ class Parameter:
         from uam4x.units import UnitType
         self.name = name
         self.dtype = dtype
+        self.log = get_log(log, object_name=f'parameter: {name}')
         if not isinstance(default_value, dtype):
+            self.log.error(f"Parameter '{name}' must be of type {dtype.__name__}, got {type(default_value).__name__}")
             raise TypeError(f"Parameter '{name}' must be of type {dtype.__name__}, got {type(default_value).__name__}")
         self._value = default_value
         self.unit_type = unit_type if unit_type is not None else UnitType.NONE
@@ -53,6 +56,7 @@ class Parameter:
         str
         """
         unit_display = self.unit if self.unit else "—"
+        self.log.debug(f'return string representation')
         return f"{self.name}: {self.value} [{self.unit_type}, {unit_display}] ({self.description})"
 
     def __repr__(self):
@@ -63,6 +67,7 @@ class Parameter:
         -------
         str
         """
+        self.log.debug(f'return string representation')
         return self.__str__()
     @property
     def value(self):
@@ -73,6 +78,7 @@ class Parameter:
         -------
         Any
         """
+        self.log.debug(f'get or set value')
         return self._value
     @value.setter
     def value(self, v):
@@ -84,7 +90,9 @@ class Parameter:
         v : Any
             Value to set. Must match dtype.
         """
+        self.log.debug(f'set value')
         if not isinstance(v, self.dtype):
+            self.log.error(f"Value for parameter '{self.name}' must be of type {self.dtype.__name__}, got {type(v).__name__}")
             raise TypeError(f"Value for parameter '{self.name}' must be of type {self.dtype.__name__}, got {type(v).__name__}")
         self._value = v
 
@@ -96,6 +104,7 @@ class Parameter:
         -------
         bool
         """
+        self.log.debug(f'check type')
         return isinstance(self.value, self.dtype)
 
     def _to_dict(self) -> dict:
@@ -108,6 +117,7 @@ class Parameter:
         """
         # Only include JSON-serializable fields, never include .dtype or any type/class
         # Ensure unit_type and unit are always serializable (string or None)
+        self.log.debug(f'write to dict')
         unit_type = self.unit_type
         if hasattr(unit_type, '__name__'):
             unit_type = unit_type.__name__
@@ -144,6 +154,7 @@ class Parameter:
         -------
         Parameter
         """
+        log.debug('Deserialize a parameter from a dictionary')
         dtype = type_string_to_type(data["dtype"])
         value = dtype(data["value"])
         return cls(
@@ -152,7 +163,7 @@ class Parameter:
             dtype=dtype,
             unit_type=data["unit_type"],
             unit=data["unit"],
-            description=data["description"]
+            description=data["description"],
         )
 
 class Mode:
@@ -171,6 +182,7 @@ class Mode:
         self.name = name
         self._overrides = {}
         self.component = component  # Reference to parent component for inheritance
+        self.log = get_log(log, object_name=f'mode: {name}')
 
     def set_parameter(self, name: str, value):
         """
@@ -183,10 +195,13 @@ class Mode:
         value : Any
             Value to set.
         """
+        self.log.debug(f'set parameter')
         if name not in self.component._parameters:
+            self.log.error(f"Parameter '{name}' does not exist in component '{self.component.name}' for mode '{self.name}'")
             raise AttributeError(f"Parameter '{name}' does not exist in component '{self.component.name}' for mode '{self.name}'")
         dtype = self.component._parameters[name].dtype
         if not isinstance(value, dtype):
+            self.log.error(f"Override for parameter '{name}' in mode '{self.name}' must be of type {dtype.__name__}, got {type(value).__name__}")
             raise TypeError(f"Override for parameter '{name}' in mode '{self.name}' must be of type {dtype.__name__}, got {type(value).__name__}")
         self._overrides[name] = value
 
@@ -204,10 +219,12 @@ class Mode:
         Any
             The value of the parameter.
         """
+        self.log.debug(f'get parameter')
         if name in self._overrides:
             return self._overrides[name]
         if name in self.component._parameters:
             return self.component._parameters[name].value
+        self.log.error(f"Parameter '{name}' does not exist in component '{self.component.name}' for mode '{self.name}'")
         raise AttributeError(f"Parameter '{name}' does not exist in component '{self.component.name}' for mode '{self.name}'")
 
     def __getattr__(self, item):
@@ -228,6 +245,7 @@ class Mode:
             return self._overrides[item]
         if self.component and hasattr(self.component, item) and not isinstance(getattr(self.component, item), Mode) and not callable(getattr(self.component, item)):
             return getattr(self.component, item)
+        self.log.error(f"'{self.__class__.__name__}' object has no attribute '{item}'")
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
 
     def __setattr__(self, key, value):
@@ -241,14 +259,17 @@ class Mode:
         value : Any
             Value to set.
         """
-
         if key in ("name", "_overrides", "component"):
             object.__setattr__(self, key, value)
         elif key in self.component._parameters:
             if not isinstance(value, self.component._parameters[key].dtype):
+                self.log.error(f"Parameter '{key}' in mode '{self.name}' must be of type {self.component._parameters[key].dtype.__name__}, got {type(value).__name__}")
                 raise TypeError(f"Parameter '{key}' in mode '{self.name}' must be of type {self.component._parameters[key].dtype.__name__}, got {type(value).__name__}")
             self._overrides[key] = value
+        elif key == 'log':
+            pass
         else:
+            self.log.error(f"'{self.__class__.__name__}' object has no parameter '{key}' to override")
             raise AttributeError(f"'{self.__class__.__name__}' object has no parameter '{key}' to override")
 
     @property
@@ -262,12 +283,14 @@ class Mode:
             Mapping of parameter names to Parameter objects.
         """
         # Return a dict of all effective Parameter objects: overridden in mode, else from component
+        self.log.debug(f'Get parameters for mode {self.name}')
         params = {}
         for pname, param in self.component._parameters.items():
             if pname in self._overrides:
                 override_value = self._overrides[pname]
                 dtype = param.dtype
                 if dtype is not None and not isinstance(override_value, dtype):
+                    self.log.error(f"Override for parameter '{pname}' in mode '{self.name}' must be of type {dtype.__name__}, got {type(override_value).__name__}")
                     raise TypeError(f"Override for parameter '{pname}' in mode '{self.name}' must be of type {dtype.__name__}, got {type(override_value).__name__}")
                 overridden_param = Parameter(
                     param.name,
@@ -283,6 +306,7 @@ class Mode:
         # Add any extra overrides not in component
         for pname, value in self._overrides.items():
             if pname not in params:
+                self.log.error(f"Parameter '{pname}' does not exist in component '{self.component.name}' for mode '{self.name}'")
                 raise AttributeError(f"Parameter '{pname}' does not exist in component '{self.component.name}' for mode '{self.name}'")
         return params
 
@@ -294,6 +318,7 @@ class Mode:
         -------
         str
         """
+        self.log.debug(f'return a string representation')
         if not self._overrides:
             return f"Mode('{self.name}') (no parameter overrides)"
         param_strs = [f"{k}: {v}" for k, v in self._overrides.items()]
@@ -315,6 +340,7 @@ class Component:
         self._parameters = {}
         self._modes = {}
         self._is_setup = True
+        self.log = get_log(log, object_name= f'component: {name} ')
         self.setup()
         self._is_setup = False
         setattr(self, 'baseline', self)
@@ -323,6 +349,7 @@ class Component:
         """
         Override in subclasses to add parameters using add_parameter().
         """
+        self.log.debug(f'Override in subclasses to add parameters using add_parameter()')
         pass
 
     def add_parameter(self, name: str, default_value, dtype, unit_type=None, unit=None, description=""):
@@ -344,7 +371,10 @@ class Component:
         description : str, optional
             Description.
         """
+
+        self.log.debug(f'add parameter {name} to {type(self).__name__}')
         if not self._is_setup:
+            self.log.error("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
             raise RuntimeError("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
         self._parameters[name] = Parameter(name, default_value, dtype, unit_type=unit_type, unit=unit, description=description)
         # Dynamically add property to the instance for this parameter
@@ -368,6 +398,7 @@ class Component:
         unit : Enum or str, optional
             Unit to set.
         """
+        self.log.debug(f'set {type(self).__name__} parameter: {name}')
         from uam4x.units import UNIT_TYPE_TO_UNIT_CLASS
         if name in self._parameters:
             param = self._parameters[name]
@@ -378,9 +409,11 @@ class Component:
                     unit_class = UNIT_TYPE_TO_UNIT_CLASS[unit_type]
                     # Accept both class attribute and value
                     if unit not in unit_class.__dict__.values():
+                        self.log.error(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
                         raise ValueError(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
                 param.unit = unit
         else:
+            self.log.error(f"Parameter '{name}' not defined for {self.__class__.__name__}.")
             raise AttributeError(f"Parameter '{name}' not defined for {self.__class__.__name__}.")
 
     def add_mode(self, mode_name: str):
@@ -396,8 +429,10 @@ class Component:
         -------
         Mode
         """
+        self.log.debug(f"add mode: {mode_name}")
         # Only accept a string (mode name), auto-create a Mode
         if not isinstance(mode_name, str):
+            self.log.error("add_mode only accepts a string as the mode name.")
             raise TypeError("add_mode only accepts a string as the mode name.")
         mode = Mode(mode_name, self)
         self._modes[mode.name] = mode
@@ -418,7 +453,9 @@ class Component:
         Any or None
             The value of the parameter, or None if not found.
         """
+        self.log.debug(f'get parameter: {param_name}')
         if param_name not in self._parameters:
+            self.log.error(f"Parameter '{param_name}' not defined for {self.__class__.__name__}.")
             raise AttributeError(f"Parameter '{param_name}' not defined for {self.__class__.__name__}.")
         return self._parameters[param_name].value
 
@@ -436,8 +473,9 @@ class Component:
         Any or None
             The type of the parameter, or None if not found.
         """
-
+        self.log.debug(f'get parameter type: {param_name}')
         if param_name not in self._parameters:
+            self.log.error(f"Parameter '{param_name}' not defined for {self.__class__.__name__}.")
             raise AttributeError(f"Parameter '{param_name}' not defined for {self.__class__.__name__}.")
         return self._parameters[param_name].dtype
 
@@ -450,11 +488,13 @@ class Component:
         dict
             {'main': ..., mode_name: ...} for all parameters and all modes.
         """
+        self.log.debug('check all parameter types')
         result = {'main': {name: param.check_type() for name, param in self._parameters.items()}}
         for mode_name, mode in self._modes.items():
             mode_result = {}
             for pname, override_value in mode._overrides.items():
                 if pname not in self._parameters:
+                    self.log.error(f"Parameter '{pname}' does not exist in component '{self.name}' for mode '{mode_name}'")
                     raise AttributeError(f"Parameter '{pname}' does not exist in component '{self.name}' for mode '{mode_name}'")
                 dtype = self._parameters[pname].dtype
                 mode_result[pname] = isinstance(override_value, dtype)
@@ -469,6 +509,7 @@ class Component:
         -------
         str
         """
+        self.log.debug('returns a string representation of the component and its parameters.')
         param_strs = [str(param) for param in self._parameters.values()]
         params = "\n    ".join(param_strs)
         return f"{self.__class__.__name__}('{self.name}')\n    {params}"
@@ -481,6 +522,7 @@ class Component:
         -------
         dict
         """
+        self.log.debug('write to dict')
         return {
             "name": self.name,
             "component_type": type(self).__name__,
@@ -502,6 +544,7 @@ class Component:
         -------
         Component
         """
+        log.debug('Deserialize a component from a dictionary')
         # Parameters
         comp_type = data["component_type"]
         comp_class = get_commponent_class(comp_type)
@@ -525,11 +568,12 @@ class Component:
         dict
             Mapping of parameter names to their values.
         """
+        self.log.debug('get dictionary of parameters and their values')
         return {name: param.value for name, param in self._parameters.items()}
 
 def register_component(cls):
     comp_name = cls.__name__
-
+    log.debug(f'register component: {comp_name}')
     # Only register in the registry, don't modify conf.json for built-in components
     # when running components.py directly
     if cls.__module__ == "__main__":
@@ -542,7 +586,7 @@ def register_component(cls):
 
 
     if comp_name in _config['COMPONENTS'] and _config['COMPONENTS'][comp_name] != importlib.util.find_spec(cls.__module__).origin:
-        print(f"WARNING: Component '{comp_name}' already registered\nOverwritting existing data")
+        log.warning(f"WARNING: Component '{comp_name}' already registered\nOverwritting existing data")
     if not "uam4x.components" in cls.__module__.replace('.', '/'):
         _config['COMPONENTS'][comp_name] = importlib.util.find_spec(cls.__module__).origin
         with open(config_path, 'w') as configfile:
@@ -555,7 +599,7 @@ def register_component(cls):
 @register_component
 class Wing(Component):
     def setup(self):
-        self.add_parameter("area", 0., float, unit_type=UnitType.AREA, description="Wing area")
+        self.add_parameter("area", 0., float, unit_type=UnitType.AREA, description="Wing area" )
         self.add_parameter("span", 0., float, unit_type=UnitType.LENGTH, description="Wing span")
         self.add_parameter("chord", 0., float, unit_type=UnitType.LENGTH, description="Wing chord")
         self.add_parameter("sweep", 0., float, unit_type=UnitType.ANGLE, description="Wing sweep angle")
@@ -590,6 +634,7 @@ class RotorBladeRegion(Component):
         self.add_parameter("vertical_shift_start", 0.0, float, unit_type=UnitType.LENGTH, description="")
         self.add_parameter("vertical_shift_stop", 0.0, float, unit_type=UnitType.LENGTH, description="")
         self.add_parameter("mainsparweb_thickness", 0.0, float, unit_type=UnitType.LENGTH, description="")
+        self.add_parameter("mainsparweb_angle", 0.0, float, unit_type=UnitType.ANGLE, description="")
 
 
 @register_component
@@ -603,6 +648,7 @@ def get_commponent_class(component_name):
         msg = f"Component '{component_name}' was not registered. Please check the following:\n"
         msg += f"\t1. Did you register the component using the @register_component?\n"
         msg += f"\t2. Were there Plugin Load Errors when you imported uam4x?\n"
+        log.error(msg)
         raise ImportError(msg)
     return _component_registry[component_name]
 

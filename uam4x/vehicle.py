@@ -1,16 +1,24 @@
 from uam4x.components import Component
+from uam4x.log import get_log
+from uam4x.utils import log
+
 class VehicleManager(list):
 
     def __init__(self):
         self._vehicles = []
+        self.log = get_log(log, object_name='vehicle manager')
+        self.log.debug('initialize')
 
     def add_vehicle(self, vehicle):
+        self.log.debug(f'add vehicle: {vehicle.name}')
         if vehicle.name in self:
+            self.log.error(f"Vehicle '{vehicle.name}' already exists in the study.")
             raise ValueError(f"Vehicle '{vehicle.name}' already exists in the study.")
         self._vehicles.append(vehicle)
 
 
     def get_vehicle(self, vehicle):
+        self.log.debug(f'get vehicle: {self.vehicle_name}')
         return self.vehicle_name
 
     def __getattr__(self, item):
@@ -18,6 +26,7 @@ class VehicleManager(list):
         for veh in self._vehicles:
             if veh.name == item:
                 return veh
+        self.log.warning(f"'{self.__class__.__name__}' object has no attribute '{item}'")
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
 
     def __iter__(self):
@@ -35,34 +44,44 @@ class Vehicle:
         """
         self._name = name
         self._components = components if components is not None else []
+        self.log = get_log(log, object_name=f'vehicle: {name} ')
+        self.log.debug(f'initialize')
 
     @property
     def name(self):
+        self.log.debug('get name')
         return self._name
 
     @name.setter
     def name(self, value):
         if not isinstance(value, str):
+            self.log.error("Name must be a string.")
             raise ValueError("Name must be a string.")
         self._name = value
 
     @property
     def components(self):
+        self.log.debug('get component')
         return self._components
 
     def add_component(self, component):
+        self.log.debug('add component')
         self._components.append(component)
 
     def remove_component(self, component):
+        self.log.debug('remove component')
         self._components.remove(component)
 
     def get_component(self, name):
+        self.log.debug(f'get component: {name}')
         for comp in self._components:
             if comp.name == name:
                 return comp
+        self.log.error(f"Component with name '{name}' not found in vehicle '{self._name}'")
         raise ValueError(f"Component with name '{name}' not found in vehicle '{self._name}'")
 
     def get_component_names(self):
+        self.log.debug('get component names')
         return [comp.name for comp in self._components]
 
     def __getattr__(self, item):
@@ -70,9 +89,11 @@ class Vehicle:
         for comp in self._components:
             if comp.name == item:
                 return comp
+        self.log.warning(f"'{self.__class__.__name__}' object has no attribute '{item}'")
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
 
     def check_all_parameter_types(self):
+        self.log.debug('check all parameter types')
         """Return (all_ok, result_dict): all_ok is True if all parameters in all components and all modes are correct type."""
         result = {comp.name: comp.check_all_parameter_types() for comp in self._components}
         all_ok = all(
@@ -82,16 +103,19 @@ class Vehicle:
         return all_ok, result
 
     def __str__(self):
+        self.log.debug('write to string')
         comp_info = ', '.join(f"{c.name} ({c.__class__.__name__})" for c in self._components)
         return f"Vehicle(name={self._name}, components=[{comp_info}])"
     def _to_dict(self) -> dict:
+        self.log.debug('write to dict')
         return {
             "name": self.name,
             "components": [c._to_dict() for c in self.components]
         }
     @classmethod
     def _from_dict(cls, data: dict) -> 'Vehicle':
-        v = Vehicle(data["name"])
+        log.debug('vehicle from dict')
+        v = Vehicle(data["name"] )
         for cdata in data["components"]:
             v.add_component(Component._from_dict(cdata))
         return v

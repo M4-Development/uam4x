@@ -4,6 +4,8 @@ import os
 import shutil
 
 from uam4x.utils import check_continuous, get_param_type
+from uam4x.log import get_log
+from uam4x.utils import log
 
 class Optimization:
     def __init__(self, study:Study, state, plugins, out_dir,check_partials=False) -> None:
@@ -12,9 +14,11 @@ class Optimization:
         self.plugins = plugins
         self.out_dir = out_dir
         self.check_partials = check_partials
+        self.log = get_log(log, object_name='optimization')
 
     def run_problem(self):
         problem = om.Problem()
+        self.log.debug('run problem')
 
         #make vehicle step
         should_be_no_inputs, used_vehicle_param_names = self.study.get_plugin_input_and_output_names('vehicles')
@@ -24,6 +28,7 @@ class Optimization:
             value = self.study._get_value_with_overwrites(param_name, self.state)
             vehicle_val_dict[param_name] = value
             vehicle_type_dict[param_name] = get_param_type(param_name, self.study)
+        # comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(self.log), promotes=['*'])
         comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(), promotes=['*'])
         comp.options["vehicle_val_dict"] = vehicle_val_dict
         comp.options["vehicle_type_dict"] = vehicle_type_dict
@@ -33,12 +38,13 @@ class Optimization:
             input_names = set([step_name + '.' + input_name for input_name in set(self.plugins[step_name].plugin_input_names.keys())])
             output_names = set([step_name + '.' + output_name for output_name in set(self.plugins[step_name].plugin_output_names.keys())])
             comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(), promotes=['*'])
+            # comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(self.log), promotes=['*'])
             comp.options["plugin"] = self.plugins[step_name]
             comp.options["input_names"] = input_names
             comp.options["output_names"] = output_names
             comp.options["work_dir"] = os.path.join(self.out_dir, step_name)
             comp.options["step_name"] = step_name
-            
+
 
         # Add connections
         for independent, dependent in self.study.solution.links:
@@ -74,10 +80,15 @@ class Optimization:
         return problem
 
 class OpenmdaoPreComp(om.IndepVarComp):
+
     def initialize(self):
+        self.log = get_log(log, object_name='OpenmdaoPreComp')
+        self.log.debug('initialize')
         self.options.declare("vehicle_val_dict")
         self.options.declare("vehicle_type_dict")
+
     def setup(self):
+        self.log.debug('setup')
         vehicle_val_dict = self.options["vehicle_val_dict"]
         vehicle_type_dict = self.options["vehicle_type_dict"]
         for param_name, value in vehicle_val_dict.items():
@@ -89,13 +100,17 @@ class OpenmdaoPreComp(om.IndepVarComp):
                 self.add_output(param_name.replace(".", "~"), val=value)
 
 class UniversalOpenmdaoComp(om.ExplicitComponent):
+
     def initialize(self):
+        self.log = get_log(log, object_name='UniversalOpenmdaoComp')
+        self.log.debug('initialize')
         self.options.declare("plugin")
         self.options.declare("input_names")
         self.options.declare("output_names")
         self.options.declare("work_dir")
         self.options.declare("step_name")
     def setup(self):
+        self.log.debug('setup')
         self.plugin = self.options["plugin"]
         self.input_names = self.options["input_names"]
         self.output_names = self.options["output_names"]
@@ -144,6 +159,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
 
 
     def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
+        self.log.debug('compute')
         if os.path.isdir(self.work_dir):
             shutil.rmtree(self.work_dir)
         os.makedirs(self.work_dir)
@@ -166,6 +182,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                     outputs[name_with_plugin.replace(".", "~")] = value
 
     def compute_partials(self, inputs, partials, discrete_inputs={}):
+        self.log.debug('compute partials')
         if not self.plugin._declare_partials:
             return
         else:
@@ -179,4 +196,5 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                     input_name_with_plugin = input_name.replace('.', '~')
                     partials[output_name_with_plugin, input_name_with_plugin] = value
                 else:
+                    self.log.error('Missing links somewhere')
                     raise ValueError('Missing links somewhere')
