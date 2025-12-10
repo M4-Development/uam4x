@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='uam4x',
-    version='0.1.1',
+    version='0.2.0',
     packages=['uam4x'],
     author='M4 Engineering',
     author_email='tnascenzi@m4-engineering.com',
