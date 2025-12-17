@@ -9,7 +9,7 @@ class VehicleManager():
         self.log = VehicleManager.log
         self.log.debug('initialize')
         self._vehicles = []
-    
+
     def add_vehicle(self, vehicle):
         self.log.debug(f'add vehicle: {vehicle.name}')
         for existing_vehicle in self._vehicles:
@@ -24,32 +24,31 @@ class VehicleManager():
         for vehicle in  self._vehicles:
             if vehicle.name == name:
                 return vehicle
-            
+
         self.log.error(f"Vehicle with name {name} not found in vehicle manager")
-        raise ValueError(f"Vehicle with name {name} not found in vehicle manager")        
+        raise ValueError(f"Vehicle with name {name} not found in vehicle manager")
 
     def append(self, vehicle):
-        return self.add_vehicle(vehicle)    
+        return self.add_vehicle(vehicle)
 
     def __getattr__(self, item):
         # Allow attribute access to components by their name
         for veh in self._vehicles:
             if veh.name == item:
                 return veh
-        self.log.warning(f"'{self.__class__.__name__}' object has no attribute '{item}'")
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
-    
+
     def __iter__(self):
         return iter(self._vehicles)
-    
+
     def __len__(self):
         return len(self._vehicles)
-    
+
     def __repr__(self):
         names = [v.name for  v in  self._vehicles]
         return f"VehicleManager(vehicles={names})"
-    
-    
+
+
 
 class Vehicle:
     log = get_log(log, object_name='vehicle')
@@ -62,7 +61,7 @@ class Vehicle:
         components : list, optional
             List of components that define the vehicle (default: empty list)
         """
-        self.log = Vehicle.log        
+        self.log = Vehicle.log
         self.name = name
         if components is  not None:
             self.check_component_names(components)
@@ -91,9 +90,9 @@ class Vehicle:
             raise ValueError(f"Name must be a string. The name {value} is invalid")
         if '[' in  value or  ']' in  value:
             self.log.error(f'vehicles cannot have the character "[" or "]" in them. '
-                           f'The name: {value} is invalid')            
+                           f'The name: {value} is invalid')
             raise ValueError(f'vehicles cannot have the character "[" or "]" in them. '
-                             f'The name: {value} is invalid')        
+                             f'The name: {value} is invalid')
         self._name = value
 
     @property
@@ -106,8 +105,8 @@ class Vehicle:
         if parent is  not None:
             raise ValueError(f'A particular component may only belong to one vehicle at maximum.\n'
                              f'The component {str(component)} belongs to {str(parent)}')
-        self._components.append(component)        
-        self.check_component_names(self._components)        
+        self._components.append(component)
+        self.check_component_names(self._components)
         self.log.debug('add component')
         component._parent = self
 
@@ -132,7 +131,6 @@ class Vehicle:
         for comp in self._components:
             if comp.name == item:
                 return comp
-        self.log.warning(f"'{self.__class__.__name__}' object has no attribute '{item}'")
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
 
     def check_all_parameter_types(self):
