@@ -1,12 +1,12 @@
 import os
 import json
-
+import multiprocessing as mp
 import numpy as  np
 import re
 from uam4x.log import FileLogger
 from numbers import Real
 from operator import  itemgetter, attrgetter
-
+import hashlib
 import sys
 
 DEV = True
@@ -23,26 +23,42 @@ TYPE_MAP = {
     "ndarray": np.ndarray,
 }
 
+def is_main_process():
+    return mp.current_process().name == 'MainProcess'
+
+def registry_writes_enabled():
+    return os.getenv('UAM4X_DISABLE_REGISTRY_WRITES') != '1'
 
 def check_and_get_config(conf_path):
     if not os.path.exists(conf_path):
-        with open(conf_path, 'w') as configfile:
-            json.dump({},configfile)
-
+        if is_main_process() and registry_writes_enabled():
+            log.info(f'No config found at {conf_path}. Creating new empty config file.')
+            with open(conf_path, 'w') as configfile:
+                json.dump({},configfile)
+        else:
+            return {"COMPONENTS": {}, "PLUGINS": {}}
+        
     with open(conf_path, 'r') as configfile:
         try:
             _config = json.load(configfile)
         except json.decoder.JSONDecodeError:
             log.error(f"Could not load parse json at {conf_path}. Please correct or delete the file.")
             raise IOError(f"Could not load parse json at {conf_path}. Please correct or delete the file.")
+        
     if 'COMPONENTS' not in _config:
         _config['COMPONENTS'] = {}
-        with open(conf_path, 'w') as configfile:
-            json.dump(_config, configfile, indent=4)
+        if is_main_process() and registry_writes_enabled():
+            log.info(f'No COMPONENTS found in config at {conf_path}. Creating empty COMPONENTS section.')
+            with open(conf_path, 'w') as configfile:
+                json.dump(_config, configfile, indent=4)
+
     if 'PLUGINS' not in _config:
         _config['PLUGINS'] = {}
-        with open(conf_path, 'w') as configfile:
-            json.dump(_config, configfile, indent=4)
+        if is_main_process() and registry_writes_enabled() :
+            log.info(f'No PLUGINS found in config at {conf_path}. Creating empty PLUGINS section.')
+            with open(conf_path, 'w') as configfile:
+                json.dump(_config, configfile, indent=4)
+                
     return _config
 
 
@@ -197,8 +213,44 @@ def value_to_type_name(value):
         return None
         
     
+def canonicalize_state(x):
+    '''
+    Given a state dictionary, sorts for hashing
+    '''
+    if isinstance(x, dict):
+        return {k: canonicalize_state(x[k]) for k in sorted(x.keys())}
 
+    if isinstance(x, list):
+        return [canonicalize_state(v) for v in x]
 
+    if isinstance(x, np.ndarray):
+        return canonicalize_state(x.tolist())
+
+    if isinstance(x, float):
+        return round(x, 12)
+    
+    if isinstance(x, (np.integer, np.floating, np.bool_)):
+        return x.item()    
+
+    return x
+
+def hash_state(state):
+    '''
+    hashes an input state
+    '''
+    canon = canonicalize_state(state)
+    
+    data = json.dumps(
+        canon,
+        sort_keys=True,
+        separators=(",", ":"), 
+        ensure_ascii=False,
+        allow_nan=False).encode("utf-8")
+    
+
+    return hashlib.sha256(data).hexdigest()
+    
+    
 def is_valid_square_brackets(string):
     '''
     Checks if the string has the proper square brackets

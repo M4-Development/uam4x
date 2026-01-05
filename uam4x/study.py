@@ -12,57 +12,9 @@ import platform
 from importlib.metadata import distributions
 from pathlib import  Path
 import subprocess
-import pygit2    
+import pygit2
+from uam4x.results import Results
 
-class _Overwrite():
-    log = get_log(log, object_name='overwrite')
-    def __init__(self, param_state:dict) -> None:
-        self.param_state = param_state
-        self.name_to_value = copy.copy(param_state)
-        self.log = _Overwrite.log
-
-    def add_item(self, name, value):
-        self.log.debug(f'add item: {name}')
-        if name in self.name_to_value:
-            self.log.warning(f"key already has value: {name}")
-        self.name_to_value[name] = value
-
-    def add_items(self, name_to_value):
-        self.log.debug('add items')
-        for name in name_to_value:
-            if name in self.name_to_value:
-                self.log.warning(f'key already has value: {name}')
-            self.name_to_value[name] = name_to_value[name]
-
-    def get_item(self, name):
-        self.log.debug(f'get item: {name}')
-        return self.name_to_value[name]
-
-    def __contains__(self, item):
-        return item in self.name_to_value
-
-    def __eq__(self, other) -> bool:
-        same = True
-        if len(other.param_state.keys()) == len(self.param_state.keys()):
-            for key, value in self.param_state.items():
-                if not other.param_state[key] == value:
-                    same = False
-        else:
-            same = False
-        return same
-
-    def tracked_outputs(self, tracked_outputs, template_hashes):
-        self.log.debug('tracked outputs')
-        results = {}
-        for name, value in self.name_to_value.items():
-            if (
-                name in self.param_state
-                or name in tracked_outputs
-                or ('des_vars' in self.param_state and name in self.param_state['des_vars'])
-                or name in  template_hashes
-            ):
-                results[name] = value
-        return results
 
 class Study:
     log = get_log(log, object_name='study')
@@ -77,7 +29,7 @@ class Study:
         self.vehicles = VehicleManager()
         self.solution = Solution()
         self.control = Control()
-        self._overwrites = []
+        self.results = Results()
         self._runtime_meta_data = {}
         
     
@@ -114,9 +66,7 @@ class Study:
             'Python': python_dict,
             'Packages': environ_dict,
         }
-        
-    #def _add_runtime_plugin_hash(self, name, h):
-        
+                
 
     def add_trade(self, trade_name:str, trade) -> None:
         self.log.debug(f'add trade: {trade_name}')
@@ -138,7 +88,7 @@ class Study:
             "control": convert_numpy_to_python(self.control._to_dict()),
             "vehicles": convert_numpy_to_python({v.name: convert_numpy_to_python(v._to_dict()) for v in self.vehicles}),
             "solution": convert_numpy_to_python(self.solution._to_dict()),
-            'results': convert_numpy_to_python([overwrite.tracked_outputs(self.solution.tracked_outputs, self.solution._template_file_paths) for overwrite in self._overwrites]),
+            'results': convert_numpy_to_python(self.results._to_dict()),
             "execution_meta_data": convert_numpy_to_python(self._runtime_meta_data),
         }
         
@@ -153,6 +103,8 @@ class Study:
             study.add_vehicle(Vehicle._from_dict(vdata))
         study.solution = Solution._from_dict(data["solution"])
         study.control = Control._from_dict(data["control"])
+        study.results = Results._from_dict(data["results"])
+
         return study
 
     def save_to_json(self, json_path: str, commit=False):
@@ -204,17 +156,6 @@ class Study:
                 output_names.append(independent)
         return set(input_names), set(output_names)
 
-    def _get_value_with_overwrites(self, name, state):
-        self.log.debug('get value with overwrites')
-        temp_over = _Overwrite(state)
-        if name in state:
-            return temp_over.get_item(name)
-        for overwrite in self._overwrites:
-            if temp_over == overwrite:
-                if name in overwrite:
-                    return overwrite.get_item(name)
-                break
-        return self.get_value(name)
 
     def get_value(self, dotted_path: str):
         """
@@ -235,15 +176,6 @@ class Study:
             value = value[inds]
         return value
 
-    def _add_overwrite(self, state, name, value):
-        self.log.debug(f'add overwrite: {name}')
-        temp_over = _Overwrite(state)
-        for overwrite in self._overwrites:
-            if temp_over == overwrite:
-                overwrite.add_item(name, value)
-                return
-        temp_over.add_item(name, value)
-        self._overwrites.append(temp_over)
 
     def get_plugin_link_inputs(self, step_name, state):
         self.log.debug(f'get plugin inputs for {step_name}')

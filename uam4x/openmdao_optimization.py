@@ -6,6 +6,7 @@ import numpy as np
 from uam4x.utils import check_continuous, get_param_type, handle_brackets
 from uam4x.log import get_log
 from uam4x.utils import log
+from uam4x.results import Results, Result
 
 class Optimization:
     log = get_log(log, object_name='optimization')
@@ -26,7 +27,10 @@ class Optimization:
         vehicle_val_dict = {}
         vehicle_type_dict = {}
         for param_name in used_vehicle_param_names:
-            value = self.study._get_value_with_overwrites(param_name, self.state)
+            if param_name in self.state:
+                value= self.state[param_name]
+            else:
+                value= self.study.get_value(param_name)
             vehicle_val_dict[param_name] = value
             vehicle_type_dict[param_name] = get_param_type(param_name, self.study)
         # comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(self.log), promotes=['*'])
@@ -100,32 +104,36 @@ class Optimization:
             problem.model.add_constraint(name.replace(".", "~"), lower=lower, upper=upper, indices=indices)
 
 
-
+        result=Result(state=self.state)
         #add template hashes to results before template files are run in optimization
         for plug_name,plug in self.plugins.items():
             if plug._template_to_checksum:
                 for path, checksum in  plug._template_to_checksum.items():
-                    self.study._add_overwrite(self.state,path, checksum)
-                    if path not  in self.study.solution._template_file_paths:
-                        self.study.solution._template_file_paths.append(path)
-        
+                    result._add_template_checksum(path, checksum)
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
         problem.driver = om.ScipyOptimizeDriver()
         problem.driver.options['optimizer'] = 'SLSQP'
         problem.setup()
         problem.run_driver()
+        
+        
+
+        
+        if problem.driver.fail:
+            result._add_convergence_status(False)
+        else:
+            result._add_convergence_status(True)
+
+        for tracked_output in self.study.solution.tracked_outputs + list(self.state['des_vars'].keys()):
+            if '[' in  tracked_output:
+                no_ind_tracked_output, inds = handle_brackets(tracked_output)
                 
-
-        if not self.check_partials:
-            for tracked_output in self.study.solution.tracked_outputs + list(self.state['des_vars'].keys()):
-                if '[' in  tracked_output:
-                    no_ind_tracked_output, inds = handle_brackets(tracked_output)
-                    self.study._add_overwrite(self.state, tracked_output, problem.get_val(no_ind_tracked_output.replace(".", "~"))[inds])
-                else:  
-                    self.study._add_overwrite(self.state, tracked_output, problem.get_val(tracked_output.replace(".", "~"))[0])
-
-        return problem
+                result._add_result(tracked_output, problem.get_val(no_ind_tracked_output.replace(".", "~"))[inds])
+            else:  
+                result._add_result(tracked_output, problem.get_val(tracked_output.replace(".", "~"))[0])
+                    
+        return result
 
 class OpenmdaoPreComp(om.IndepVarComp):
     log = get_log(log, object_name='OpenmdaoPreComp')

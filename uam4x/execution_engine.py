@@ -1,3 +1,4 @@
+import concurrent
 from uam4x.study import Study
 import os
 from uam4x.openmdao_optimization import Optimization
@@ -9,6 +10,9 @@ import hashlib
 import numpy as  np
 from uam4x.utils import check_continuous, get_param_type, check_if_scalar,log, parse_index, handle_brackets
 from collections import  defaultdict
+from uam4x.results import Results, Result   
+from uam4x.log import FileLogger
+
 
 class Engine:
     """
@@ -42,7 +46,6 @@ class Engine:
     work_dir : str
         Working directory for execution outputs.
     """
-    log = get_log(log, object_name='engine')
     def __init__(self, study:Study, work_dir, num_processes=1) -> None:
         self.study = study
         self.num_processes = num_processes
@@ -51,7 +54,7 @@ class Engine:
         self.current_sweep_values = {}
         self.work_dir = work_dir
         os.makedirs(self.work_dir, exist_ok=True)
-        self.log = Engine.log
+        self.log = get_log(log, object_name='engine')
 
 
     def check_partials(self, trade_name, form='forward', step=1.e-6):
@@ -107,25 +110,7 @@ class Engine:
         problem.check_partials(step=step, form=form, compact_print=True)
         os.chdir(cwd)
 
-
-
-    # def are_plugins_threadsafe(self):
-    #     for step_name, step_info in self.study.solution.steps.items():
-    #         plugin = get_new_plugin_instance(step_info["plugin_type"])
-    #         plugin.setup_plugin(step_info["plugin_options"])
-    #         if not plugin.is_threadsafe:
-    #             return False
-    #     return True
-
-    # def init_plugins(self):
-    #     plugins = {}
-    #     # thread_safe = False
-    #     for step_name, step_info in self.study.solution.steps.items():
-    #         plugins[step_name] = step_info["plugin"]()
-    #         plugins[step_name].setup_plugin(step_info["plugin_options"])
-    #     return plugins
-
-    def run_solution(self, state, plugins, iteration=None, check=True):
+    def _run_solution(self, state,iteration=None, check=True):
         """
         Run a solution for a given state.
 
@@ -155,37 +140,67 @@ class Engine:
         else:
             out_dir = os.path.join(self.work_dir)
 
-        external_executable_to_versioning_data = {}
-        if not plugins:
-            plugins = {}
-            for step_name, step_info in self.study.solution.steps.items():
-                self.log.debug(f'setup {step_name} plugin')
-                plugin = step_info["plugin"]()
-                plugin.setup_plugin(step_info["plugin_options"])
-                plugins[step_name] = plugin
-                if plugin._executable_to_data and not 'step_external_executable_data' in self.study._runtime_meta_data:
-                    #copying here because i don't want to carry and accidentally modify state
-                    external_executable_to_versioning_data[step_name] = copy.deepcopy(plugin._executable_to_data)
-                
-            if external_executable_to_versioning_data:
-                self.study._add_runtime_external_executable_data(external_executable_to_versioning_data)
-        
-        
-        #TBD: are plugins ever provided? if so, additional logic needed here for the external stuff
-                    
-                
+        os.makedirs(out_dir, exist_ok=True)
 
+        plugins = {}
+        cwd=os.getcwd()
+        for step_name, step_info in self.study.solution.steps.items():
+            self.log.debug(f'setup {step_name} plugin')
+            plugin = step_info["plugin"]()
+            plugin.setup_plugin(step_info["plugin_options"])
+            plugins[step_name] = plugin
+            
         if check:
             self.check_model(plugins, state)
 
-        os.makedirs(out_dir, exist_ok=True)
-        
         if state['optimization']:
-            self.run_optimization(state, plugins, out_dir)
+            result=self._run_optimization(state, plugins, out_dir)
         else:
-            self.run_single_point(state, plugins, out_dir)
+            result=self._run_single_point(state, plugins, out_dir)
 
-    def run_optimization(self, state, plugins, out_dir):
+        return result
+    
+    @staticmethod
+    def _run_solution_parallel(study_dict, state, iteration=None, work_dir=None):
+        """
+        Static method to run a solution in parallel.
+
+        This method is designed to be used with concurrent execution
+        frameworks. It reconstructs the Study object from a dictionary
+        and runs the solution for the given state.
+
+        Parameters
+        ----------
+        study_dict : dict
+            Dictionary representation of the Study object.
+        state : dict
+            State dictionary containing all parameters and configuration.
+        iteration : int, optional
+            Iteration number for output directory naming, by default None.
+        work_dir : str, optional
+            Working directory for execution outputs, by default None.
+
+        Returns
+        -------
+        Result
+            The result object containing outputs from the solution.
+        """
+        if not iteration is None:
+            out_dir = os.path.join(work_dir, f"out_{iteration}")
+        else:
+            out_dir = os.path.join(work_dir)
+
+        os.makedirs(out_dir, exist_ok=True)
+
+
+
+        study = Study._from_dict(study_dict, out_dir)
+        engine = Engine(study, out_dir)    
+        result = engine._run_solution(state, iteration=iteration)
+        return result
+
+
+    def _run_optimization(self, state, plugins, out_dir):
         """
         Run an optimization analysis.
 
@@ -205,11 +220,13 @@ class Engine:
         cwd = os.getcwd()
         os.chdir(out_dir)
         opt = Optimization(self.study, state, plugins, out_dir)
-        opt.run_problem()
+        opt_result=opt.run_problem()
 
         os.chdir(cwd)
 
-    def run_single_point(self, state, plugins, out_dir):
+        return opt_result
+
+    def _run_single_point(self, state, plugins, out_dir):
         """
         Run a single-point analysis.
 
@@ -227,39 +244,46 @@ class Engine:
             Output directory for analysis results.
         """
         self.log.debug('run single point')
+        temp_state=copy.deepcopy(state)
         for step_name, step_info in self.study.solution.steps.items():
             self.log.debug(f'run single point: {step_name}')
             plugin = plugins[step_name]
             work_dir = os.path.join(out_dir, step_name)
             os.makedirs(work_dir, exist_ok=True)
+            
+            plugin_inputs={}
+            for (independent,dependent) in self.study.solution.links:  
+                dependent_split = dependent.split(".")
+                if dependent_split[0]==step_name:
+                    var_name = ".".join(dependent_split[1:])
+                    if independent in temp_state:
+                        plugin_inputs[var_name] = temp_state[independent]
+                    else:
+                        plugin_inputs[var_name]=self.study.get_value(independent)
 
-            plugin_inputs = self.study.get_plugin_link_inputs(step_name, state)
             results = plugin.run_plugin(plugin_inputs, work_dir)
-            self.update_state_from_results(state, results, step_name)
+            
+            for var_name, result in results.items():
+                var_name=step_name + "." + var_name
+                if var_name in temp_state:
+                    self.log.warning(f'Plugin {step_name} returned output {var_name} which overwrites an existing state variable.')
+                temp_state[var_name] = result
 
 
-    def update_state_from_results(self, state, results, step_name):
-        """
-        Update state dictionary with plugin results.
+        result=Result(state=state)
 
-        Adds results from a plugin execution to the state dictionary
-        with the step name as a prefix to avoid naming conflicts.
+        for tracked_output in self.study.solution.tracked_outputs:
+            if '[' in  tracked_output:
+                no_ind_tracked_output, inds = handle_brackets(tracked_output)
+                var_value = temp_state[no_ind_tracked_output][inds]
+            else:
+                var_value = temp_state[tracked_output]
+            result._add_result(tracked_output, var_value)        
 
-        Parameters
-        ----------
-        state : dict
-            State dictionary to update.
-        results : dict
-            Results dictionary from plugin execution.
-        step_name : str
-            Name of the step that produced the results.
-        """
-        self.log.debug('update state from results')
-        for name, value in results.items():
-            self.log.debug(f'update state from results: {name}')
-            self.study._add_overwrite(state, step_name + "." + name, value)
+        return result   
+                
 
-    def run_tradestudy(self, trade_name, num_processesors=None, commit=False):
+    def run_tradestudy(self, trade_name, num_processors=None, commit=False):
         """
         Run a trade study analysis.
 
@@ -284,6 +308,8 @@ class Engine:
         self.log.debug(f'run tradestudy: {trade_name}')
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
+        import uam4x
+        os.environ['UAM4X_DISABLE_REGISTRY_WRITES'] = '1'
         # plugins = self.init_plugins()
 
         # if num_processesors:
@@ -292,13 +318,13 @@ class Engine:
         #         plugins = None
         #     else:
         #         pass
-        plugins = None
         failed_states = []
         successful_states = []
         # populate environment at execution time
         self.study._capture_environment()
         # hash plugins at runtime
         plugin_name_to_hash = {}
+        external_executable_to_versioning_data = {}
         for step_name, step_info in self.study.solution.steps.items():
             self.log.debug(f'setup {step_name} plugin')
             plugin_class = step_info["plugin"]
@@ -310,35 +336,86 @@ class Engine:
             plugin_name_to_hash[step_name] = plug_hash
             if self.study.solution.steps[step_name]['plugin_hash'] != plug_hash:
                 log.warning(f"Plugin '{plugin_class.__name__}' contains a different checksum from the one generated at branching script. Check plugin code for changes")
-                
+
+            plugin = step_info["plugin"]()
+            plugin.setup_plugin(step_info["plugin_options"])
+            if plugin._executable_to_data and not 'step_external_executable_data' in self.study._runtime_meta_data:
+                #copying here because i don't want to carry and accidentally modify state
+                external_executable_to_versioning_data[step_name] = copy.deepcopy(plugin._executable_to_data)
+
+        if external_executable_to_versioning_data:
+            self.study._add_runtime_external_executable_data(external_executable_to_versioning_data)        
+        
         self.study._add_runtime_plugin_checksums(plugin_name_to_hash)
             
-     
-        for i, state in enumerate(tradestudy.get_states()):
 
-            try:
-                self.run_solution(state, plugins,  iteration=i)
-                self.log.info(f'state successful: {state}')
-                successful_states.append(state)
-            except PluginException as e:
-                tb = e.__traceback__  # get traceback object from exception
-                while tb.tb_next:
-                    tb = tb.tb_next  # go to the last traceback frame (where error originated)
+        if num_processors and num_processors >1:
+            if num_processors > os.cpu_count():
+                log.warning(f'num_processors {num_processors} is greater than available CPU count {os.cpu_count()}. Setting num_processors to {os.cpu_count()}')
+                num_processors = os.cpu_count()
+            max_workers = num_processors 
+            outputs=[]
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                futures={i:executor.submit(Engine._run_solution_parallel, self.study._to_dict(),state, iteration=i,work_dir=self.work_dir)  for i, state in enumerate(tradestudy.get_states())}
+                for j in sorted(futures.keys()):
+                    try:
+                        outputs.append(futures[j].result())
+                        self.log.info(f'state successful: {tradestudy.get_states()[j]}')
+                        successful_states.append(tradestudy.get_states()[j])
+                    except PluginException as e:
+                        tb = e.__traceback__
+                        while tb.tb_next:
+                            tb = tb.tb_next
+                        lineno = tb.tb_lineno
+                        filename = tb.tb_frame.f_code.co_filename
+                        self.log.error(f"{type(e).__name__}: state failed - {tradestudy.get_states()[j]}")
+                        failed_state=copy.deepcopy(tradestudy.get_states()[j])
+                        failed_state["Failure_Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
+                        failed_states.append(tradestudy.get_states()[j])
+                        outputs.append(Result(state=failed_state))  
 
-                lineno = tb.tb_lineno
-                filename = tb.tb_frame.f_code.co_filename
-                self.log.error(f"{type(e).__name__}: state failed - {state}")
-                failed_states.append(state)
-            except Exception as e:
-                tb = e.__traceback__  # get traceback object from exception
-                while tb.tb_next:
-                    tb = tb.tb_next  # go to the last traceback frame (where error originated)
-
-                lineno = tb.tb_lineno
-                filename = tb.tb_frame.f_code.co_filename
-                self.log.error(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
-                raise RuntimeError(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
-
+                    except Exception as e:
+                        tb = e.__traceback__
+                        while tb.tb_next:
+                            tb = tb.tb_next
+                        lineno = tb.tb_lineno
+                        filename = tb.tb_frame.f_code.co_filename
+                        self.log.error(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
+                        raise RuntimeError(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
+        elif num_processors ==1 or not num_processors:
+            outputs=[]
+            for i, state in enumerate(tradestudy.get_states()):
+#
+                try:
+                    outputs.append(self._run_solution(state,  iteration=i))
+                    self.log.info(f'state successful: {state}')
+                    successful_states.append(state)
+                except PluginException as e:
+                    tb = e.__traceback__  # get traceback object from exception
+                    while tb.tb_next:
+                        tb = tb.tb_next  # go to the last traceback frame (where error originated)
+                    lineno = tb.tb_lineno
+                    filename = tb.tb_frame.f_code.co_filename
+                    self.log.error(f"{type(e).__name__}: state failed - {state}")
+                    failed_states.append(state)
+                    
+                except Exception as e:
+                    tb = e.__traceback__  # get traceback object from exception
+                    while tb.tb_next:
+                        tb = tb.tb_next  # go to the last traceback frame (where error originated)
+#
+                    lineno = tb.tb_lineno
+                    filename = tb.tb_frame.f_code.co_filename
+                    self.log.error(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
+                    raise RuntimeError(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
+        else:
+            raise ValueError('num_processors must be None or an integer >=1')
+        #Consolidate results
+        study_result=Results()
+        for result in outputs:
+            study_result.results.append(result) 
+            study_result._hash_to_result[result.state_hash] = result
+        self.study.results = study_result
         # self.log.info(f'succesful states: {successful_states}')
         # self.log.info(f'failed states: {failed_states}')
 
@@ -386,41 +463,6 @@ class Engine:
         else:
             self.study.solution._steps = dict(new_step_order)
 
-    #def get_param_type(self, dotted_path: str, plugins):
-        #'''
-        #Get a the type of a given parameter
-        #assumes general form vehicles. ... .attribute
-        #'''
-        #parts = dotted_path.split('.')
-        #obj = self.study
-        #if parts[0] == 'vehicles':
-            #for part in parts:
-                ## Try dict access first (for vehicles, parameters, etc.)
-                #if isinstance(obj, dict) and part in obj:
-                    #obj = obj[part]
-                ## Try attribute access
-                #elif hasattr(obj, part):
-                    #if hasattr(obj,'_modes'):
-                        #modes = list(obj._modes.keys())
-                    #else:
-                        #modes = []
-                    #if hasattr(obj, 'get_parameter_type') :
-                            #if part not in modes:
-                                #return obj.get_parameter_type(part)
-                    #else:
-                        #obj = getattr(obj, part)
-                #else:
-                    #raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
-        #elif plugins:
-            #plugin_name = dotted_path.split('.')[0]
-            #part = '.'.join(dotted_path.split('.')[1:])
-            #plugin = plugins[plugin_name]
-            #if part in  plugin.plugin_input_names:
-                #obj = plugin.plugin_input_names[part]['type']
-            #elif part in  plugin.plugin_output_names:
-                #obj = plugin.plugin_output_names[part]['type']
-
-        #return obj
 
     def check_model(self, plugins, state):
         """
@@ -448,7 +490,7 @@ class Engine:
         self.check_links_to_plugins(plugins)
         self.check_link_types(plugins)
         self.check_link_indices(plugins)
-        if state['optimization']: #TODO can this not exist?
+        if state.get('optimization'):
             self.check_desvars(plugins, state)
             self.check_constraints(plugins, state)
             self.check_objective(plugins, state)

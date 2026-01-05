@@ -3,7 +3,7 @@ from typing import Callable
 import os
 import json
 import importlib.util
-from uam4x.utils import check_and_get_config, check_numpy_shape, check_if_scalar, is_numpy_array, normalize_shape
+from uam4x.utils import check_and_get_config, check_numpy_shape, check_if_scalar, is_numpy_array, normalize_shape,is_main_process,registry_writes_enabled
 _plugin_registry = {}
 from collections.abc import Sequence
 from numbers import  Real
@@ -18,7 +18,6 @@ class Solution:
     log = get_log(log, object_name='solution')
     def __init__(self) -> None:
         self.tracked_outputs = []
-        self._template_file_paths = []
         self.links = []
         self.steps = {}
         self.log = Solution.log
@@ -429,8 +428,10 @@ def register_plugin(cls):
         log.warning(f"Plugin '{plugin_name}' already registered\nOverwritting existing data")
 
     _config['PLUGINS'][plugin_name] = module_origin
-    with open(config_path, 'w') as configfile:
-        json.dump(_config, configfile, indent=4)
+
+    if is_main_process() and registry_writes_enabled():
+        with open(config_path, 'w') as configfile:
+            json.dump(_config, configfile, indent=4)
 
     _plugin_registry[plugin_name] = cls
     return cls

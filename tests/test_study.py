@@ -7,7 +7,7 @@ import subprocess
 import copy
 import numpy as np
 
-from uam4x.study import Study, _Overwrite
+from uam4x.study import Study
 from uam4x.solution import Solution
 from uam4x.control import Control
 from uam4x.vehicle import Vehicle, VehicleManager
@@ -59,152 +59,7 @@ SAMPLE_PARAM_STATE = {
 def sample_param_state():
     return copy.deepcopy(SAMPLE_PARAM_STATE)
 
-#-----------------------------Overwrite
-def test_Overwrite_instance(sample_param_state):
-
     
-    OW = _Overwrite(sample_param_state)
-    
-    assert OW.param_state is  sample_param_state
-    assert OW.name_to_value is not sample_param_state
-    assert OW.name_to_value == sample_param_state
-    
-def test_Overwrite_add_item_good(sample_param_state):
-    
-    OW = _Overwrite(sample_param_state)
-    
-    OW.add_item('another_tracked_var', 67.)
-    
-    assert 'another_tracked_var' not  in OW.param_state
-    assert 'another_tracked_var' in OW.name_to_value
-    
-def test_Overwrite_add_items_good(sample_param_state):
-    OW = _Overwrite(sample_param_state)
-    
-    additional_output_dict = {
-        'steelers': 67.,
-        'packers': 420.,
-        'eagles': 360.,
-        
-    }
-    
-    OW.add_items(additional_output_dict)
-    
-    assert OW.name_to_value['eagles'] == 360.
-    assert OW.name_to_value['packers'] == 420.
-    assert OW.name_to_value['steelers'] == 67.
-    assert 'eagles' not  in sample_param_state
-    
-
-def test_Overwrite_get_item(sample_param_state):
-    
-    OW = _Overwrite(sample_param_state)
-    
-    for name, value in sample_param_state.items():
-        assert OW.get_item(name) == value
-
-def test_Overwrite_contains(sample_param_state):
-    OW = _Overwrite(sample_param_state)
-    
-    for name in  sample_param_state.keys():
-        assert name in OW
-    
-def test_Overwrite_equality(sample_param_state):
-    OW1 = _Overwrite(sample_param_state)
-    
-    OW2 = _Overwrite(sample_param_state)
-    assert OW1 == OW2
-    assert OW1 is not OW2
-    
-    OW1.add_item('another_tracked_var', 67.)
-    
-    assert OW1 == OW2
-    
-    param_state = copy.deepcopy(sample_param_state)
-    param_state["calc_area.area"] = 67.
-    
-    OW3 = _Overwrite(param_state)
-    
-    assert OW3 != OW1
-    
-    another_param_state = copy.deepcopy(sample_param_state)
-    another_param_state['new_var'] = 4.
-    OW4 = _Overwrite(another_param_state)
-    
-    assert OW4 != OW1
-    
-    
-    
-def test_Overwrite_tracked_outputs(sample_param_state):
-    OW = _Overwrite(sample_param_state)
-
-    additional_output_dict = {
-        'steelers': 67.,
-        'packers': 420.,
-        'eagles': 360.,
-    }
-
-    # No extra template hashes for this unit test
-    template_hashes = {}
-
-    # Before adding items, only original param_state keys should be present
-    results = OW.tracked_outputs(additional_output_dict, template_hashes)
-    assert 'steelers' not in results
-    assert 'packers' not in results
-    assert 'eagles' not in results
-
-    # After adding items, keys which are in `tracked_outputs` should show up
-    OW.add_items(additional_output_dict)
-
-    results = OW.tracked_outputs(additional_output_dict, template_hashes)
-
-    # Now the additional items should appear
-    assert 'steelers' in results
-    assert 'packers' in results
-    assert 'eagles' in results
-
-    # Existing behavior checks still hold
-    assert results["calc_objective.wing_weight"] == 88.92178070843795
-    assert 'constraints' in results
-    assert "vehicles.multi_objective_vehicle.weighting_factor.weighting_factor" in results
-
-
-    
-
-#------------- Negative Checks
-def test_Overwrite_add_item_warning(sample_param_state):
-    
-    OW = _Overwrite(sample_param_state)
-    
-    OW.add_item('another_tracked_var', 67.)
-    
-    OW.log.root_logger.begin_log_capture(capture_level_min='WARNING', clear_capture_log=True)
-
-    OW.add_item('another_tracked_var', 420.)
-    
-    message = OW.log.root_logger.end_log_capture()[0]
-
-    assert message == ('WARNING', 'key already has value: another_tracked_var')
-
-def test_Overwrite_add_items_warning(sample_param_state):
-    OW = _Overwrite(sample_param_state)
-    additional_output_dict = {
-        'steelers': 67.,
-        'packers': 420.,
-        'eagles': 360.,
-        "objective_name": "calc_objective.new_objective"
-        
-    }
-    
-    OW.log.root_logger.begin_log_capture(capture_level_min='WARNING', clear_capture_log=True)
-    
-    OW.add_items(additional_output_dict)
-    
-    message = OW.log.root_logger.end_log_capture()[0]
-    
-    assert message == ('WARNING', 'key already has value: objective_name')
-    
-
 #--------------------------------------------------------Study
 @pytest.fixture
 def sample_study():
@@ -271,7 +126,6 @@ def test_Study_instance():
     assert isinstance(s.vehicles, VehicleManager)
     assert isinstance(s.solution, Solution)
     assert isinstance(s.control, Control)
-    assert s._overwrites == []
     
     
     

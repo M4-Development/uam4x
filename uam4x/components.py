@@ -5,13 +5,14 @@ from uam4x.utils import log
 from uam4x.units import (
     UnitType, LengthUnit, AngleUnit, MassUnit, TimeUnit, ForceUnit, TemperatureUnit, PressureUnit, EnergyUnit, PowerUnit, VolumeUnit, AreaUnit, SpeedUnit, AccelerationUnit
 )
-from uam4x.utils import check_and_get_config, type_string_to_type
+from uam4x.utils import check_and_get_config, type_string_to_type,is_main_process,registry_writes_enabled
 
 from enum import Enum
 
 import json
 import importlib.util
 import numpy as np
+
 
 _component_registry = {}
 
@@ -604,8 +605,9 @@ def register_component(cls):
         log.warning(f"WARNING: Component '{comp_name}' already registered\nOverwritting existing data")
     if not "uam4x.components" in cls.__module__.replace('.', '/'):
         _config['COMPONENTS'][comp_name] = importlib.util.find_spec(cls.__module__).origin
-        with open(config_path, 'w') as configfile:
-            json.dump(_config, configfile, indent=4)
+        if is_main_process() and registry_writes_enabled():
+            with open(config_path, 'w') as configfile:
+                json.dump(_config, configfile, indent=4)
 
     _component_registry[comp_name] = cls
     return cls
