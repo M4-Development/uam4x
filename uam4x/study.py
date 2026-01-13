@@ -107,7 +107,7 @@ class Study:
 
         return study
 
-    def save_to_json(self, json_path: str, commit=False):
+    def _save_to_json(self, json_path: str, commit=False,commit_message=''):
         """Save the study to a JSON file."""
         self.log.debug('save to json')
         data = self._to_dict()
@@ -115,9 +115,68 @@ class Study:
         with open(json_path, 'w') as f:
             json.dump(data, f, indent=4)
         if commit:
-            repo_path = pygit2.discover_repository(json_path)
-            pygit2.Repository(repo_path)
+            self._commit_json_to_branch(json_path, commit_message)            
+
+    def save_model_to_json(self, json_path: str, commit=False):
+        
+        msg = f'AutoCommit: Created data for variant {self.control.variant_name}'
+        self._save_to_json(json_path, commit=commit, commit_message=msg if commit else None)
+        
+    def save_results_to_json(self, json_path: str, commit=False):
+        msg = f'AutoCommit: Writing results for variant {self.control.variant_name}'
+        self._save_to_json(json_path, commit=commit, commit_message=msg if commit else None)
+
+
+    def _commit_json_to_branch(self, json_path, commit_message):
+        
+        if not os.path.isdir(self.control.repo_root):
+            raise NotADirectoryError(f'The provided repository root path {self.control.repo_root} is not a directory.\n'
+                             f'The repo root must be a directory.')
+        
+        assert os.path.isdir(os.path.join(self.control.repo_root, ".git"))
+        
+        try:
+            repo_path = pygit2.discover_repository(self.control.repo_root)
+        except KeyError:
+            repo_path = None
             
+        if repo_path is  None:
+            raise ValueError('No repository found with provided path')
+        
+        
+        expected_git_dir = os.path.join(self.control.repo_root, '.git')
+        repo_path_norm = os.path.normcase(os.path.normpath(os.path.realpath(repo_path)))
+        
+        
+        expected_norm = os.path.normcase(os.path.normpath(os.path.realpath(expected_git_dir)))
+        
+        if repo_path_norm != expected_norm:
+            raise ValueError(f'Provided path: {self.control.repo_root} does not have a repo')
+        
+        repo = pygit2.Repository(repo_path)
+        if repo.head_is_detached:
+            raise RuntimeError("Cannot commit: repo is in detached HEAD state.")        
+        if repo.head_is_unborn:
+            parents = []
+        else:
+            parents = [repo.head.target]
+        
+        #stage the JSON file
+        index = repo.index
+        
+        # rel path
+        rel_path = os.path.relpath(json_path, repo.workdir)
+        rel_path = rel_path.replace(os.sep, '/')
+        #same as git add path
+        index.add(rel_path)
+        index.write()
+        
+        #this is the snapshot of your repo as a hash
+        tree = index.write_tree()
+                
+        author = pygit2.Signature(self.control.author, 'fake@email')
+        committer = pygit2.Signature(self.control.author, 'fake@email')
+        repo.create_commit("HEAD",author, committer, commit_message, tree, parents)
 
     def load_from_json(self, json_path: str):
         """Load the study from a JSON file."""
@@ -278,7 +337,7 @@ class Variants:
         self.log.debug(f"add variant {name}")
         self.variants[name] = func_list
 
-    def generate_variants(self,):
+    def generate_variants(self,commit=False):
         self.log.debug('generate variants')
         studies = []
 
@@ -295,8 +354,11 @@ class Variants:
             study = Study(log_dir=variants_dir)
             for func in func_list:
                 func(study)
+
+            study.control._set_variant_name(name)
             json_path = os.path.join(this_variant_dir, 'data.json')
-            study.save_to_json(json_path)
+            study.save_model_to_json(json_path,commit=commit)
+            study._save_to_json(json_path)
             studies.append(study)
         return studies
 

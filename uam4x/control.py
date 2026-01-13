@@ -141,7 +141,16 @@ class ParameterSweep:
                 state.update(self.child._to_dict())
                 states.append(state)
             elif isinstance(self.child, ParameterSweep):
-                states.extend(self.child.get_states())
+                # in cases where there is a child parameter sweep,
+                # want a cartesian product of states (for every in parent, create a state
+                # for for every in child).
+                child_states = self.child.get_states()
+                states_to_add = [] 
+                for child_state in  child_states:
+                    sample_state = copy.deepcopy(state)
+                    sample_state.update(child_state)
+                    states_to_add.append(sample_state)
+                states.extend(states_to_add)
             else:
                 state['optimization'] = False
                 states.append(state)
@@ -167,12 +176,26 @@ class ParameterSweep:
 
 class Control:
     log = get_log(log, object_name='control')
-    def __init__(self, title: str = "Default Title", author: str = "Default Author", description: str = "Default Description") -> None:
+    def __init__(self, title: str = "Default Title", author: str = "Default Author", description: str = "Default Description", repo_root: str = None) -> None:
         self.title = title
         self.author = author
         self.description = description
+        self.repo_root = repo_root
         self.trade_studies = {}
         self.log = Control.log
+        self.variant_name=''
+
+
+    def _set_variant_name(self, variant_name: str) -> None:
+        self.variant_name = variant_name
+
+    def add_metadata(self, title: str = "Default Title", author: str = "Default Author", description: str = "Default Description") -> None:
+        '''
+        Allows user to set the metadata via the Study API
+        '''
+        self.title = title
+        self.author = author
+        self.description = description
 
     def add_trade(self, trade_name:str, trade:Union[ParameterSweep, Optimization]) -> None:
         self.log.debug(f'add trade: {trade_name}')
@@ -183,6 +206,8 @@ class Control:
             "title": self.title,
             "author": self.author,
             "description": self.description,
+            "repo_root": self.repo_root,
+            "variant_name": self.variant_name,
             "trade_studies": {k: v._to_dict() for k, v in self.trade_studies.items()}
         }
     @classmethod
@@ -192,7 +217,11 @@ class Control:
             title=data["title"],
             author=data["author"],
             description=data["description"],
+            repo_root=data.get("repo_root", None)
         )
+
+        control._set_variant_name(data.get("variant_name", ""))
+
         for k, v in data["trade_studies"].items():
             if v['type'] == "ParameterSweep":
                 trade = ParameterSweep._from_dict(v)
