@@ -70,7 +70,7 @@ class Study:
 
     def add_trade(self, trade_name:str, trade) -> None:
         self.log.debug(f'add trade: {trade_name}')
-        self.control.add_trade(trade_name, trade)
+        self.control.add_tradestudy(trade_name, trade)
 
     def add_vehicle(self, vehicle) -> None:
         self.log.debug(f'add vehicle: {vehicle.name}')
@@ -103,7 +103,7 @@ class Study:
             study.add_vehicle(Vehicle._from_dict(vdata))
         study.solution = Solution._from_dict(data["solution"])
         study.control = Control._from_dict(data["control"])
-        study.results = Results._from_dict(data["results"])
+        study.results = Results._from_dict(data["results"],study)
 
         return study
 
@@ -321,7 +321,7 @@ class Study:
         self.log.debug('Get all possible vehicle names and step input/output names.')
         all_names = self.get_all_names_by_category()
         return all_names['vehicle_names'] + all_names['step_inputs'] + all_names['step_outputs']
-
+    
 class Variants:
     log = get_log(log, object_name='variants')
     def __init__(self, dir: str) -> None:
@@ -404,7 +404,7 @@ if __name__ == "__main__":
         child=opt
     )
     control = Control(title="Demo Study Control", author="UAM", description="Demo control for study")
-    control.add_trade("sweep_with_opt", sweep)
+    control.add_tradestudy("sweep_with_opt", sweep)
 
     # Add everything to a Study
     study = Study()

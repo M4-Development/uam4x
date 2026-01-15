@@ -345,7 +345,7 @@ def test_Control_add_trade():
     param_sweep1 = ParameterSweep(sample_param_dict1, opt)
     
     C = Control()
-    C.add_trade('sample_trade1', param_sweep1)
+    C.add_tradestudy('sample_trade1', param_sweep1)
     
     
     
@@ -353,7 +353,7 @@ def test_Control_add_trade():
                     'sample_param4': [6.0, 7.0, 67.0, 6767., 676767.]}
     
     param_sweep2 = ParameterSweep(sample_param_dict2, opt)
-    C.add_trade('sample_trade2', param_sweep2)
+    C.add_tradestudy('sample_trade2', param_sweep2)
     
     assert C.trade_studies['sample_trade2'] is param_sweep2
     assert C.trade_studies['sample_trade1'] is param_sweep1
@@ -380,8 +380,8 @@ def test_Control_to_dict():
     C.author = "Unit Tester"
     C.description = "Control used for _to_dict test"
 
-    C.add_trade('sample_trade1', param_sweep1)
-    C.add_trade('sample_trade2', param_sweep2)
+    C.add_tradestudy('sample_trade1', param_sweep1)
+    C.add_tradestudy('sample_trade2', param_sweep2)
 
     data = C._to_dict()
 

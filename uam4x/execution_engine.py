@@ -350,6 +350,9 @@ class Engine:
             
 
         if num_processors and num_processors >1:
+            if num_processors > len(tradestudy.get_states()):
+                log.warning(f'num_processors {num_processors} is greater than number of states {len(tradestudy.get_states())}. Setting num_processors to {len(tradestudy.get_states())}')
+                num_processors = len(tradestudy.get_states())
             if num_processors > os.cpu_count():
                 log.warning(f'num_processors {num_processors} is greater than available CPU count {os.cpu_count()}. Setting num_processors to {os.cpu_count()}')
                 num_processors = os.cpu_count()
@@ -370,7 +373,7 @@ class Engine:
                         filename = tb.tb_frame.f_code.co_filename
                         self.log.error(f"{type(e).__name__}: state failed - {tradestudy.get_states()[j]}")
                         failed_state=copy.deepcopy(tradestudy.get_states()[j])
-                        failed_state["Failure_Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
+                        failed_state["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
                         failed_states.append(tradestudy.get_states()[j])
                         outputs.append(Result(state=failed_state))  
 
@@ -397,6 +400,9 @@ class Engine:
                     lineno = tb.tb_lineno
                     filename = tb.tb_frame.f_code.co_filename
                     self.log.error(f"{type(e).__name__}: state failed - {state}")
+                    failed_state=copy.deepcopy(tradestudy.get_states()[i])
+                    failed_state["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
+                    outputs.append(Result(state=failed_state))  
                     failed_states.append(state)
                     
                 except Exception as e:
@@ -411,11 +417,14 @@ class Engine:
         else:
             raise ValueError('num_processors must be None or an integer >=1')
         #Consolidate results
-        study_result=Results()
+        study_result=self.study.results
+        if trade_name in study_result._results:
+            study_result._results[trade_name]=[]
+            self.log.warning(f'Overwriting existing results for trade study {trade_name}')
         for result in outputs:
-            study_result.results.append(result) 
+            study_result._results[trade_name].append(result)
             study_result._hash_to_result[result.state_hash] = result
-        self.study.results = study_result
+
         # self.log.info(f'succesful states: {successful_states}')
         # self.log.info(f'failed states: {failed_states}')
 

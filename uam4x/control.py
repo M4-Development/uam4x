@@ -197,9 +197,10 @@ class Control:
         self.author = author
         self.description = description
 
-    def add_trade(self, trade_name:str, trade:Union[ParameterSweep, Optimization]) -> None:
+    def add_tradestudy(self, trade_name:str, trade:Union[ParameterSweep, Optimization]) -> None:
         self.log.debug(f'add trade: {trade_name}')
         self.trade_studies[trade_name] = trade
+        
     def _to_dict(self) -> dict:
         self.log.debug('write to dict')
         return {
@@ -229,7 +230,7 @@ class Control:
                 trade = Optimization._from_dict(v)
             else:
                 raise ValueError(f"Unknown trade study type: {v['type']}")
-            control.add_trade(k, trade)
+            control.add_tradestudy(k, trade)
 
         return control
 if __name__ == "__main__":
@@ -246,7 +247,7 @@ if __name__ == "__main__":
         child=opt
     )
     control = Control(title="Vehicle Control", author="Tom", description="Control for vehicle design")
-    control.add_trade("aspect_ratio_parameter_sweep", param_sweep)
+    control.add_tradestudy("aspect_ratio_parameter_sweep", param_sweep)
 
     # Print all trade studies and their details
     print("\nTrade studies in control:")
@@ -260,6 +261,6 @@ if __name__ == "__main__":
         print()
 
     # Add and print a direct optimization trade
-    control.add_trade("direct_optimization", opt)
+    control.add_tradestudy("direct_optimization", opt)
     print("Direct optimization trade as dict:")
     print(vars(opt))
