@@ -16,7 +16,9 @@ setup(
         'pytest-cov',
         "pytest",
         "pytest-html",
-        'pygit2'
+        'pygit2',
+        'matplotlib>=3.10.0',
+
     ],
     description='M4 Engineering developed UAM design space exploration framework with embedded version control',
 )
