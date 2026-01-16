@@ -2,6 +2,9 @@ import copy
 import numpy as np
 from uam4x.utils import canonicalize_state, hash_state, convert_numpy_to_python
 from collections import defaultdict
+import matplotlib.pyplot as plt
+
+
 class Results:
     
     def __init__(self,study=None):
@@ -9,7 +12,31 @@ class Results:
         self._hash_to_result = {}
         self.study=study
         self.active_trade=None
-    
+
+    def scatter(self,var1,var2,x_axis_title=None,y_axis_title=None,plot_title='default_title',trade_name=None,save_dir=None):
+        
+        if trade_name is None:
+            trade_name=self.active_trade
+        if trade_name is None:
+            raise ValueError('No active trade study set. Please provide trade_name or set an active trade study.')  
+        
+        fig, ax=plt.subplots(figsize=(10, 6))
+        x_values=self.get_variable(var1,trade_name=trade_name)
+        y_values=self.get_variable(var2,trade_name=trade_name)
+        ax.scatter(x_values, y_values, color='blue', alpha=0.7)
+
+        ax.set_title(plot_title, fontsize=16,fontweight='bold')
+        if x_axis_title is None:
+            x_axis_title=var1
+        if y_axis_title is None:
+            y_axis_title=var2      
+        ax.set_xlabel(x_axis_title, fontsize=14)
+        ax.set_ylabel(y_axis_title, fontsize=14)
+        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+        if save_dir is not None:
+            plt.savefig(f"{save_dir}/{plot_title.replace(' ','_')}.png", dpi=300, bbox_inches='tight')   
+        return ax     
     def get_result_by_state(self, state):
         pass
 
@@ -63,7 +90,7 @@ class Results:
         
             
         #raise ValueError(f'Variable name {variable_name} not found in tracked outputs, trade study sweep variables, or vehicle parameters.')   
-
+        
 
     def _to_dict(self):
         result_dict = {}
@@ -81,7 +108,7 @@ class Results:
                 results._results[trade_name].append(r)
                 results._hash_to_result[r.state_hash] = r
         return results
-        
+    
     
 class Result:
     
@@ -128,9 +155,7 @@ class Result:
         
         return result
         
-        
-    
-    
-    
+
+
         
         

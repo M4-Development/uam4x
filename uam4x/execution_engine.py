@@ -14,7 +14,6 @@ from collections import  defaultdict
 from uam4x.results import Results, Result   
 from uam4x.log import FileLogger
 
-
 class Engine:
     """
     Execution engine for running UAM4X studies and trade studies.
@@ -153,13 +152,7 @@ class Engine:
 
         os.makedirs(out_dir, exist_ok=True)
 
-        plugins = {}
-        cwd=os.getcwd()
-        for step_name, step_info in self.study.solution.steps.items():
-            self.log.debug(f'setup {step_name} plugin')
-            plugin = step_info["plugin"]()
-            plugin.setup_plugin(step_info["plugin_options"])
-            plugins[step_name] = plugin
+        plugins=self._generate_plugins()
             
 
         if state['optimization']:
@@ -200,7 +193,6 @@ class Engine:
             out_dir = os.path.join(work_dir)
 
         os.makedirs(out_dir, exist_ok=True)
-
 
 
         study = Study._from_dict(study_dict, out_dir)
@@ -356,24 +348,21 @@ class Engine:
         check : bool, optional  
             Whether to perform model validation checks, by default True.
         """
-
         self.log.debug(f'run tradestudy: {trade_name}')
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
         import uam4x
         os.environ['UAM4X_DISABLE_REGISTRY_WRITES'] = '1'
-
         # if num_processesors:
         #     if not self.are_plugins_threadsafe():
         #         print("WARNING: NON-THREADSAFE PLUGIN DETECTED, CREATING UNIQUE INSTANCE FOR EACH THREAD")
         #         plugins = None
         #     else:
         #         pass
-
+        
         self.capture_execution_data()
         if isinstance(tradestudy,UAM4XOptimization) and num_processors is not None:
             log.warning('num_processors is ignored for single point optimizations')
-
         if isinstance(tradestudy, UAM4XOptimization):
             #run optimization as defined by the base state
             state=tradestudy._to_dict()
@@ -404,7 +393,6 @@ class Engine:
         successful_states = []
         states= trade_states
         num_states = len(states)
-
         if num_processors and num_processors >1:
             if num_processors > num_states:
                 log.warning(f'num_processors {num_processors} is greater than number of states {num_states}. Setting num_processors to {num_states}')
@@ -429,10 +417,9 @@ class Engine:
                         lineno = tb.tb_lineno
                         filename = tb.tb_frame.f_code.co_filename
                         self.log.error(f"{type(e).__name__}: state failed - {states[j]}")
-                        failed_state=copy.deepcopy(states[j])
-                        failed_state["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
+                        states[j]["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
                         failed_states.append(states[j])
-                        outputs.append(Result(state=failed_state))  
+                        outputs.append(Result(state=states[j]))  
 
                     except Exception as e:
                         tb = e.__traceback__
@@ -457,9 +444,8 @@ class Engine:
                     lineno = tb.tb_lineno
                     filename = tb.tb_frame.f_code.co_filename
                     self.log.error(f"{type(e).__name__}: state failed - {state}")
-                    failed_state=copy.deepcopy(states[i])
-                    failed_state["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
-                    outputs.append(Result(state=failed_state))  
+                    state["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
+                    outputs.append(Result(state=state))  
                     failed_states.append(state)
                     
                 except Exception as e:
@@ -473,7 +459,6 @@ class Engine:
                     raise RuntimeError(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
         else:
             raise ValueError('num_processors must be None or an integer >=1')
-
         #Consolidate results
         study_result=self.study.results
         if trade_name in study_result._results:
