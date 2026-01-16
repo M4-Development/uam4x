@@ -198,6 +198,9 @@ class Control:
         self.description = description
 
     def add_tradestudy(self, trade_name:str, trade:Union[ParameterSweep, Optimization]) -> None:
+        if trade_name=='Default State':
+            self.log.error('Trade study name cannot be "Default State", as this is reserved.')
+            raise ValueError('Trade study name cannot be "Default State", as this is reserved.')
         self.log.debug(f'add trade: {trade_name}')
         self.trade_studies[trade_name] = trade
         

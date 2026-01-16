@@ -2,6 +2,7 @@ import concurrent
 from uam4x.study import Study
 import os
 from uam4x.openmdao_optimization import Optimization
+from uam4x.control import Optimization as UAM4XOptimization
 import copy
 from uam4x.log import get_log
 from uam4x.custom_errors import PluginException
@@ -46,9 +47,8 @@ class Engine:
     work_dir : str
         Working directory for execution outputs.
     """
-    def __init__(self, study:Study, work_dir, num_processes=1) -> None:
+    def __init__(self, study:Study, work_dir) -> None:
         self.study = study
-        self.num_processes = num_processes
         self.study_results = {} # change once there is a better way to store outputs
         self.sweep_combos = {}
         self.current_sweep_values = {}
@@ -88,15 +88,16 @@ class Engine:
 
         # Sample state, doesn't really matter here, special check
         # partials directory created
-        sample_state = copy.deepcopy(tradestudy.get_states()[0])
+        if isinstance(tradestudy,UAM4XOptimization):
+            sample_state = tradestudy._to_dict()
+            sample_state['optimization']=True
+        else:
+            sample_state = copy.deepcopy(tradestudy.get_states()[0])
+
         out_dir = os.path.join(self.work_dir, f"check_partials")
         os.makedirs(out_dir, exist_ok=True)
 
-        plugins = {}
-        for step_name, step_info in self.study.solution.steps.items():
-            self.log.debug(f'setup {step_name} plugin')
-            plugin = step_info["plugin"]()
-            plugin.setup_plugin(step_info["plugin_options"])
+        plugins=self._generate_plugins()
 
             
         # May need to refactor this, but def want a check here. 
@@ -110,7 +111,17 @@ class Engine:
         problem.check_partials(step=step, form=form, compact_print=True)
         os.chdir(cwd)
 
-    def _run_solution(self, state,iteration=None, check=True):
+
+    def _generate_plugins(self):
+        plugins = {}
+        for step_name, step_info in self.study.solution.steps.items():
+            self.log.debug(f'setup {step_name} plugin')
+            plugin = step_info["plugin"]()
+            plugin.setup_plugin(step_info["plugin_options"])
+            plugins[step_name] = plugin
+        return plugins
+
+    def _run_state(self, state,iteration=None, check=True):
         """
         Run a solution for a given state.
 
@@ -150,8 +161,6 @@ class Engine:
             plugin.setup_plugin(step_info["plugin_options"])
             plugins[step_name] = plugin
             
-        if check:
-            self.check_model(plugins, state)
 
         if state['optimization']:
             result=self._run_optimization(state, plugins, out_dir)
@@ -161,7 +170,7 @@ class Engine:
         return result
     
     @staticmethod
-    def _run_solution_parallel(study_dict, state, iteration=None, work_dir=None):
+    def _run_state_parallel(study_dict, state, iteration=None, work_dir=None):
         """
         Static method to run a solution in parallel.
 
@@ -196,7 +205,7 @@ class Engine:
 
         study = Study._from_dict(study_dict, out_dir)
         engine = Engine(study, out_dir)    
-        result = engine._run_solution(state, iteration=iteration)
+        result = engine._run_state(state, iteration=iteration)
         return result
 
 
@@ -219,7 +228,8 @@ class Engine:
         self.log.debug('run optimization')
         cwd = os.getcwd()
         os.chdir(out_dir)
-        opt = Optimization(self.study, state, plugins, out_dir)
+        temp_state=copy.deepcopy(state)
+        opt = Optimization(self.study, temp_state,plugins, out_dir)
         opt_result=opt.run_problem()
 
         os.chdir(cwd)
@@ -282,44 +292,24 @@ class Engine:
 
         return result   
                 
-
-    def run_tradestudy(self, trade_name, num_processors=None, commit=False):
-        """
-        Run a trade study analysis.
-
-        Executes all states in a trade study sequentially. Sorts the solution
-        steps to ensure proper execution order and runs each state as a
-        separate solution.
-
-        Parameters
-        ----------
-        trade_name : str
-            Name of the trade study to execute.
-        num_processesors : int, optional
-            Number of processors for parallel execution, by default None.
-        commit : bool, optional
-            Whether to commit results, by default False.
-
-        Notes
-        -----
-        The num_processesors parameter is currently not implemented.
-        All states are executed sequentially.
-        """
-        self.log.debug(f'run tradestudy: {trade_name}')
+    def run_solution(self):
+        name='Default State'
+        self.log.debug('run solution')
+        self.capture_execution_data()
         self.sort_steps()
-        tradestudy = self.study.control.trade_studies[trade_name]
-        import uam4x
-        os.environ['UAM4X_DISABLE_REGISTRY_WRITES'] = '1'
-        # plugins = self.init_plugins()
+        plugins=self._generate_plugins()
+        state={}
+        out_dir=self.work_dir
+        result=self._run_single_point(state, plugins, out_dir=out_dir)
+        study_result=self.study.results
+        if name in study_result._results:
+            study_result._results[name]=[]
+            self.log.warning(f'Overwriting existing results for trade study {name}')
 
-        # if num_processesors:
-        #     if not self.are_plugins_threadsafe():
-        #         print("WARNING: NON-THREADSAFE PLUGIN DETECTED, CREATING UNIQUE INSTANCE FOR EACH THREAD")
-        #         plugins = None
-        #     else:
-        #         pass
-        failed_states = []
-        successful_states = []
+        study_result._results[name].append(result)
+        study_result._hash_to_result[result.state_hash] = result
+
+    def capture_execution_data(self):
         # populate environment at execution time
         self.study._capture_environment()
         # hash plugins at runtime
@@ -347,34 +337,101 @@ class Engine:
             self.study._add_runtime_external_executable_data(external_executable_to_versioning_data)        
         
         self.study._add_runtime_plugin_checksums(plugin_name_to_hash)
+
+    def run_tradestudy(self, trade_name,num_processors=None, commit=False,check=True):
+        """
+        Run a trade study analysis.
+        Executes a trade study, which can be either a parameter sweep
+        or an optimization. Sorts solution steps, captures execution data,
+        and manages parallel execution if specified.
+        Parameters
+        ----------      
+
+        trade_name : str
+            Name of the trade study to run.
+        num_processors : int, optional
+            Number of processors for parallel execution, by default None.
+        commit : bool, optional 
+            Whether to commit results to the study, by default False.
+        check : bool, optional  
+            Whether to perform model validation checks, by default True.
+        """
+
+        self.log.debug(f'run tradestudy: {trade_name}')
+        self.sort_steps()
+        tradestudy = self.study.control.trade_studies[trade_name]
+        import uam4x
+        os.environ['UAM4X_DISABLE_REGISTRY_WRITES'] = '1'
+
+        # if num_processesors:
+        #     if not self.are_plugins_threadsafe():
+        #         print("WARNING: NON-THREADSAFE PLUGIN DETECTED, CREATING UNIQUE INSTANCE FOR EACH THREAD")
+        #         plugins = None
+        #     else:
+        #         pass
+
+        self.capture_execution_data()
+        if isinstance(tradestudy,UAM4XOptimization) and num_processors is not None:
+            log.warning('num_processors is ignored for single point optimizations')
+
+        if isinstance(tradestudy, UAM4XOptimization):
+            #run optimization as defined by the base state
+            state=tradestudy._to_dict()
+            state['optimization']=True
+            plugins=self._generate_plugins()
             
+            if check:
+                self.check_model(plugins, state)
+
+            result=self._run_optimization(state, plugins, self.work_dir)
+            study_result=self.study.results
+            if trade_name in study_result._results:
+                study_result._results[trade_name]=[]
+                self.log.warning(f'Overwriting existing results for trade study {trade_name}')
+
+            study_result._results[trade_name].append(result)
+            study_result._hash_to_result[result.state_hash] = result
+
+        else:
+            # Note a parameter sweep can contain optimizations
+            trade_states=tradestudy.get_states()
+            self._run_parameter_sweep(trade_name,trade_states,num_processors=num_processors)
+
+
+    
+    def _run_parameter_sweep(self,trade_name,trade_states,num_processors=None):
+        failed_states = []
+        successful_states = []
+        states= trade_states
+        num_states = len(states)
 
         if num_processors and num_processors >1:
-            if num_processors > len(tradestudy.get_states()):
-                log.warning(f'num_processors {num_processors} is greater than number of states {len(tradestudy.get_states())}. Setting num_processors to {len(tradestudy.get_states())}')
-                num_processors = len(tradestudy.get_states())
+            if num_processors > num_states:
+                log.warning(f'num_processors {num_processors} is greater than number of states {num_states}. Setting num_processors to {num_states}')
+                num_processors = num_states
             if num_processors > os.cpu_count():
                 log.warning(f'num_processors {num_processors} is greater than available CPU count {os.cpu_count()}. Setting num_processors to {os.cpu_count()}')
                 num_processors = os.cpu_count()
             max_workers = num_processors 
             outputs=[]
+            study_dict=self.study._to_dict()
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                futures={i:executor.submit(Engine._run_solution_parallel, self.study._to_dict(),state, iteration=i,work_dir=self.work_dir)  for i, state in enumerate(tradestudy.get_states())}
+                futures={i:executor.submit(Engine._run_state_parallel, study_dict, state, iteration=i,work_dir=self.work_dir)  for i, state in enumerate(states)}
                 for j in sorted(futures.keys()):
                     try:
                         outputs.append(futures[j].result())
-                        self.log.info(f'state successful: {tradestudy.get_states()[j]}')
-                        successful_states.append(tradestudy.get_states()[j])
+                        self.log.info(f'state successful: {states[j]}')
+                        successful_states.append(states[j])
                     except PluginException as e:
                         tb = e.__traceback__
                         while tb.tb_next:
                             tb = tb.tb_next
                         lineno = tb.tb_lineno
                         filename = tb.tb_frame.f_code.co_filename
-                        self.log.error(f"{type(e).__name__}: state failed - {tradestudy.get_states()[j]}")
-                        failed_state=copy.deepcopy(tradestudy.get_states()[j])
+                        self.log.error(f"{type(e).__name__}: state failed - {states[j]}")
+                        failed_state=copy.deepcopy(states[j])
                         failed_state["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
-                        failed_states.append(tradestudy.get_states()[j])
+                        failed_states.append(states[j])
                         outputs.append(Result(state=failed_state))  
 
                     except Exception as e:
@@ -387,10 +444,10 @@ class Engine:
                         raise RuntimeError(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
         elif num_processors ==1 or not num_processors:
             outputs=[]
-            for i, state in enumerate(tradestudy.get_states()):
+            for i, state in enumerate(states):
 #
                 try:
-                    outputs.append(self._run_solution(state,  iteration=i))
+                    outputs.append(self._run_state(state,  iteration=i))
                     self.log.info(f'state successful: {state}')
                     successful_states.append(state)
                 except PluginException as e:
@@ -400,7 +457,7 @@ class Engine:
                     lineno = tb.tb_lineno
                     filename = tb.tb_frame.f_code.co_filename
                     self.log.error(f"{type(e).__name__}: state failed - {state}")
-                    failed_state=copy.deepcopy(tradestudy.get_states()[i])
+                    failed_state=copy.deepcopy(states[i])
                     failed_state["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
                     outputs.append(Result(state=failed_state))  
                     failed_states.append(state)
@@ -416,6 +473,7 @@ class Engine:
                     raise RuntimeError(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
         else:
             raise ValueError('num_processors must be None or an integer >=1')
+
         #Consolidate results
         study_result=self.study.results
         if trade_name in study_result._results:
