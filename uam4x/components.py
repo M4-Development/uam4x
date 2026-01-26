@@ -81,8 +81,8 @@ class Parameter:
         -------
         Any
         """
-        self.log.debug(f'get or set value')
         return self._value
+
     @value.setter
     def value(self, v):
         """
@@ -93,7 +93,7 @@ class Parameter:
         v : Any
             Value to set. Must match dtype.
         """
-        self.log.debug(f'set value')
+
         if not isinstance(v, self.dtype):
             self.log.error(f"Value for parameter '{self.name}' must be of type {self.dtype.__name__}, got {type(v).__name__}")
             raise TypeError(f"Value for parameter '{self.name}' must be of type {self.dtype.__name__}, got {type(v).__name__}")
@@ -344,8 +344,8 @@ class Component:
     def __init__(self, name: str):
         self.name = name
         if '[' in  name:
-            self.log.error(f'components cannot have the character "[" in them')            
-            raise ValueError(f'components cannot have the character "[" in them')         
+            self.log.error(f'components cannot have the character "[" in them')
+            raise ValueError(f'components cannot have the character "[" in them')
         self._parameters = {}
         self._modes = {}
         self._is_setup = True
@@ -386,8 +386,8 @@ class Component:
             self.log.error("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
             raise RuntimeError("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
         if '[' in  name or ']' in  name:
-            self.log.error(f'parameters cannot have the character "[" or "]" in them')            
-            raise ValueError(f'parameters cannot have the character "[" or "]" in them')            
+            self.log.error(f'parameters cannot have the character "[" or "]" in them')
+            raise ValueError(f'parameters cannot have the character "[" or "]" in them')
         self._parameters[name] = Parameter(name, default_value, dtype, unit_type=unit_type, unit=unit, description=description)
         # Dynamically add property to the instance for this parameter
         def getter(self):
@@ -415,7 +415,7 @@ class Component:
         if name in self._parameters:
             param = self._parameters[name]
             param.value = value
-            
+
             unit_type = param.unit_type
             if unit_type and unit_type in UNIT_TYPE_TO_UNIT_CLASS:
                 unit_class = UNIT_TYPE_TO_UNIT_CLASS[unit_type]
@@ -447,7 +447,7 @@ class Component:
             self.log.error("add_mode only accepts a string as the mode name.")
             raise TypeError("add_mode only accepts a string as the mode name.")
         if '[' in mode_name or  ']' in  mode_name:
-            self.log.error(f'modes cannot have the character "[" or "]" in them')            
+            self.log.error(f'modes cannot have the character "[" or "]" in them')
             raise ValueError(f'modes cannot have the character "[" or "]" in them')
         mode = _Mode(mode_name, self)
         self._modes[mode.name] = mode
@@ -668,6 +668,18 @@ def get_commponent_class(component_name):
         log.error(msg)
         raise ImportError(msg)
     return _component_registry[component_name]
+
+def get_registered_component_names():
+    """Get a list of all registered component names."""
+    log.debug('get component names')
+    return list(_component_registry.keys())
+
+def get_registered_component_name_to_parameters():
+    name_to_parameters = {}
+    for component_type, component in _component_registry.items():
+        dummy = component('dummy')
+        name_to_parameters[component_type] = list(dummy.get_param_dict().keys())
+    return  name_to_parameters
 
 # --- Test script ---
 if __name__ == "__main__":

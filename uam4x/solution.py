@@ -4,7 +4,6 @@ import os
 import json
 import importlib.util
 from uam4x.utils import check_and_get_config, check_numpy_shape, check_if_scalar, is_numpy_array, normalize_shape,is_main_process,registry_writes_enabled
-_plugin_registry = {}
 from collections.abc import Sequence
 from numbers import  Real
 from itertools import  product
@@ -13,6 +12,9 @@ from uam4x.utils import log
 import numpy as np
 import inspect
 import hashlib
+
+_plugin_registry = {}
+
 
 class Solution:
     log = get_log(log, object_name='solution')
@@ -25,12 +27,12 @@ class Solution:
 
     def add_link(self, independent:str, dependent:str):
         self.log.debug(f'add link. independent link: {independent}, dependent link: {dependent}')
-        
-        # need slicing here dependent cannot 
+
+        # need slicing here dependent cannot
         if  '[' in dependent:
             raise ValueError(rf'Only independent variables can have indices specified. The independent variable {dependent}\n'
                              rf'has slices indices specified.')
-        
+
         link = [independent, dependent]
         if link not in self.links:
             self.links.append(link)
@@ -44,7 +46,7 @@ class Solution:
     def get_step_names(self):
         self.log.debug(f'get step names')
         return [step_name for step_name in self.steps]
-    
+
     def _make_step_info(self, plugin_class, plugin_options, plugin_hash=None):
         if plugin_hash is None:
             src = inspect.getsource(plugin_class)
@@ -64,15 +66,15 @@ class Solution:
             self.log.error("add_step: plugin_class should be a callable (class).")
             raise TypeError("plugin_class should be a callable (class).")
         if step_name is  not None and  ('[' in  step_name or  ']' in  step_name):
-            self.log.error(f'steps cannot have the character "[" or "]" in them')            
-            raise ValueError(f'steps cannot have the character "[" or "]" in them')         
+            self.log.error(f'steps cannot have the character "[" or "]" in them')
+            raise ValueError(f'steps cannot have the character "[" or "]" in them')
         # plugin_name should be a string, not a class
         if step_name is None:
             step_name = "step" + str(len(self.steps)+1)
-        
+
         step_info = self._make_step_info(plugin_class, plugin_options)
         self.steps[step_name] = step_info
-    
+
 
     def remove_step(self, step_name):
         self.log.debug(f'remove step: {step_name}')
@@ -144,10 +146,10 @@ class Solution:
             plugin_class = get_plugin_class(plugin_name)
             plugin_options = step_data["plugin_options"]
             plugin_hash = step_data["plugin_hash"]
-    
+
             step_info = sol._make_step_info(plugin_class, plugin_options, plugin_hash)
-            sol.steps[step_name] = step_info            
-            
+            sol.steps[step_name] = step_info
+
         sol.tracked_outputs = data["tracked_outputs"]
         sol.links = data["links"]
         return sol
@@ -167,7 +169,7 @@ class Plugin():
         self.log = Plugin.log
         self._template_to_checksum = {}
         self._executable_to_data = {}
-    
+
     def __str__(self):
         return f'{self.__class__.__name__}'
 
@@ -176,7 +178,7 @@ class Plugin():
 
     def run_plugin(self, links:dict, work_dir:str):
         self.log.debug('run plugin')
-        
+
 
     def declare_partials_plugin(self, of: str|Sequence[str], wrt: str|Sequence[str], method='fd', step=None, form=None,
                                 rows: list|np.ndarray|None=None, cols: list|np.ndarray| None=None):
@@ -329,15 +331,15 @@ class Plugin():
         if not isinstance(var_type, type):
             raise TypeError(f'Declared type must be a type. {name} has declared type {var_type} which is not a type.')
 
-        
+
         if '~' in  name or  '[' in  name or  ']' in  name:
             #self.log.error(r'Tildes (~), square brackets "[","]" are not allowed in variable names\n'
                              #rf'The following name is not allowed: {name}')
             raise ValueError(f'Tildes (~), square brackets "[","]" are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
-        
+
         if shape is  not None:
-            
+
             if var_type is not np.ndarray:
                 raise ValueError(f'{name} has declared type: {var_type} but a shape argument was provided\n'
                                  f'only np.ndarray types are allowed to have shapes')
@@ -345,7 +347,7 @@ class Plugin():
                 if not check_numpy_shape(shape):
                     raise ValueError(f'The shape must be declared as a tuple of integers or as a\n'
                                  f'single integer or as NoneType. The shape of {name} is {shape} which is invalid')
-            
+
                 shape = normalize_shape(shape)
                 if value is  not None:
                     if check_if_scalar(value):
@@ -354,18 +356,18 @@ class Plugin():
                         raise ValueError(f'If the value of an array is not declared as a scalar, then the shape must match\n'
                                          f'the declared shape. The variable {name} has declared shape {shape} and actual shape {value.shape}')
         else:
-            
+
             if value is  None and  var_type is np.ndarray:
                 raise ValueError(f'Arrays must have either the shape or value defined (or both). The variable\n'
                                  f'{name} has no shape or value.')
             if value is not None and check_if_scalar(value) and var_type is  np.ndarray:
                 raise ValueError(f'If array value is declared with scalar, shape must be declared for broadcasting.\n'
                                  f'The variable {name} has value: {value} and type: {var_type} but no shape declared.')
-        
+
         return shape
-        
-                    
-                    
+
+
+
     def declare_input(self, name, var_type, value=None, shape: int|tuple|None=None):
         shape = self.check_declared_IO(name, var_type, value, shape)
         self.plugin_input_names[name] = {'type': var_type,
@@ -392,18 +394,18 @@ class Plugin():
         else:
             h = 'file_does_not_exist_at_setup'
         self._template_to_checksum[str(path)] = h
-        
+
     def add_executable_data(self, path, description):
         '''
         Allows user to version/provide data about the executable used
         should be used in the setup portion of the plugin.
         Allows for custom scripting within the plugin setup.
         User should pair the path with either a string or dictionary
-        of data but ultimately up to the user, should be JSONable though. 
+        of data but ultimately up to the user, should be JSONable though.
         '''
         self._executable_to_data[path] = description
-           
-        
+
+
 
 def register_plugin(cls):
     plugin_name = cls.__name__
