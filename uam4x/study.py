@@ -14,7 +14,9 @@ from pathlib import  Path
 import subprocess
 import pygit2
 from uam4x.results import Results
-
+from collections import defaultdict
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 class Study:
     log = get_log(log, object_name='study')
@@ -30,16 +32,16 @@ class Study:
         self.solution = Solution()
         self.control = Control()
         self.results = Results()
-        self._runtime_meta_data = {}
+        self._runtime_meta_data = defaultdict(dict)
         
     
-    def _add_runtime_plugin_checksums(self, plugin_to_checksum):
-        self._runtime_meta_data['step_plugin_hashes'] = plugin_to_checksum
+    def _add_runtime_plugin_checksums(self, trade_name,plugin_to_checksum):
+        self._runtime_meta_data[trade_name]['step_plugin_hashes'] = plugin_to_checksum
     
-    def _add_runtime_external_executable_data(self, external_executable_to_data):
-        self._runtime_meta_data['step_external_executable_data'] = external_executable_to_data
+    def _add_runtime_external_executable_data(self, trade_name,external_executable_to_data):
+        self._runtime_meta_data[trade_name]['step_external_executable_data'] = external_executable_to_data
         
-    def _capture_environment(self):
+    def _capture_environment(self,trade_name):
         '''
         Fully defines environment
         '''
@@ -60,12 +62,38 @@ class Study:
             "python_executable": str(Path(out))}
         
         environ_dict = {dist.name: dist.version for dist in distributions()}
+
+        dt=datetime.now(tz=ZoneInfo("America/Los_Angeles"))
+        message=f'Executed on'
+        keywords=['A','B','d','Y','I','M','S','p']
+        for keyword in keywords:
+            if not keyword in ['M','S']:
+                message+=f' {dt.strftime(f"%{keyword}")}'
+            else:
+                message+=f':{dt.strftime(f"%{keyword}")}'
+            if keyword in ['A','d']:
+                message+=','
+            if keyword=='Y':
+                message+=' at'
+            
+        message+=' Pacific Standard Time'
         
-        self._runtime_meta_data['environment'] = {
+        if trade_name in self._runtime_meta_data:
+            self._runtime_meta_data[trade_name]['environment'] = {
+            'Timestamp':message,
             'Machine': machine_dict,
             'Python': python_dict,
-            'Packages': environ_dict,
+            'Packages': environ_dict
         }
+        else:
+            execution_env={
+                'environment':{
+                    'Timestamp':message,
+                    'Machine': machine_dict,
+                    'Python': python_dict,
+                    'Packages': environ_dict
+            }}
+            self._runtime_meta_data[trade_name]=execution_env
                 
 
     def add_trade(self, trade_name:str, trade) -> None:
@@ -98,12 +126,13 @@ class Study:
     @classmethod
     def _from_dict(cls, data: dict, work_dir = None) -> 'Study':
         cls.log.debug('study from dict')
-        study = Study(log_dir=work_dir)
+        study = cls(log_dir=work_dir)
         for vname, vdata in data["vehicles"].items():
             study.add_vehicle(Vehicle._from_dict(vdata))
         study.solution = Solution._from_dict(data["solution"])
         study.control = Control._from_dict(data["control"])
         study.results = Results._from_dict(data["results"],study)
+        study._runtime_meta_data=data["execution_meta_data"]
 
         return study
 

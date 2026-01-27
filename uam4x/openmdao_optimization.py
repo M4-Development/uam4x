@@ -3,7 +3,7 @@ from uam4x.study import Study
 import os
 import shutil
 import numpy as np
-from uam4x.utils import check_continuous, get_param_type, handle_brackets
+from uam4x.utils import check_continuous, check_if_scalar, get_param_type, handle_brackets
 from uam4x.log import get_log
 from uam4x.utils import log
 from uam4x.results import Results, Result
@@ -226,8 +226,12 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         for name, value in inputs.items():
             plugin_name = name.replace("~", ".")
             plugin_name = ".".join(plugin_name.split(".")[1:])
+            var_type=self.plugin.plugin_input_names[plugin_name]['type']
             if not self.plugin.plugin_input_names[plugin_name]['type'] is np.ndarray:
-                value = self.plugin.plugin_input_names[plugin_name]['type'](value)
+                if isinstance(value,np.ndarray) and check_if_scalar(var_type):
+                    value=value[0]
+                else:
+                    value = self.plugin.plugin_input_names[plugin_name]['type'](value)
             self.plugin_dict[plugin_name] = value
         for name, value in discrete_inputs.items():
             plugin_name = name.replace("~", ".")

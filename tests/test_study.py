@@ -131,14 +131,15 @@ def test_Study_instance():
     
 def test_Study_get_environment():
     s = Study()
-    s._capture_environment()
+    s._capture_environment('sample_trade')
 
     # New location of the environment info
-    assert 'environment' in s._runtime_meta_data
-    env = s._runtime_meta_data['environment']
+    assert 'sample_trade' in s._runtime_meta_data
+    assert 'environment' in s._runtime_meta_data['sample_trade']
+    env = s._runtime_meta_data['sample_trade']['environment']
 
     assert isinstance(env, dict)
-    assert set(env.keys()) == {'Machine', 'Python', 'Packages'}
+    assert set(env.keys()) == {'Machine', 'Python', 'Packages','Timestamp'}
 
     machine = env['Machine']
 

@@ -5,6 +5,11 @@ from uam4x.log import get_log
 from uam4x.utils import log
 import numpy as np
 from uam4x.utils import check_continuous, is_numpy_array, value_to_type_name
+from uam4x.UQ import UQAnalysis
+from uam4x.local_sensitivity import LocalSensitivity
+
+DEFAULT_TRADE_NAME = "Default State"
+
 
 class Optimization:
     def __init__(self) -> None:
@@ -22,6 +27,8 @@ class Optimization:
         }
         return save_dict
     
+    def get_desvar_names(self):
+        return list(self.des_vars.keys())
     @classmethod
     def _from_dict(cls, data: dict) -> 'Optimization':
         obj = cls()
@@ -129,6 +136,23 @@ class ParameterSweep:
             raise TypeError("Child must be ParameterSweep or Optimization")
         self.child = child
 
+    def get_desvar_names(self):
+        #assumes optimization cannot have child
+        child=self.child
+        if self.child is None:
+                return []
+        else:
+            return child.get_desvar_names()
+        
+    def get_all_param_names(self):
+        #assumes optimization cannot have child
+        child=self.child
+        params=set(self.param_name_to_value_list.keys())
+        if isinstance(self.child,ParameterSweep):
+            return params.union(child.get_all_param_names())
+        else:
+            return params
+
     def get_states(self) -> List[Dict[str, Any]]:
         states = []
         self.log.debug('get states')
@@ -197,13 +221,13 @@ class Control:
         self.author = author
         self.description = description
 
-    def add_tradestudy(self, trade_name:str, trade:Union[ParameterSweep, Optimization]) -> None:
-        if trade_name=='Default State':
+    def add_tradestudy(self, trade_name:str, trade:Union[ParameterSweep, Optimization,UQAnalysis]) -> None:
+        if trade_name == DEFAULT_TRADE_NAME:
             self.log.error('Trade study name cannot be "Default State", as this is reserved.')
             raise ValueError('Trade study name cannot be "Default State", as this is reserved.')
         self.log.debug(f'add trade: {trade_name}')
         self.trade_studies[trade_name] = trade
-        
+
     def _to_dict(self) -> dict:
         self.log.debug('write to dict')
         return {
@@ -231,6 +255,10 @@ class Control:
                 trade = ParameterSweep._from_dict(v)
             elif v['type'] == "Optimization":
                 trade = Optimization._from_dict(v)
+            elif v['type']=='UQAnalysis':
+                trade=UQAnalysis._from_dict(v)
+            elif v['type']=='LocalSensitivity':
+                trade=LocalSensitivity._from_dict(v)
             else:
                 raise ValueError(f"Unknown trade study type: {v['type']}")
             control.add_tradestudy(k, trade)

@@ -1,4 +1,3 @@
-import concurrent
 from uam4x.study import Study
 import os
 from uam4x.openmdao_optimization import Optimization
@@ -11,8 +10,9 @@ import hashlib
 import numpy as  np
 from uam4x.utils import check_continuous, get_param_type, check_if_scalar,log, parse_index, handle_brackets
 from collections import  defaultdict
-from uam4x.results import Results, Result   
+from uam4x.results import Results, Result, Tradestudy  
 from uam4x.log import FileLogger
+import concurrent.futures
 
 class Engine:
     """
@@ -287,23 +287,25 @@ class Engine:
     def run_solution(self):
         name='Default State'
         self.log.debug('run solution')
-        self.capture_execution_data()
+        self.capture_execution_data(name)
         self.sort_steps()
         plugins=self._generate_plugins()
         state={}
         out_dir=self.work_dir
         result=self._run_single_point(state, plugins, out_dir=out_dir)
         study_result=self.study.results
-        if name in study_result._results:
-            study_result._results[name]=[]
+        if name in study_result.tradestudies:
             self.log.warning(f'Overwriting existing results for trade study {name}')
 
-        study_result._results[name].append(result)
-        study_result._hash_to_result[result.state_hash] = result
+        ts=Tradestudy(name)
+        ts._results.append(result)
+        ts._hash_to_result[result.state_hash] = result
+        
+        study_result.add_tradestudy(name,ts)
 
-    def capture_execution_data(self):
+    def capture_execution_data(self,trade_name):
         # populate environment at execution time
-        self.study._capture_environment()
+        self.study._capture_environment(trade_name)
         # hash plugins at runtime
         plugin_name_to_hash = {}
         external_executable_to_versioning_data = {}
@@ -326,9 +328,9 @@ class Engine:
                 external_executable_to_versioning_data[step_name] = copy.deepcopy(plugin._executable_to_data)
 
         if external_executable_to_versioning_data:
-            self.study._add_runtime_external_executable_data(external_executable_to_versioning_data)        
+            self.study._add_runtime_external_executable_data(trade_name,external_executable_to_versioning_data)        
         
-        self.study._add_runtime_plugin_checksums(plugin_name_to_hash)
+        self.study._add_runtime_plugin_checksums(trade_name,plugin_name_to_hash)
 
     def run_tradestudy(self, trade_name,num_processors=None, commit=False,check=True):
         """
@@ -351,6 +353,10 @@ class Engine:
         self.log.debug(f'run tradestudy: {trade_name}')
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
+        # addition for UQ workflows where orchestration is more complex
+        if hasattr(tradestudy,'_check_analysis'):
+            tradestudy._check_analysis()
+
         import uam4x
         os.environ['UAM4X_DISABLE_REGISTRY_WRITES'] = '1'
         # if num_processesors:
@@ -360,7 +366,7 @@ class Engine:
         #     else:
         #         pass
         
-        self.capture_execution_data()
+        self.capture_execution_data(trade_name)
         if isinstance(tradestudy,UAM4XOptimization) and num_processors is not None:
             log.warning('num_processors is ignored for single point optimizations')
         if isinstance(tradestudy, UAM4XOptimization):
@@ -374,12 +380,14 @@ class Engine:
 
             result=self._run_optimization(state, plugins, self.work_dir)
             study_result=self.study.results
-            if trade_name in study_result._results:
-                study_result._results[trade_name]=[]
+            if trade_name in study_result.tradestudies:
                 self.log.warning(f'Overwriting existing results for trade study {trade_name}')
 
-            study_result._results[trade_name].append(result)
-            study_result._hash_to_result[result.state_hash] = result
+
+            ts=Tradestudy(trade_name)
+            ts._results.append(result)
+            ts._hash_to_result[result.state_hash]=result
+            study_result.add_tradestudy(trade_name,ts)
 
         else:
             # Note a parameter sweep can contain optimizations
@@ -461,13 +469,19 @@ class Engine:
             raise ValueError('num_processors must be None or an integer >=1')
         #Consolidate results
         study_result=self.study.results
-        if trade_name in study_result._results:
-            study_result._results[trade_name]=[]
+        if trade_name in study_result.tradestudies:
             self.log.warning(f'Overwriting existing results for trade study {trade_name}')
-        for result in outputs:
-            study_result._results[trade_name].append(result)
-            study_result._hash_to_result[result.state_hash] = result
 
+        ts=Tradestudy(trade_name)
+        spec = self.study.control.trade_studies[trade_name]
+        post_cls = getattr(spec, "post_spec", None)
+        if post_cls is not None:
+            ts.set_post(post_cls)
+        for result in outputs:
+            ts._results.append(result)
+            ts._hash_to_result[result.state_hash] = result
+
+        study_result.add_tradestudy(trade_name,ts)
         # self.log.info(f'succesful states: {successful_states}')
         # self.log.info(f'failed states: {failed_states}')
 
