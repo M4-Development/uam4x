@@ -104,7 +104,7 @@ class Tradestudy:
         des_vars=get_desvar_names() if callable(get_desvar_names) else []
 
         # get parameter variables if applicable
-        get_param_names=getattr(trade,"get_param_names",None)
+        get_param_names=getattr(trade,"get_all_param_names",None)
         param_names=get_param_names() if callable(get_param_names) else []
 
         # get UQ variable names if applicable
