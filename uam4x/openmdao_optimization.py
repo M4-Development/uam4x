@@ -113,7 +113,9 @@ class Optimization:
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
         problem.driver = om.ScipyOptimizeDriver()
-        problem.driver.options['optimizer'] = 'SLSQP'
+        problem.driver.options['optimizer'] = self.state['optimizer']
+        problem.driver.options['maxiter'] = self.state['max_iterations']
+        problem.driver.options['tol'] = self.state['tolerance']
         problem.setup()
         problem.run_driver()
         

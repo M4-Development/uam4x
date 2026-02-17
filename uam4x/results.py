@@ -55,24 +55,24 @@ class Tradestudy:
         else:
             return self._results_owner.study
 
-    def scatter(self,var1,var2,x_axis_title=None,y_axis_title=None,plot_title='default_title',save_dir=None):
+    def scatter(self,var1,var2,xlabel=None,ylabel=None,title='default_title',save_dir=None):
         
         fig, ax=plt.subplots(figsize=(10, 6))
         x_values=self.get_variable(var1)
         y_values=self.get_variable(var2)
         ax.scatter(x_values, y_values, color='blue', alpha=0.7)
 
-        ax.set_title(plot_title, fontsize=16,fontweight='bold')
-        if x_axis_title is None:
-            x_axis_title=var1
-        if y_axis_title is None:
-            y_axis_title=var2      
-        ax.set_xlabel(x_axis_title, fontsize=14)
-        ax.set_ylabel(y_axis_title, fontsize=14)
+        ax.set_title(title, fontsize=16,fontweight='bold')
+        if xlabel is None:
+            xlabel=var1
+        if ylabel is None:
+            ylabel=var2      
+        ax.set_xlabel(xlabel, fontsize=14)
+        ax.set_ylabel(ylabel, fontsize=14)
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
 
         if save_dir is not None:
-            plt.savefig(f"{save_dir}/{plot_title.replace(' ','_')}.png", dpi=300, bbox_inches='tight')   
+            plt.savefig(f"{save_dir}/{title.replace(' ','_')}.png", dpi=300, bbox_inches='tight')   
         return ax   
       
     def get_result_by_state(self, state):

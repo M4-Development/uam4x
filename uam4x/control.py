@@ -17,16 +17,39 @@ class Optimization:
         self.des_vars = {}
         self.constraints = {}
         self.objective_name = ''
+        self.optimizer = 'SLSQP'
+        self.max_iterations = 200
+        self.tolerance = 1e-6
+
 
     def _to_dict(self):
         save_dict = {
             'type': self.type,
             'des_vars': self.des_vars,
             'constraints': self.constraints,
-            'objective_name': self.objective_name
+            'objective_name': self.objective_name,
+            'optimizer': self.optimizer,
+            'max_iterations': self.max_iterations,
+            'tolerance': self.tolerance
         }
         return save_dict
     
+    def set_optimizer(self, optimizer_name: str):
+        accepted_optimizers = ['SLSQP','BFGS','L-BFGS-B','trust-constr']
+        if optimizer_name not in accepted_optimizers:
+            raise ValueError(f"Optimizer {optimizer_name} not recognized. Accepted optimizers are: {accepted_optimizers}")
+        self.optimizer = optimizer_name
+
+    def set_tolerance(self, tolerance: float):
+        if tolerance <= 0:
+            raise ValueError("Tolerance must be a positive number.")
+        self.tolerance = tolerance
+
+    def set_max_iterations(self, max_iterations: int):
+        if max_iterations <= 0:
+            raise ValueError("Max iterations must be a positive integer.")
+        self.max_iterations = max_iterations
+
     def get_desvar_names(self):
         return list(self.des_vars.keys())
     @classmethod

@@ -13,6 +13,7 @@ from collections import  defaultdict
 from uam4x.results import Results, Result, Tradestudy  
 from uam4x.log import FileLogger
 import concurrent.futures
+import time
 
 class Engine:
     """
@@ -285,6 +286,7 @@ class Engine:
         return result   
                 
     def run_solution(self):
+        start_time = time.perf_counter()
         name='Default State'
         self.log.debug('run solution')
         self.capture_execution_data(name)
@@ -302,6 +304,11 @@ class Engine:
         ts._hash_to_result[result.state_hash] = result
         
         study_result.add_tradestudy(name,ts)
+        #add time to results metadata
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        self.study._runtime_meta_data[name]['Execution_Time'] = f'Analysis took {elapsed_time} seconds'
+
 
     def capture_execution_data(self,trade_name):
         # populate environment at execution time
@@ -350,6 +357,7 @@ class Engine:
         check : bool, optional  
             Whether to perform model validation checks, by default True.
         """
+        start_time = time.perf_counter()
         self.log.debug(f'run tradestudy: {trade_name}')
         self.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
@@ -394,6 +402,10 @@ class Engine:
             trade_states=tradestudy.get_states()
             self._run_parameter_sweep(trade_name,trade_states,num_processors=num_processors)
 
+        #add time to results metadata
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        self.study._runtime_meta_data[trade_name]['Execution_Time'] = f'Analysis took {elapsed_time} seconds'
 
     
     def _run_parameter_sweep(self,trade_name,trade_states,num_processors=None):

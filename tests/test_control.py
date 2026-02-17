@@ -92,7 +92,11 @@ def test_to_dict_good():
         'type': 'Optimization',
         'des_vars': {DESIGN_VAR_NAME: {'lower': 1.0,'upper': 10.0,'indices': None}}, 
         'constraints':{CONSTRAINT_NAME: {'lower': lower,'upper': upper,'indices': None}}, 
-        'objective_name': 'random_objective'}
+        'objective_name': 'random_objective',
+        'optimizer': 'SLSQP',
+        'max_iterations': 200,
+        'tolerance': 1e-6
+    }
     
 def test_Optimization_from_dict_array_and_scalar_bounds():
     # Hand-crafted dict that mimics what would come from JSON

@@ -468,16 +468,77 @@ class RegressionPCEPost(BasicStatsPost):
 
         input_order=list(ts.aleatory_var_to_dist.keys())
 
-        def surrogate(name_to_value_dict):
-            vals=[]
-            for name in input_order:
-                vals.append(name_to_value_dict[name])
-            point=ot.Point(vals)
-            return res.getMetaModel()(point)
-        
-        return surrogate
+        return Surrogate(input_order,res)
 
         
+class Surrogate:
+    def __init__(self,inp_order,result):
+        self.input_order=inp_order
+        self._ot_res=result
+        self.new_sample_points=None
+        self.new_sample_values=None
+        
+    
+    def predict(self,name_to_value_dict):
+        vals=[]
+        for name in self.input_order:
+            vals.append(name_to_value_dict[name])
+        point=ot.Point(vals)
+        return self._ot_res.getMetaModel()(point)
+    
+    @property
+    def analytical_mean(self):
+        return np.array(ot.FunctionalChaosRandomVector(self._ot_res).getMean())
+    @property
+    def analytical_variance(self):
+        return np.array(ot.FunctionalChaosRandomVector(self._ot_res).getCovariance())
+    @property
+    def analytical_std(self):
+        return np.sqrt(self.analytical_variance)
+    
+    def sample(self,num_samples):
+        model=self._ot_res.getMetaModel()
+        self.new_sample_points=self._ot_res.getDistribution().getSample(num_samples)
+        Y=model(self.new_sample_points)
+        self.new_sample_values=np.array(Y) 
+        return np.array(self.new_sample_points),np.array(self.new_sample_values)
+    
+    def plot_cdf(self,save_dir=None):
+        if self.new_sample_values is None:
+            raise ValueError('Must generate samples before plotting cdf')
+        vals=self.new_sample_values.flatten()
+        ecdf=stats.ecdf(vals)
+        quantiles=ecdf.cdf.quantiles
+        probabilities=ecdf.cdf.probabilities
+        fig,ax=plt.subplots(figsize=(10,6))
+        ax.plot(quantiles,probabilities,color='blue')   
+        ax.set_title(f'CDF of surrogate output', fontsize=16,fontweight='bold')
+        ax.set_xlabel('Output', fontsize=14)
+        ax.set_ylabel('Probability', fontsize=14)
+        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+        if save_dir is not None:
+            plt.savefig(f"{save_dir}/CDF_surrogate_output.png", dpi=300, bbox_inches='tight')
+
+        return np.hstack((quantiles,probabilities))
+
+
+
+    def plot_pdf(self,bins=20,save_dir=None):
+        if self.new_sample_values is None:
+            raise ValueError('Must generate samples before plotting pdf')
+        vals=self.new_sample_values.flatten()
+        fig,ax=plt.subplots(figsize=(10,6))
+        ax.hist(vals,bins=bins,color='blue',edgecolor='black')
+        ax.set_title(f'PDF of surrogate output', fontsize=16,fontweight='bold')
+        ax.set_xlabel('Output', fontsize=14)
+        ax.set_ylabel('Frequency', fontsize=14)
+        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+        if save_dir is not None:
+            plt.savefig(f"{save_dir}/PDF_surrogate_output.png", dpi=300, bbox_inches='tight')
+
+        return ax
 
 
 @register_post_workflow
