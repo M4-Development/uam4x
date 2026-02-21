@@ -31,7 +31,7 @@ class Study:
         self.vehicles = VehicleManager()
         self.solution = Solution()
         self.control = Control()
-        self.results = Results()
+        self.results = Results(self)
         self._runtime_meta_data = defaultdict(dict)
         
     
@@ -80,21 +80,24 @@ class Study:
         
         if trade_name in self._runtime_meta_data:
             self._runtime_meta_data[trade_name]['environment'] = {
-            'Timestamp':message,
             'Machine': machine_dict,
             'Python': python_dict,
             'Packages': environ_dict
-        }
+            }
+            self._runtime_meta_data[trade_name]['time_info']={
+                'Start_Time':message
+                }
         else:
             execution_env={
                 'environment':{
-                    'Timestamp':message,
                     'Machine': machine_dict,
                     'Python': python_dict,
                     'Packages': environ_dict
             }}
             self._runtime_meta_data[trade_name]=execution_env
-                
+            self._runtime_meta_data[trade_name]['time_info']={
+                'Start_Time':message
+                }
 
     def add_trade(self, trade_name:str, trade) -> None:
         self.log.debug(f'add trade: {trade_name}')

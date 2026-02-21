@@ -33,7 +33,8 @@ class Optimization:
             'tolerance': self.tolerance
         }
         return save_dict
-    
+
+
     def set_optimizer(self, optimizer_name: str):
         accepted_optimizers = ['SLSQP','BFGS','L-BFGS-B','trust-constr']
         if optimizer_name not in accepted_optimizers:

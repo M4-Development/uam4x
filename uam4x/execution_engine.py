@@ -14,6 +14,8 @@ from uam4x.results import Results, Result, Tradestudy
 from uam4x.log import FileLogger
 import concurrent.futures
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 class Engine:
     """
@@ -287,28 +289,48 @@ class Engine:
                 
     def run_solution(self):
         start_time = time.perf_counter()
-        name='Default State'
+        trade_name='Default State'
         self.log.debug('run solution')
-        self.capture_execution_data(name)
+        self.capture_execution_data(trade_name)
         self.sort_steps()
         plugins=self._generate_plugins()
         state={}
         out_dir=self.work_dir
         result=self._run_single_point(state, plugins, out_dir=out_dir)
         study_result=self.study.results
-        if name in study_result.tradestudies:
-            self.log.warning(f'Overwriting existing results for trade study {name}')
+        if trade_name in study_result.tradestudies:
+            self.log.warning(f'Overwriting existing results for trade study {trade_name}')
 
-        ts=Tradestudy(name)
+        ts=Tradestudy(trade_name)
         ts._results.append(result)
         ts._hash_to_result[result.state_hash] = result
         
-        study_result.add_tradestudy(name,ts)
+        study_result.add_tradestudy(trade_name,ts)
         #add time to results metadata
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
-        self.study._runtime_meta_data[name]['Execution_Time'] = f'Analysis took {elapsed_time} seconds'
+        self.add_end_time_meta_data(trade_name,elapsed_time)
 
+        
+    def add_end_time_meta_data(self,trade_name,elapsed_time):
+        self.study._runtime_meta_data[trade_name]['time_info']['Elapsed_Time'] = f'Analysis took {elapsed_time} seconds'
+        
+        dt=datetime.now(tz=ZoneInfo("America/Los_Angeles"))
+
+        message=f'Completed on'
+        keywords=['A','B','d','Y','I','M','S','p']
+        for keyword in keywords:
+            if not keyword in ['M','S']:
+                message+=f' {dt.strftime(f"%{keyword}")}'
+            else:
+                message+=f':{dt.strftime(f"%{keyword}")}'
+            if keyword in ['A','d']:
+                message+=','
+            if keyword=='Y':
+                message+=' at'
+            
+        message+=' Pacific Standard Time'
+        self.study._runtime_meta_data[trade_name]['time_info']['Completion_Time'] = message
 
     def capture_execution_data(self,trade_name):
         # populate environment at execution time
@@ -405,7 +427,7 @@ class Engine:
         #add time to results metadata
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
-        self.study._runtime_meta_data[trade_name]['Execution_Time'] = f'Analysis took {elapsed_time} seconds'
+        self.add_end_time_meta_data(trade_name,elapsed_time)
 
     
     def _run_parameter_sweep(self,trade_name,trade_states,num_processors=None):

@@ -134,7 +134,7 @@ class RegressionPCE(BasicStats):
     def _check_analysis(self,UQAnalysis):
         #check order and number of aleatory vs. num samples
         # from XIU Polynomial expansion, dimension of space is C(order+number of random vars,number of random vars)
-        # should oversample 
+        # should oversample 2-3x
         num_aleatory=len(UQAnalysis.aleatory_var_to_dist)
         min_terms=comb(self.poly_order+num_aleatory,self.poly_order)
         if min_terms>self.num_samples:
@@ -142,8 +142,6 @@ class RegressionPCE(BasicStats):
         elif min_terms*3>self.num_samples:
             print('Warning')
         
-        
-
     def _to_dict(self):
         return {
             'name': self.__class__.__name__,
@@ -158,6 +156,63 @@ class RegressionPCE(BasicStats):
         num_samples=workflow_dict['num_samples']
         poly_order=workflow_dict['polynomial_order']
         return cls(num_samples,sampler,poly_order)
+
+
+@register_workflow
+class GaussQuadraturePCE:
+    def __init__(self,poly_order):
+        self.poly_order=poly_order
+
+    def _check_analysis(self,UQAnalysis):
+        num_aleatory=len(UQAnalysis.aleatory_var_to_dist)
+        if num_aleatory>5:
+            raise ValueError('Quadrature based PCE may not be efficient for more than 5 aleatory variables')
+
+    def _get_states(self, aleatory_to_distribution):
+        num_aleatory=len(aleatory_to_distribution)
+
+        if num_aleatory==1:
+            (name,dist),=aleatory_to_distribution.items()
+            var_name_to_col={name:0}
+            dist=dist._OT_Dist()
+        else:
+            joint=[]
+            var_name_to_col={}
+            for i,(name, dist) in enumerate(aleatory_to_distribution.items()):
+                joint.append(dist._OT_Dist())
+                var_name_to_col[name]=i
+            dist=ot.JointDistribution(joint)
+            
+        # Experiment with joint distribution with k marginals
+        # the points per var is poly deg+1, the total number of points is
+        # (deg+1)^k for full tensor implementation (used here) 
+        points_per_var=[self.poly_order+1]*num_aleatory
+        experiment=ot.GaussProductExperiment(dist,points_per_var)
+        nodes,weights=experiment.generateWithWeights()
+        nodes,weights=np.array(nodes),np.array(weights)
+
+        states=[]
+        for row in range(nodes.shape[0]):
+            local_state={'weight':weights[row]}
+            for name,col in var_name_to_col.items():
+                local_state[name]=nodes[row,col]
+            local_state['optimization']=False
+            states.append(local_state)
+
+        return states
+                
+
+
+    def _to_dict(self):
+        return {
+            'name': self.__class__.__name__,
+            'polynomial_order':self.poly_order
+        }
+    
+    @classmethod
+    def _from_dict(cls,workflow_dict):
+        poly_order=workflow_dict['polynomial_order']
+        return cls(poly_order)
 
 @register_workflow
 class SobolSensitivity(BasicStats):
@@ -233,13 +288,6 @@ class SobolSensitivity(BasicStats):
 
         return sobol_workflow
     
-class GaussQuadtraturePCE(BasicStats):
-    '''
-    Docstring for GaussQuadtraturePCE
-    '''
-    pass
-
-
 
 # Define post process classes:
 @register_post_workflow
@@ -363,6 +411,9 @@ class BasicStatsPost:
 
     
     def compute_quantile(self,var_name,quantile,method='inverted_cdf'):
+        ''''
+        Computes probability levels (quantiles)
+        '''
         if quantile<=0.0 or quantile>=1.0:
             raise ValueError()
         methods=[
@@ -382,10 +433,7 @@ class BasicStatsPost:
         
         vals=np.array(self.tradestudy.get_variable(var_name))
 
-        return np.quantile(vals,quantile,method=method)
-
-    def compute_confidence_interval(self,var_name):
-        pass
+        return np.quantile(vals,quantile,method=method)                
 
     def compute_spearman_correlation(self,var_name1,var_name2):
         #NEED TO DETERMINE NAN POLICY
@@ -441,8 +489,7 @@ class RegressionPCEPost(BasicStatsPost):
         outputs=ot.Sample(np.array(self.tradestudy.get_variable(output_name))[:,None])
 
         # Joint distribution based on independent input aleatory dists
-        joint=ot.ComposedDistribution(joint_list)
-
+        joint=ot.JointDistribution(joint_list)
 
         #Enumeration function
         enum=ot.LinearEnumerateFunction(len(aleatory_var_to_dist))
@@ -469,8 +516,67 @@ class RegressionPCEPost(BasicStatsPost):
         input_order=list(ts.aleatory_var_to_dist.keys())
 
         return Surrogate(input_order,res)
+    
+@register_post_workflow    
+class GaussQuadtraturePCEPost(BasicStatsPost):
+    def __init__(self,tradestudy:Tradestudy):
+        super().__init__(tradestudy)
 
-        
+    def generate_surrogate(self,output_name):
+        trade_name=self.tradestudy.trade_name
+        ts=self.tradestudy.study.control.trade_studies[trade_name]
+        aleatory_var_to_dist=ts.aleatory_var_to_dist
+        num_aleatory=len(aleatory_var_to_dist)
+        num_samples=(ts.UQ_workflow.poly_order+1)**num_aleatory
+        #get the weights:
+        weights=[]
+        for result in self.tradestudy._results:
+            weights.append(result.state['weight'])
+        weights=ot.Point(weights)
+        poly_factories=[]
+        # matrix of input values
+        abscissas=np.zeros((num_samples,len(aleatory_var_to_dist)))
+        joint_list=[]
+        for i,(name,distribution) in enumerate(aleatory_var_to_dist.items()):
+            ot_dist=distribution._OT_Dist()
+            poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
+            abscissas[:,i]=np.array(self.tradestudy.get_variable(name))
+            joint_list.append(ot_dist)
+
+        # Data as OT samples
+        abscissas=ot.Sample(abscissas)
+        outputs=ot.Sample(np.array(self.tradestudy.get_variable(output_name))[:,None])
+
+        # Joint distribution based on independent input aleatory dists
+        joint=ot.JointDistribution(joint_list)
+
+
+        #Enumeration function
+        enum=ot.LinearEnumerateFunction(len(aleatory_var_to_dist))
+
+        # Basis built from distributions (Normal-->Hermite, Uniform-->Legendre)
+        product_basis=ot.OrthogonalProductPolynomialFactory(poly_factories)
+
+        # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
+        poly_order=ts.UQ_workflow.poly_order
+        basis_size=enum.getBasisSizeFromTotalDegree(poly_order)
+        if basis_size!=comb(poly_order+len(aleatory_var_to_dist),poly_order):
+            raise ValueError(f'Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(aleatory_var_to_dist)}')
+            
+        # Selects first P elemens of the polynomial chaos basis according to enumeration function
+        truncation_strategy=ot.FixedStrategy(product_basis,basis_size)
+
+        # Gaussian PCE using integration 
+        projection_strategy=ot.IntegrationStrategy()
+
+        algo=ot.FunctionalChaosAlgorithm(abscissas,weights,outputs,joint,truncation_strategy,projection_strategy)
+        algo.run()
+        res=algo.getResult()
+
+        input_order=list(ts.aleatory_var_to_dist.keys())
+
+        return Surrogate(input_order,res)
+
 class Surrogate:
     def __init__(self,inp_order,result):
         self.input_order=inp_order
@@ -488,17 +594,39 @@ class Surrogate:
     
     @property
     def analytical_mean(self):
-        return np.array(ot.FunctionalChaosRandomVector(self._ot_res).getMean())
+        return ot.FunctionalChaosRandomVector(self._ot_res).getMean()[0]
     @property
     def analytical_variance(self):
-        return np.array(ot.FunctionalChaosRandomVector(self._ot_res).getCovariance())
+        ot_var=np.array(ot.FunctionalChaosRandomVector(self._ot_res).getCovariance())[0][0]
+        coeffs=np.array(self._ot_res.getCoefficients())
+        #skip first term which is mean
+        variance=np.sum(coeffs[1:]**2)
+        if np.abs(ot_var-variance)>10**-6:
+            raise ValueError()
+        return variance
     @property
     def analytical_std(self):
         return np.sqrt(self.analytical_variance)
     
-    def sample(self,num_samples):
+    def sample(self,num_samples,method='MC'):
         model=self._ot_res.getMetaModel()
-        self.new_sample_points=self._ot_res.getDistribution().getSample(num_samples)
+        # need to add method here? 
+        dist=self._ot_res.getDistribution()
+        if method=='MC':
+            experiment=ot.MonteCarloExperiment(dist,num_samples)
+            self.new_sample_points=np.array(experiment.generate())
+        elif method=='LHS':
+            experiment=ot.LHSExperiment(dist,num_samples)
+            self.new_sample_points=np.array(experiment.generate())
+        elif method=='Sobol':
+            sobolseq=ot.SobolSequence(dist.getDimension())
+            experiment=ot.LowDiscrepancyExperiment(sobolseq,dist,num_samples)
+            self.new_sample_points=np.array(experiment.generate())
+        elif method=='Halton':
+            haltonseq=ot.HaltonSequence(dist.getDimension())
+            experiment=ot.LowDiscrepancyExperiment(haltonseq,dist,num_samples)
+            self.new_sample_points=np.array(experiment.generate())
+
         Y=model(self.new_sample_points)
         self.new_sample_values=np.array(Y) 
         return np.array(self.new_sample_points),np.array(self.new_sample_values)
@@ -692,6 +820,7 @@ class LatinHypercubeSampler(BaseSampler):
 
         return samples,var_name_to_col
     
+@register_sampler
 class SobolSampler(BaseSampler):
 
     #Note this use here is for SobolExperiment, where the
@@ -720,6 +849,7 @@ class SobolSampler(BaseSampler):
         return samples,var_name_to_col
         
 
+@register_sampler
 class HaltonSampler(BaseSampler):
 
     @staticmethod
@@ -782,12 +912,36 @@ class UniformDistribution:
     @classmethod
     def _from_dict(cls,data):
         return cls(data['low'],data['high'])
+
+
+@register_distribution
+class LogNormalDistribution:
+    def __init__(self, mu, sigma, gamma=0.0):
+        self.mu = mu
+        self.sigma = sigma
+        self.gamma = gamma
+
+    def _OT_Dist(self):
+        return ot.LogNormalMuSigma(self.mu, self.sigma, self.gamma).getDistribution()
+
+    def _to_dict(self):
+        return {
+            'name': self.__class__.__name__,
+            'mu': self.mu,
+            'sigma': self.sigma,
+            'gamma': self.gamma,
+        }
+
+    @classmethod
+    def _from_dict(cls, data):
+        return cls(data['mu'], data['sigma'], data.get('gamma', 0.0))
     
 # Pair all workflow classes with their post process classes    
 pre_to_post_workflow_registry={
     'BasicStats':BasicStatsPost,
     'RegressionPCE':RegressionPCEPost,
-    'SobolSensitivity':SobolSensitivityPost
+    'SobolSensitivity':SobolSensitivityPost,
+    'GaussQuadraturePCE':GaussQuadtraturePCEPost
 }
 if __name__ == "__main__":
     

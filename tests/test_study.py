@@ -139,7 +139,10 @@ def test_Study_get_environment():
     env = s._runtime_meta_data['sample_trade']['environment']
 
     assert isinstance(env, dict)
-    assert set(env.keys()) == {'Machine', 'Python', 'Packages','Timestamp'}
+    assert set(env.keys()) == {'Machine', 'Python', 'Packages'}
+    assert "time_info" in s._runtime_meta_data["sample_trade"]
+    assert "Start_Time" in s._runtime_meta_data["sample_trade"]["time_info"]
+    assert isinstance(s._runtime_meta_data["sample_trade"]["time_info"]["Start_Time"], str)
 
     machine = env['Machine']
 
