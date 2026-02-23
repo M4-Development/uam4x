@@ -91,10 +91,14 @@ class Engine:
         # Sample state, doesn't really matter here, special check
         # partials directory created
         if isinstance(tradestudy,UAM4XOptimization):
-            sample_state = tradestudy._to_dict()
-            sample_state['optimization']=True
-        else:
+            optim = tradestudy
+            sample_state = optim._to_dict()
+        elif hasattr(tradestudy, 'get_optim_child'):
             sample_state = copy.deepcopy(tradestudy.get_states()[0])
+            optim = tradestudy.get_optim_child() 
+        else:
+            print('Checking Partials Only Available For Optimization Based Analysis')
+            return
 
         out_dir = os.path.join(self.work_dir, f"check_partials")
         os.makedirs(out_dir, exist_ok=True)
@@ -107,7 +111,12 @@ class Engine:
         
         cwd = os.getcwd()
         os.chdir(out_dir)
-        opt = Optimization(self.study, sample_state, plugins, out_dir, check_partials=True)
+        driver_data = {
+                'mdao_driver_options': optim._mdao_driver_options,
+                'optimizer_options':optim._optimizer_options,
+                'optimizer': optim.optimizer,
+            }
+        opt = Optimization(self.study, sample_state, plugins, out_dir, driver_data, check_partials=True)
         problem = opt.run_problem()
 
         problem.check_partials(step=step, form=form, compact_print=True)
@@ -123,7 +132,7 @@ class Engine:
             plugins[step_name] = plugin
         return plugins
 
-    def _run_state(self, state,iteration=None, check=True):
+    def _run_state(self, state,trade_name,iteration=None, check=True):
         """
         Run a solution for a given state.
 
@@ -156,17 +165,31 @@ class Engine:
         os.makedirs(out_dir, exist_ok=True)
 
         plugins=self._generate_plugins()
-            
+        
+        #returns child optimization if parameter sweep has child optimization
+        #otherwise returns None
+        tradestudy=self.study.control.trade_studies[trade_name]
+        if isinstance(tradestudy,UAM4XOptimization):
+            optim=tradestudy
+        elif hasattr(tradestudy,'get_optim_child'):
+            optim=tradestudy.get_optim_child()
+        else:
+            optim=None
 
-        if state['optimization']:
-            result=self._run_optimization(state, plugins, out_dir)
+        if isinstance(optim,UAM4XOptimization):
+            driver_data={
+                'mdao_driver_options':copy.deepcopy(optim._mdao_driver_options),
+                'optimizer_options':copy.deepcopy(optim._optimizer_options),
+                'optimizer':optim.optimizer
+                         }
+            result=self._run_optimization(state, plugins, out_dir, driver_data)
         else:
             result=self._run_single_point(state, plugins, out_dir)
 
         return result
     
     @staticmethod
-    def _run_state_parallel(study_dict, state, iteration=None, work_dir=None):
+    def _run_state_parallel(study_dict, state,trade_name, iteration=None, work_dir=None):
         """
         Static method to run a solution in parallel.
 
@@ -200,11 +223,11 @@ class Engine:
 
         study = Study._from_dict(study_dict, out_dir)
         engine = Engine(study, out_dir)    
-        result = engine._run_state(state, iteration=iteration)
+        result = engine._run_state(state, trade_name, iteration=iteration)
         return result
 
 
-    def _run_optimization(self, state, plugins, out_dir):
+    def _run_optimization(self, state, plugins, out_dir, driver_data):
         """
         Run an optimization analysis.
 
@@ -224,7 +247,7 @@ class Engine:
         cwd = os.getcwd()
         os.chdir(out_dir)
         temp_state=copy.deepcopy(state)
-        opt = Optimization(self.study, temp_state,plugins, out_dir)
+        opt = Optimization(self.study, temp_state, plugins, out_dir, driver_data)
         opt_result=opt.run_problem()
 
         os.chdir(cwd)
@@ -402,13 +425,16 @@ class Engine:
         if isinstance(tradestudy, UAM4XOptimization):
             #run optimization as defined by the base state
             state=tradestudy._to_dict()
-            state['optimization']=True
             plugins=self._generate_plugins()
             
             if check:
                 self.check_model(plugins, state)
-
-            result=self._run_optimization(state, plugins, self.work_dir)
+            driver_data = {
+                'mdao_driver_options': tradestudy._mdao_driver_options,
+                'optimizer_options': tradestudy._optimizer_options,
+                'optimizer': tradestudy.optimizer,
+            }
+            result=self._run_optimization(state, plugins, self.work_dir, driver_data)
             study_result=self.study.results
             if trade_name in study_result.tradestudies:
                 self.log.warning(f'Overwriting existing results for trade study {trade_name}')
@@ -446,7 +472,7 @@ class Engine:
             outputs=[]
             study_dict=self.study._to_dict()
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                futures={i:executor.submit(Engine._run_state_parallel, study_dict, state, iteration=i,work_dir=self.work_dir)  for i, state in enumerate(states)}
+                futures={i:executor.submit(Engine._run_state_parallel, study_dict, state,trade_name, iteration=i,work_dir=self.work_dir)  for i, state in enumerate(states)}
                 for j in sorted(futures.keys()):
                     try:
                         outputs.append(futures[j].result())
@@ -476,7 +502,7 @@ class Engine:
             for i, state in enumerate(states):
 #
                 try:
-                    outputs.append(self._run_state(state,  iteration=i))
+                    outputs.append(self._run_state(state, trade_name, iteration=i))
                     self.log.info(f'state successful: {state}')
                     successful_states.append(state)
                 except PluginException as e:
@@ -590,7 +616,7 @@ class Engine:
         self.check_links_to_plugins(plugins)
         self.check_link_types(plugins)
         self.check_link_indices(plugins)
-        if state.get('optimization'):
+        if {'des_vars', 'constraints', 'objective_name'}.issubset(state):
             self.check_desvars(plugins, state)
             self.check_constraints(plugins, state)
             self.check_objective(plugins, state)

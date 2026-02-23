@@ -17,9 +17,14 @@ class Optimization:
         self.des_vars = {}
         self.constraints = {}
         self.objective_name = ''
-        self.optimizer = 'SLSQP'
-        self.max_iterations = 200
-        self.tolerance = 1e-6
+        self._mdao_driver_options={
+            'optimizer':'SLSQP',
+            'maxiter':200,
+            'tol':1e-6
+            }
+        self._optimizer_options={}
+        self.optimizer='ScipyOptimizeDriver'
+
 
 
     def _to_dict(self):
@@ -28,31 +33,30 @@ class Optimization:
             'des_vars': self.des_vars,
             'constraints': self.constraints,
             'objective_name': self.objective_name,
-            'optimizer': self.optimizer,
-            'max_iterations': self.max_iterations,
-            'tolerance': self.tolerance
+            'driver_options':self._mdao_driver_options,
+            'optimizer_options':self._optimizer_options,
+            'optimizer':self.optimizer
         }
         return save_dict
 
+    def set_optimizer(self,name):
+        self.optimizer=name
 
-    def set_optimizer(self, optimizer_name: str):
-        accepted_optimizers = ['SLSQP','BFGS','L-BFGS-B','trust-constr']
-        if optimizer_name not in accepted_optimizers:
-            raise ValueError(f"Optimizer {optimizer_name} not recognized. Accepted optimizers are: {accepted_optimizers}")
-        self.optimizer = optimizer_name
+    def add_driver_option(self,name,value):
+        '''
+        Sets problem.driver.options settings in openmdao
+        '''
+        self._mdao_driver_options[name]=value
 
-    def set_tolerance(self, tolerance: float):
-        if tolerance <= 0:
-            raise ValueError("Tolerance must be a positive number.")
-        self.tolerance = tolerance
-
-    def set_max_iterations(self, max_iterations: int):
-        if max_iterations <= 0:
-            raise ValueError("Max iterations must be a positive integer.")
-        self.max_iterations = max_iterations
+    def add_optimizer_option(self,name,value):
+        '''
+        Sets problem.driver.opt_settings in openmdao problem
+        '''
+        self._optimizer_options[name]=value
 
     def get_desvar_names(self):
         return list(self.des_vars.keys())
+    
     @classmethod
     def _from_dict(cls, data: dict) -> 'Optimization':
         obj = cls()
@@ -73,6 +77,13 @@ class Optimization:
         obj.des_vars = data['des_vars']
         obj.constraints = data['constraints']
         obj.objective_name = data['objective_name']
+        obj.optimizer=data['optimizer']
+        if data['driver_options']:
+            for name,value in data['driver_options'].items():
+                obj.add_driver_option(name,value)
+        if data['optimizer_options']:
+            for name,value in data['optimizer_options'].items():
+                obj.add_optimizer_option(name,value)
         return obj
     
     def add_design_var(self, name: str, lower: np.ndarray|float|np.floating|None=None,
@@ -160,6 +171,16 @@ class ParameterSweep:
             raise TypeError("Child must be ParameterSweep or Optimization")
         self.child = child
 
+    def get_optim_child(self):
+        child=self.child
+        if child is None:
+            return None
+        if isinstance(child,ParameterSweep):
+            return child.get_optim_child()
+        if isinstance(child,Optimization):
+            return child
+        
+
     def get_desvar_names(self):
         #assumes optimization cannot have child
         child=self.child
@@ -185,7 +206,6 @@ class ParameterSweep:
             for name, values in self.param_name_to_value_list.items():
                 state[name] = values[i]
             if isinstance(self.child, Optimization):
-                state['optimization'] = True
                 state.update(self.child._to_dict())
                 states.append(state)
             elif isinstance(self.child, ParameterSweep):
@@ -200,7 +220,6 @@ class ParameterSweep:
                     states_to_add.append(sample_state)
                 states.extend(states_to_add)
             else:
-                state['optimization'] = False
                 states.append(state)
         return states
     def _to_dict(self):

@@ -108,7 +108,6 @@ class BasicStats:
             local_state={}
             for name,col in var_name_to_col.items():
                 local_state[name]=sample_points[row,col]
-            local_state['optimization']=False
             states.append(local_state)
         return states
     
@@ -196,7 +195,6 @@ class GaussQuadraturePCE:
             local_state={'weight':weights[row]}
             for name,col in var_name_to_col.items():
                 local_state[name]=nodes[row,col]
-            local_state['optimization']=False
             states.append(local_state)
 
         return states
@@ -223,8 +221,8 @@ class SobolSensitivity(BasicStats):
         super().__init__(num_samples,SamplingClass)
         self.computeSecondOrder=computeSecondOrder
     
-    def _check_analysis(self):
-        pass
+    #def _check_analysis(self):
+    #    pass
 
     def _get_states(self, aleatory_to_distribution):
         ot.ResourceMap.Set('SobolIndicesExperiment-SamplingMethod',self.SamplingClass._OT_ResourceMapName)
@@ -260,7 +258,6 @@ class SobolSensitivity(BasicStats):
             local_state={}
             for name,col in var_name_to_col.items():
                 local_state[name]=results[row,col]
-                local_state['optimization']=False
             states.append(local_state)
             
 
@@ -273,7 +270,6 @@ class SobolSensitivity(BasicStats):
             'sampler':self.SamplingClass.__name__,
             'num_samples':self.num_samples,
             'second_order_sobol':self.computeSecondOrder,
-            'num_sobol_samples':self.num_sobol_samples
         }
     
     @classmethod
@@ -281,10 +277,8 @@ class SobolSensitivity(BasicStats):
         sampler=sampler_name_to_class_registry[workflow_dict['sampler']]
         num_samples=workflow_dict['num_samples']
         second_order_sobol=workflow_dict['second_order_sobol']
-        num_sobol_samples=workflow_dict['num_sobol_samples']
 
         sobol_workflow=cls(num_samples,sampler,second_order_sobol)
-        sobol_workflow.num_sobol_samples=num_sobol_samples
 
         return sobol_workflow
     

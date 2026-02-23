@@ -93,9 +93,13 @@ def test_to_dict_good():
         'des_vars': {DESIGN_VAR_NAME: {'lower': 1.0,'upper': 10.0,'indices': None}}, 
         'constraints':{CONSTRAINT_NAME: {'lower': lower,'upper': upper,'indices': None}}, 
         'objective_name': 'random_objective',
-        'optimizer': 'SLSQP',
-        'max_iterations': 200,
-        'tolerance': 1e-6
+        'driver_options': {
+            'optimizer': 'SLSQP',
+            'maxiter': 200,
+            'tol': 1e-6,
+        },
+        'optimizer_options': {},
+        'optimizer': 'ScipyOptimizeDriver',
     }
     
 def test_Optimization_from_dict_array_and_scalar_bounds():
@@ -115,6 +119,9 @@ def test_Optimization_from_dict_array_and_scalar_bounds():
             "c2": {"lower": -1.0, "upper": 2.0},
         },
         "objective_name": "obj",
+        "driver_options": {"optimizer": "SLSQP", "maxiter": 200, "tol": 1e-6},
+        "optimizer_options": {},
+        "optimizer": "ScipyOptimizeDriver",
     }
 
     opt = Optimization._from_dict(data)
@@ -447,6 +454,9 @@ def test_Control_from_dict_mixed_trades():
             "c1": {"lower": -1.0, "upper": 1.0},
         },
         "objective_name": "obj_sweep",
+        "driver_options": {"optimizer": "SLSQP", "maxiter": 200, "tol": 1e-6},
+        "optimizer_options": {},
+        "optimizer": "ScipyOptimizeDriver",
     }
 
     # Standalone optimization trade
@@ -457,6 +467,9 @@ def test_Control_from_dict_mixed_trades():
         },
         "constraints": {},
         "objective_name": "obj_opt_only",
+        "driver_options": {"optimizer": "SLSQP", "maxiter": 200, "tol": 1e-6},
+        "optimizer_options": {},
+        "optimizer": "ScipyOptimizeDriver",
     }
 
     control_dict = {

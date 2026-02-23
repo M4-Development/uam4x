@@ -8,14 +8,17 @@ from uam4x.log import get_log
 from uam4x.utils import log
 from uam4x.results import Results, Result
 
+driver_name_to_driver={#'pyOptSparseDriver':om.pyOptSparseDriver,
+                       'ScipyOptimizeDriver':om.ScipyOptimizeDriver}
 class Optimization:
     log = get_log(log, object_name='optimization')
-    def __init__(self, study:Study, state, plugins, out_dir,check_partials=False) -> None:
+    def __init__(self, study:Study, state, plugins, out_dir, driver_data, check_partials=False) -> None:
         self.study = study
         self.state = state
         self.plugins = plugins
         self.out_dir = out_dir
         self.check_partials = check_partials
+        self.driver_data = driver_data if driver_data is not None else {}
         self.log = Optimization.log
 
     def run_problem(self):
@@ -112,11 +115,18 @@ class Optimization:
                     result._add_template_checksum(path, checksum)
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
-        problem.driver = om.ScipyOptimizeDriver()
-        #iterate on optimizer options instead
-        problem.driver.options['optimizer'] = self.state['optimizer']
-        problem.driver.options['maxiter'] = self.state['max_iterations']
-        problem.driver.options['tol'] = self.state['tolerance']
+
+        driver_name = self.driver_data['optimizer']
+        driver_cls = driver_name_to_driver[driver_name]
+        problem.driver = driver_cls()
+
+        # iterate on options dictionaries provided by control.Optimization
+        for name, value in self.driver_data['mdao_driver_options'].items():
+            problem.driver.options[name] = value
+        if hasattr(problem.driver, 'opt_settings'):
+            for name, value in self.driver_data['optimizer_options'].items():
+                problem.driver.opt_settings[name] = value
+
         problem.setup()
         problem.run_driver()
         
