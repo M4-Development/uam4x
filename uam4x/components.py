@@ -15,6 +15,8 @@ import numpy as np
 
 
 _component_registry = {}
+_component_names = []
+_comp_class_name_to_param_name_type_list = {}
 
 class Parameter:
     """
@@ -588,12 +590,13 @@ class Component:
         return {name: param.value for name, param in self._parameters.items()}
 
 def register_component(cls):
-    comp_name = cls.__name__
-    log.debug(f'register component: {comp_name}')
+    comp_class_name = cls.__name__
+    log.debug(f'register component: {comp_class_name}')
     # Only register in the registry, don't modify conf.json for built-in components
     # when running components.py directly
     if cls.__module__ == "__main__":
-        _component_registry[comp_name] = cls
+        _component_registry[comp_class_name] = cls
+        _update_consts(comp_class_name, cls)
         return cls
 
     # For external components, update conf.json
@@ -601,16 +604,41 @@ def register_component(cls):
     _config = check_and_get_config(config_path)
 
 
-    if comp_name in _config['COMPONENTS'] and _config['COMPONENTS'][comp_name] != importlib.util.find_spec(cls.__module__).origin:
-        log.warning(f"WARNING: Component '{comp_name}' already registered\nOverwritting existing data")
+    if comp_class_name in _config['COMPONENTS'] and _config['COMPONENTS'][comp_class_name] != importlib.util.find_spec(cls.__module__).origin:
+        log.warning(f"WARNING: Component '{comp_class_name}' already registered\nOverwritting existing data")
     if not "uam4x.components" in cls.__module__.replace('.', '/'):
-        _config['COMPONENTS'][comp_name] = importlib.util.find_spec(cls.__module__).origin
+        _config['COMPONENTS'][comp_class_name] = importlib.util.find_spec(cls.__module__).origin
         if is_main_process() and registry_writes_enabled():
             with open(config_path, 'w') as configfile:
                 json.dump(_config, configfile, indent=4)
 
-    _component_registry[comp_name] = cls
+    _component_registry[comp_class_name] = cls
+    _update_consts(comp_class_name, cls)
     return cls
+
+def _update_consts(comp_class_name, comp_class):
+    if not comp_class_name in _component_names:
+        _component_names.append(comp_class_name)
+    dummy = comp_class('dummy')
+    params = list(dummy.get_param_dict().keys())
+    _comp_class_name_to_param_name_type_list[comp_class_name] = []
+    for param  in params:
+        _comp_class_name_to_param_name_type_list[comp_class_name].append((param, dummy._parameters[param].dtype.__name__))
+
+def get_commponent_class(component_class_name):
+    if not component_class_name in _component_registry:
+        msg = f"Component '{component_class_name}' was not registered. Please check the following:\n"
+        msg += f"\t1. Did you register the component using the @register_component?\n"
+        msg += f"\t2. Were there Plugin Load Errors when you imported uam4x?\n"
+        log.error(msg)
+        raise ImportError(msg)
+    return _component_registry[component_class_name]
+
+def get_component_class_names():
+    return _component_names
+
+def get_param_name_and_type_list(comp_class_name):
+    return _comp_class_name_to_param_name_type_list[comp_class_name]
 
 # Wing component with only span, chord, and sweep
 @register_component
@@ -653,33 +681,11 @@ class RotorBladeRegion(Component):
         self.add_parameter("mainsparweb_thickness", 0.0, float, unit_type=UnitType.LENGTH, description="")
         self.add_parameter("mainsparweb_angle", 0.0, float, unit_type=UnitType.ANGLE, description="")
 
-
 @register_component
 class Aircraft(Component):
     def setup(self):
         self.add_parameter("npass", 4, int, description="Number of passengers")
         self.add_parameter("wpass", 200.0, float, unit_type=UnitType.MASS, description="Mass per passenger")
-
-def get_commponent_class(component_name):
-    if not component_name in _component_registry:
-        msg = f"Component '{component_name}' was not registered. Please check the following:\n"
-        msg += f"\t1. Did you register the component using the @register_component?\n"
-        msg += f"\t2. Were there Plugin Load Errors when you imported uam4x?\n"
-        log.error(msg)
-        raise ImportError(msg)
-    return _component_registry[component_name]
-
-def get_registered_component_names():
-    """Get a list of all registered component names."""
-    log.debug('get component names')
-    return list(_component_registry.keys())
-
-def get_registered_component_name_to_parameters():
-    name_to_parameters = {}
-    for component_type, component in _component_registry.items():
-        dummy = component('dummy')
-        name_to_parameters[component_type] = list(dummy.get_param_dict().keys())
-    return  name_to_parameters
 
 # --- Test script ---
 if __name__ == "__main__":
