@@ -206,6 +206,7 @@ class ParameterSweep:
             for name, values in self.param_name_to_value_list.items():
                 state[name] = values[i]
             if isinstance(self.child, Optimization):
+                state['optimization'] = True
                 state.update(self.child._to_dict())
                 states.append(state)
             elif isinstance(self.child, ParameterSweep):
@@ -220,6 +221,7 @@ class ParameterSweep:
                     states_to_add.append(sample_state)
                 states.extend(states_to_add)
             else:
+                state['optimization'] = False
                 states.append(state)
         return states
     def _to_dict(self):
