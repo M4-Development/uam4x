@@ -408,7 +408,7 @@ class BasicStatsPost:
         ''''
         Computes probability levels (quantiles)
         '''
-        if quantile<=0.0 or quantile>=1.0:
+        if quantile<0.0 or quantile>1.0:
             raise ValueError()
         methods=[
             'inverted_cdf',
@@ -473,10 +473,33 @@ class RegressionPCEPost(BasicStatsPost):
         abscissas=np.zeros((num_samples,len(aleatory_var_to_dist)))
         joint_list=[]
         for i,(name,distribution) in enumerate(aleatory_var_to_dist.items()):
-            ot_dist=distribution._OT_Dist()
-            poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
-            abscissas[:,i]=np.array(self.tradestudy.get_variable(name))
+            if isinstance(distribution,LogNormalDistribution):
+                #special transformation of log-->normal since no analytical 
+                #polynomials for log (was getting error)
+                
+                #transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
+                #then this says the log of Y is normally distributed with mean mu and
+                # standard deviation sigma (the log distribution has different expectation)
+                #and variance
+                ot_dist=ot.Normal(distribution.mu_log,distribution.sigma_log)
+                #first center the log distribution by getting rid of the gamma shift
+                #then take the natural log, X=ln(Y-gamma)
+                x_phys=np.array(self.tradestudy.get_variable(name))
+                z=x_phys-distribution.gamma
+                if np.any(z)<=0.0:
+                    raise ValueError()
+                
+                new_vals=np.log(z)
+                abscissas[:, i] = new_vals
+                poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
+            else:
+                ot_dist=distribution._OT_Dist()
+                poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
+                abscissas[:,i]=np.array(self.tradestudy.get_variable(name))
+
+
             joint_list.append(ot_dist)
+
         
         # Data as OT samples
         abscissas=ot.Sample(abscissas)
@@ -507,9 +530,9 @@ class RegressionPCEPost(BasicStatsPost):
         algo.run()
         res=algo.getResult()
 
-        input_order=list(ts.aleatory_var_to_dist.keys())
-
-        return Surrogate(input_order,res)
+        aleatory_var_to_dist=ts.aleatory_var_to_dist
+        
+        return Surrogate(aleatory_var_to_dist,res)
     
 @register_post_workflow    
 class GaussQuadtraturePCEPost(BasicStatsPost):
@@ -532,9 +555,31 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
         abscissas=np.zeros((num_samples,len(aleatory_var_to_dist)))
         joint_list=[]
         for i,(name,distribution) in enumerate(aleatory_var_to_dist.items()):
-            ot_dist=distribution._OT_Dist()
-            poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
-            abscissas[:,i]=np.array(self.tradestudy.get_variable(name))
+            if isinstance(distribution,LogNormalDistribution):
+                #special transformation of log-->normal since no analytical 
+                #polynomials for log (was getting error)
+                
+                #transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
+                #then this says the log of Y is normally distributed with mean mu and
+                # standard deviation sigma (the log distribution has different expectation)
+                #and variance
+                ot_dist=ot.Normal(distribution.mu_log,distribution.sigma_log)
+                #first center the log distribution by getting rid of the gamma shift
+                #then take the natural log, X=ln(Y-gamma)
+                x_phys=np.array(self.tradestudy.get_variable(name))
+                z=x_phys-distribution.gamma
+                if np.any(z)<=0.0:
+                    raise ValueError()
+                
+                new_vals=np.log(z)
+                abscissas[:, i] = new_vals
+                poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
+            else:
+                ot_dist=distribution._OT_Dist()
+                poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
+                abscissas[:,i]=np.array(self.tradestudy.get_variable(name))
+
+
             joint_list.append(ot_dist)
 
         # Data as OT samples
@@ -567,22 +612,30 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
         algo.run()
         res=algo.getResult()
 
-        input_order=list(ts.aleatory_var_to_dist.keys())
+        aleatory_var_to_dist=ts.aleatory_var_to_dist
 
-        return Surrogate(input_order,res)
+        return Surrogate(aleatory_var_to_dist,res)
 
 class Surrogate:
-    def __init__(self,inp_order,result):
-        self.input_order=inp_order
+    def __init__(self,aleatory_var_to_dist,result):
+        #NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
+        #FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
+        self.aleatory_var_to_dist=aleatory_var_to_dist
         self._ot_res=result
         self.new_sample_points=None
         self.new_sample_values=None
         
     
     def predict(self,name_to_value_dict):
+        #Note, name_to_value_dict should be PHYSICAL inputs, not 
+        #probabalistic based inputs 
         vals=[]
-        for name in self.input_order:
-            vals.append(name_to_value_dict[name])
+        for name,distribution in self.aleatory_var_to_dist.items():
+            if isinstance(distribution,LogNormalDistribution):
+                transformed_val=np.log(name_to_value_dict[name]-distribution.gamma)
+                vals.append(transformed_val)
+            else:    
+                vals.append(name_to_value_dict[name])
         point=ot.Point(vals)
         return self._ot_res.getMetaModel()(point)
     
@@ -620,8 +673,19 @@ class Surrogate:
             haltonseq=ot.HaltonSequence(dist.getDimension())
             experiment=ot.LowDiscrepancyExperiment(haltonseq,dist,num_samples)
             self.new_sample_points=np.array(experiment.generate())
+        
 
         Y=model(self.new_sample_points)
+
+        #NOTE, SAMPLE POINTS RETURNED ARE PHYSICAL POINTS, NOT Probability space points
+        # in the case of the lognormal distribution. Basic Uniform and Normal
+        #probability space is equal to the physical since no transformaton occurs. 
+        for i,(name,distribution) in enumerate(self.aleatory_var_to_dist.items()):
+            if isinstance(distribution):
+                #points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
+                #where gamma is the shift
+                self.new_sample_points[:,i]=np.exp(self.new_sample_points[:,i])+dist.gamma
+                
         self.new_sample_values=np.array(Y) 
         return np.array(self.new_sample_points),np.array(self.new_sample_values)
     
@@ -910,19 +974,19 @@ class UniformDistribution:
 
 @register_distribution
 class LogNormalDistribution:
-    def __init__(self, mu, sigma, gamma=0.0):
-        self.mu = mu
-        self.sigma = sigma
+    def __init__(self, mu_log, sigma_log, gamma=0.0):
+        self.mu_log = mu_log
+        self.sigma_log = sigma_log
         self.gamma = gamma
 
     def _OT_Dist(self):
-        return ot.LogNormalMuSigma(self.mu, self.sigma, self.gamma).getDistribution()
+        return ot.LogNormal(self.mu_log, self.sigma_log, self.gamma)
 
     def _to_dict(self):
         return {
             'name': self.__class__.__name__,
-            'mu': self.mu,
-            'sigma': self.sigma,
+            'mu': self.mu_log,
+            'sigma': self.sigma_log,
             'gamma': self.gamma,
         }
 
