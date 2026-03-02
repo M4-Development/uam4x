@@ -14,9 +14,9 @@ import importlib.util
 import numpy as np
 
 
-_component_registry = {}
-_component_names = []
-_comp_class_name_to_param_name_type_list = {}
+_subsystem_registry = {}
+_subsystem_names = []
+_subsystem_to_param_name_type_list = {}
 
 class Parameter:
     """
@@ -182,11 +182,11 @@ class _Mode:
     ----------
     name : str
         Name of the mode.
-    component : Component, optional
+    component : Subsystem, optional
         The parent component.
     """
     log = get_log(log, object_name=f'mode')
-    def __init__(self, name: str, component: "Component"):
+    def __init__(self, name: str, component: "Subsystem"):
         self.name = name
         self._overrides = {}
         self.component = component  # Reference to parent component for inheritance
@@ -333,9 +333,9 @@ class _Mode:
         params = ", ".join(param_strs)
         return f"Mode('{self.name}') overrides: {params}"
 
-class Component:
+class Subsystem:
     """
-    Base class for all components. Supports parameters, modes, and dynamic properties.
+    Base class for all subsystems. Supports parameters, modes, and dynamic properties.
 
     Parameters
     ----------
@@ -351,7 +351,7 @@ class Component:
         self._parameters = {}
         self._modes = {}
         self._is_setup = True
-        self.log = Component.log
+        self.log = Subsystem.log
         self.setup()
         self._is_setup = False
         setattr(self, 'baseline', self)
@@ -512,8 +512,8 @@ class Component:
             mode_result = {}
             for pname, override_value in mode._overrides.items():
                 if pname not in self._parameters:
-                    self.log.error(f"Parameter '{pname}' does not exist in component '{self.name}' for mode '{mode_name}'")
-                    raise AttributeError(f"Parameter '{pname}' does not exist in component '{self.name}' for mode '{mode_name}'")
+                    self.log.error(f"Parameter '{pname}' does not exist in subsystem '{self.name}' for mode '{mode_name}'")
+                    raise AttributeError(f"Parameter '{pname}' does not exist in subsystem '{self.name}' for mode '{mode_name}'")
                 dtype = self._parameters[pname].dtype
                 mode_result[pname] = isinstance(override_value, dtype)
             result[mode_name] = mode_result
@@ -543,13 +543,13 @@ class Component:
         self.log.debug('write to dict')
         return {
             "name": self.name,
-            "component_type": type(self).__name__,
+            "subsystem_type": type(self).__name__,
             "parameters": {k: v._to_dict() for k, v in self._parameters.items()},
             "modes": {k: {"overrides": dict(mode._overrides)} for k, mode in self._modes.items()}
         }
 
     @classmethod
-    def _from_dict(cls, data: dict) -> 'Component':
+    def _from_dict(cls, data: dict) -> 'Subsystem':
         """
         Deserialize a component from a dictionary.
 
@@ -560,13 +560,13 @@ class Component:
 
         Returns
         -------
-        Component
+        Subsystem
         """
         cls.log.debug('Deserialize a component from a dictionary')
         # Parameters
-        comp_type = data["component_type"]
-        comp_class = get_commponent_class(comp_type)
-        comp = comp_class(data["name"])
+        subsystem_type = data["subsystem_type"]
+        subsystem_class = get_subsystem_class(subsystem_type)
+        comp = subsystem_class(data["name"])
         for k, v in data["parameters"].items():
             comp._parameters[k] = Parameter._from_dict(v)
 
@@ -589,60 +589,60 @@ class Component:
         self.log.debug('get dictionary of parameters and their values')
         return {name: param.value for name, param in self._parameters.items()}
 
-def register_component(cls):
-    comp_class_name = cls.__name__
-    log.debug(f'register component: {comp_class_name}')
-    # Only register in the registry, don't modify conf.json for built-in components
+def register_subsystem(cls):
+    subsystem = cls.__name__
+    log.debug(f'register subsystem: {subsystem}')
+    # Only register in the registry, don't modify conf.json for built-in subsystems
     # when running components.py directly
     if cls.__module__ == "__main__":
-        _component_registry[comp_class_name] = cls
-        _update_consts(comp_class_name, cls)
+        _subsystem_registry[subsystem] = cls
+        _update_consts(subsystem , cls)
         return cls
 
-    # For external components, update conf.json
+    # For external subsystems, update conf.json
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
     _config = check_and_get_config(config_path)
 
 
-    if comp_class_name in _config['COMPONENTS'] and _config['COMPONENTS'][comp_class_name] != importlib.util.find_spec(cls.__module__).origin:
-        log.warning(f"WARNING: Component '{comp_class_name}' already registered\nOverwritting existing data")
+    if subsystem  in _config['SUBSYSTEMS'] and _config['SUBSYSTEMS'][subsystem] != importlib.util.find_spec(cls.__module__).origin:
+        log.warning(f"WARNING: Subsystem '{subsystem }' already registered\nOverwritting existing data")
     if not "uam4x.components" in cls.__module__.replace('.', '/'):
-        _config['COMPONENTS'][comp_class_name] = importlib.util.find_spec(cls.__module__).origin
+        _config['SUBSYSTEMS'][subsystem] = importlib.util.find_spec(cls.__module__).origin
         if is_main_process() and registry_writes_enabled():
             with open(config_path, 'w') as configfile:
                 json.dump(_config, configfile, indent=4)
 
-    _component_registry[comp_class_name] = cls
-    _update_consts(comp_class_name, cls)
+    _subsystem_registry[subsystem] = cls
+    _update_consts(subsystem, cls)
     return cls
 
-def _update_consts(comp_class_name, comp_class):
-    if not comp_class_name in _component_names:
-        _component_names.append(comp_class_name)
-    dummy = comp_class('dummy')
+def _update_consts(subsystem , subsystem_class):
+    if not subsystem  in _subsystem_names:
+        _subsystem_names.append(subsystem)
+    dummy = subsystem_class('dummy')
     params = list(dummy.get_param_dict().keys())
-    _comp_class_name_to_param_name_type_list[comp_class_name] = []
+    _subsystem_to_param_name_type_list[subsystem] = []
     for param  in params:
-        _comp_class_name_to_param_name_type_list[comp_class_name].append((param, dummy._parameters[param].dtype.__name__))
+        _subsystem_to_param_name_type_list[subsystem ].append((param, dummy._parameters[param].dtype.__name__))
 
-def get_commponent_class(component_class_name):
-    if not component_class_name in _component_registry:
-        msg = f"Component '{component_class_name}' was not registered. Please check the following:\n"
-        msg += f"\t1. Did you register the component using the @register_component?\n"
+def get_subsystem_class(subsystem_class_name):
+    if not subsystem_class_name in _subsystem_registry:
+        msg = f"Subsystem '{subsystem_class_name}' was not registered. Please check the following:\n"
+        msg += f"\t1. Did you register the subsystem using the @register_subsystem?\n"
         msg += f"\t2. Were there Plugin Load Errors when you imported uam4x?\n"
         log.error(msg)
         raise ImportError(msg)
-    return _component_registry[component_class_name]
+    return _subsystem_registry[subsystem_class_name]
 
-def get_component_class_names():
-    return _component_names
+def get_subsystem_names():
+    return  _subsystem_names
 
-def get_param_name_and_type_list(comp_class_name):
-    return _comp_class_name_to_param_name_type_list[comp_class_name]
+def get_param_name_and_type_list(subsystem):
+    return _subsystem_to_param_name_type_list[subsystem]
 
-# Wing component with only span, chord, and sweep
-@register_component
-class Wing(Component):
+# Wing subsystem with only span, chord, and sweep
+@register_subsystem
+class Wing(Subsystem):
     def setup(self):
         self.add_parameter("area", 0., float, unit_type=UnitType.AREA, description="Wing area" )
         self.add_parameter("span", 0., float, unit_type=UnitType.LENGTH, description="Wing span")
@@ -650,8 +650,8 @@ class Wing(Component):
         self.add_parameter("sweep", 0., float, unit_type=UnitType.ANGLE, description="Wing sweep angle")
         self.add_parameter("aspect_ratio", 1., float, unit_type=UnitType.ANGLE, description="Wing sweep angle")
 
-@register_component
-class Rotor(Component):
+@register_subsystem
+class Rotor(Subsystem):
     def setup(self):
         self.add_parameter("vtip", 550., float, unit_type=UnitType.SPEED, description="Rotor tip speed")
         self.add_parameter("tilt", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor tilt")
@@ -661,8 +661,8 @@ class Rotor(Component):
         self.add_parameter("blade_chord", 0.1, float, unit_type=UnitType.LENGTH, description="Blade chord length")
         self.add_parameter("collective_pitch", 0.0, float, unit_type=UnitType.ANGLE, description="Collective pitch angle (deg)")
 
-@register_component
-class RotorBladeRegion(Component):
+@register_subsystem
+class RotorBladeRegion(Subsystem):
     def setup(self):
         self.add_parameter("spanwise_start", 0.0, float, unit_type=UnitType.LENGTH, description="start of section as a fraction of the total span")
         self.add_parameter("spanwise_stop", 0.0, float, unit_type=UnitType.LENGTH, description="end of section as a fration of the total span")
@@ -681,8 +681,8 @@ class RotorBladeRegion(Component):
         self.add_parameter("mainsparweb_thickness", 0.0, float, unit_type=UnitType.LENGTH, description="")
         self.add_parameter("mainsparweb_angle", 0.0, float, unit_type=UnitType.ANGLE, description="")
 
-@register_component
-class Aircraft(Component):
+@register_subsystem
+class Aircraft(Subsystem):
     def setup(self):
         self.add_parameter("npass", 4, int, description="Number of passengers")
         self.add_parameter("wpass", 200.0, float, unit_type=UnitType.MASS, description="Mass per passenger")

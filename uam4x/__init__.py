@@ -1,5 +1,5 @@
 
-from uam4x.components import register_component, Component, _component_registry
+from uam4x.components import register_subsystem, Subsystem, _subsystem_registry
 from uam4x.solution import register_plugin, Plugin, _plugin_registry
 from uam4x.utils import check_and_get_config, log
 from uam4x.node import register_node, Node, _node_registry
@@ -12,7 +12,7 @@ from pathlib import Path
 _conf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conf.json')
 _config = check_and_get_config(_conf_path)
 
-for _comp_name, _python_file_path in _config['COMPONENTS'].items():
+for _comp_name, _python_file_path in _config['SUBSYSTEMS'].items():
     # Check if this is a built-in component from uam4x/uam4x/components.py
     is_builtin = ("uam4x" == os.path.split(_python_file_path)[-2] and
                   os.path.basename(_python_file_path) == "components.py")
@@ -25,7 +25,7 @@ for _comp_name, _python_file_path in _config['COMPONENTS'].items():
         sys.modules[_module_name] = _module
         try:
             _spec.loader.exec_module(_module)
-            _component_registry[_comp_name] = getattr(_module,_comp_name)
+            _subsystem_registry[_comp_name] = getattr(_module,_comp_name)
         except FileNotFoundError:
             log.warning(f"Component load error ({_comp_name}). Could not find path {_python_file_path}")
         except AttributeError:

@@ -1,4 +1,4 @@
-from uam4x.components import Component
+from uam4x.components import Subsystem
 from uam4x.log import get_log
 from uam4x.utils import log
 from collections import  Counter
@@ -156,7 +156,7 @@ class Vehicle:
         cls.log.debug('vehicle from dict')
         v = Vehicle(data["name"] )
         for cdata in data["components"]:
-            v.add_component(Component._from_dict(cdata))
+            v.add_component(Subsystem._from_dict(cdata))
         return v
 
 

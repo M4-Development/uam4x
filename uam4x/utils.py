@@ -36,19 +36,19 @@ def check_and_get_config(conf_path):
             with open(conf_path, 'w') as configfile:
                 json.dump({},configfile)
         else:
-            return {"COMPONENTS": {}, "PLUGINS": {}}
-        
+            return {"SUBSYSTEMS": {}, "PLUGINS": {}}
+
     with open(conf_path, 'r') as configfile:
         try:
             _config = json.load(configfile)
         except json.decoder.JSONDecodeError:
             log.error(f"Could not load parse json at {conf_path}. Please correct or delete the file.")
             raise IOError(f"Could not load parse json at {conf_path}. Please correct or delete the file.")
-        
-    if 'COMPONENTS' not in _config:
-        _config['COMPONENTS'] = {}
+
+    if 'SUBSYSTEMS' not in _config:
+        _config['SUBSYSTEMS'] = {}
         if is_main_process() and registry_writes_enabled():
-            log.info(f'No COMPONENTS found in config at {conf_path}. Creating empty COMPONENTS section.')
+            log.info(f'No SUBSYSTEMS found in config at {conf_path}. Creating empty SUBSYSTEMS section.')
             with open(conf_path, 'w') as configfile:
                 json.dump(_config, configfile, indent=4)
 
@@ -58,7 +58,7 @@ def check_and_get_config(conf_path):
             log.info(f'No PLUGINS found in config at {conf_path}. Creating empty PLUGINS section.')
             with open(conf_path, 'w') as configfile:
                 json.dump(_config, configfile, indent=4)
-                
+
     return _config
 
 
@@ -84,7 +84,7 @@ def check_if_scalar(val_or_type):
         return True
     if isinstance(val_or_type, type) and (issubclass(val_or_type, (Real, np.integer, np.floating)) and val_or_type not in (np.bool_,bool)):
         return True
-    
+
     return False
 
 def type_string_to_type(type_name:str):
@@ -147,12 +147,12 @@ def convert_numpy_to_python(value):
         return {k: convert_numpy_to_python(x) for  k, x in value.items()}
 
     return value
-    
+
 
 def check_numpy_shape(shape):
     #Integer shapes are allowed
     if is_bool(shape):
-        return False    
+        return False
     elif is_integer(shape):
         return shape >= 0
     elif is_tuple(shape):
@@ -164,8 +164,8 @@ def check_numpy_shape(shape):
             if dim < 0:
                 return False
         return True
-    
-    
+
+
     return False
 
 def normalize_shape(shape):
@@ -175,9 +175,9 @@ def normalize_shape(shape):
     the returns original value, if it is an int
     then it returns the canonical (N,) form shown
     by numpy when shape is requested
-    
+
     NOTE: ASSUMES check_numpy_shape has been run on the shape
-    already. 
+    already.
     '''
     if is_tuple(shape):
         return shape
@@ -203,7 +203,7 @@ def is_numpy_array(value):
 
 #Get type name from a value
 def value_to_type_name(value):
-    
+
     value_type = type(value)
     if hasattr(value_type, '__name__'):
         return value_type.__name__
@@ -211,8 +211,8 @@ def value_to_type_name(value):
         return str(value_type)
     else:
         return None
-        
-    
+
+
 def canonicalize_state(x):
     '''
     Given a state dictionary, sorts for hashing
@@ -228,9 +228,9 @@ def canonicalize_state(x):
 
     if isinstance(x, float):
         return round(x, 12)
-    
+
     if isinstance(x, (np.integer, np.floating, np.bool_)):
-        return x.item()    
+        return x.item()
 
     return x
 
@@ -239,18 +239,18 @@ def hash_state(state):
     hashes an input state
     '''
     canon = canonicalize_state(state)
-    
+
     data = json.dumps(
         canon,
         sort_keys=True,
-        separators=(",", ":"), 
+        separators=(",", ":"),
         ensure_ascii=False,
         allow_nan=False).encode("utf-8")
-    
+
 
     return hashlib.sha256(data).hexdigest()
-    
-    
+
+
 def is_valid_square_brackets(string):
     '''
     Checks if the string has the proper square brackets
@@ -267,29 +267,29 @@ def is_valid_square_brackets(string):
         return True
     else:
         raise ValueError(f'Brackets are inalid in indexing string: {string}')
-    
+
 def is_valid_index(string: str):
     '''
     Checks list for valid characters and order run after is_valid_square_brackets.
-    
+
     Note, the string should be the index, not the full variable name.
-    
+
     examples of valid indexing:
     simple: inds=[2,5,7,11,3], inds=[-2,5,-1,3]
     slicing: inds=[::-1], inds=[4:3:2]
-    listed subcomponents: inds=[[1,2],[6,7]]
+    listed SUBSYSTEMS: inds=[[1,2],[6,7]]
     any combination: inds=[[6,7],3:4:2,4]
     '''
-    
+
     valid_characters = [',', '-', ':', '[', ']']
     # At most two consectutive colons
     if ':::' in string:
         raise ValueError('At most 2 consecutive colons allowed when specifying indices. The string:\n'
                          f'{string} has invalid indexes.')
-    
+
     if not (string.startswith('[') and  string.endswith(']')):
         raise ValueError(f'Indexes must be surrounded with [] the string: {string} does not have this')
-    
+
     for i, letter in  enumerate(string[1:-1]):
         loc = i + 1
         # letter must be in the valid characters or an integer
@@ -311,10 +311,10 @@ def is_valid_index(string: str):
         # handle ]
         if letter == ']' and loc != len(string)-2 and string[loc+1] != ',':
             raise ValueError(f'Internal closing brackets must be proceeded with commas. The string {string} is not valid')
-        
+
     return True
-        
-        
+
+
 def is_simple(string):
     '''
     Run after is_valid_square_brackets to characterize
@@ -336,7 +336,7 @@ def is_slice(string):
     if ':' in  string:
         return True
     return False
-    
+
 def is_fancy(string):
     '''
     Ran only when index is grouped,
@@ -348,51 +348,51 @@ def is_fancy(string):
         else:
             return True
     return False
-        
+
 
 def parse_simple(string):
     '''
-    
+
     '''
     indices = re.findall(r'[-]?\d+', string)
     indices = [int(num) for  num in  indices]
     if len(indices) == 1:
         return indices[0]
-    
+
     return tuple(indices)
 
 def parse_fancy(string):
-    
+
     indices = re.findall(r'[-]?\d+', string)
     return [int(num) for  num in  indices]
 
 def parse_slice(string):
-    
+
     if string.count(':') > 2:
         raise ValueError(f'At most 2 colons for slicing within category {string} in violation')
-    
+
     s = string.split(':')
-    
+
     while len(s) < 3:
         s.append('')
-        
+
     def empty_to_none(ex_string):
         if ex_string == '':
             return None
         return int(ex_string)
-        
-    start, stop, step = [empty_to_none(letter) for  letter in  s]    
-    
+
+    start, stop, step = [empty_to_none(letter) for  letter in  s]
+
     if step == 0:
         raise ValueError(f'Step size cannot be zero. Slice: {string} in violation')
-    
+
     return slice(start, stop, step)
-    
-   
+
+
 def parse_complicated(string):
     '''
     parse complex indexing string
-    form is assumed as [...] 
+    form is assumed as [...]
     '''
     comma_inds = []
     depth = 0
@@ -404,18 +404,18 @@ def parse_complicated(string):
             depth -= 1
         if letter == ',' and depth == 0:
             comma_inds.append(loc)
-                
+
     lower_list = [1] + [comma_ind + 1 for  comma_ind in  comma_inds]
     upper_list = [comma_ind for comma_ind in comma_inds] + [-1]
-        
-    slice_list = []            
+
+    slice_list = []
     for lower, upper in  zip(lower_list, upper_list):
         slice_list.append(slice(lower, upper))
-        
+
     index_groups = []
     for slice_inds in slice_list:
         index_groups.append(string[slice_inds])
-        
+
     full_index = []
     for group in  index_groups:
         if is_simple(group):
@@ -426,10 +426,10 @@ def parse_complicated(string):
             full_index.append(parse_slice(group))
         else:
             raise ValueError(f'Issue')
-        
+
     return tuple(full_index)
-            
-                
+
+
 def parse_index(string):
     '''
     Parse the slices out of a string.
@@ -437,22 +437,22 @@ def parse_index(string):
     1.) N-dimensional simple index call out e.g [1,4,6]
     2.) N-dimensional advanced call out e.g [[1,5,3],[1,2],[8]]
     3.) N-dimensional slicing e.g [1:,2:-1,3].
-    
+
     Assumes the string passed in is the list of indexes in string form
     '''
     is_valid_square_brackets(string)
     is_valid_index(string)
-    #Try first form: 
+    #Try first form:
     if is_simple(string[1:-1]):
         return parse_simple(string)
     else:
         return parse_complicated(string)
-    
-    
+
+
 def handle_brackets(dotted_path):
     bracket_ind = dotted_path.find('[')
     inds = parse_index(dotted_path[bracket_ind:])
     dotted_path = dotted_path[:bracket_ind]
-        
+
     return dotted_path, inds
-        
+
