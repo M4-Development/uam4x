@@ -1,5 +1,5 @@
 import pytest
-from uam4x.components import Wing, Rotor, Aircraft,  Parameter, get_commponent_class
+from uam4x.components import Wing, Rotor, Aircraft
 from uam4x.vehicle import Vehicle
 from uam4x.study import Study, Variants
 import os
@@ -58,7 +58,7 @@ def setup_solution(study:Study):
         The study to add the solution to
     """
     register_plugin(TestPlug)
-    
+
     # Define and add test plugin
     study.solution.add_step(TestPlug,"test_plug",{})
 
@@ -87,7 +87,7 @@ class TestPlug(Plugin):
         results = {}
         results['testout_cont'] = 0.06
         results['testout_discrete'] = 6
-        return results 
+        return results
 
 def test_get_param_type(study:Study):
     """
@@ -98,8 +98,8 @@ def test_get_param_type(study:Study):
     study : Study
         The study to the sample problem to
     """
-    
-   
+
+
     # setup problem
     THIS_DIR = os.path.dirname(os.path.abspath(__file__))
     VARIANTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "variants")
@@ -107,7 +107,7 @@ def test_get_param_type(study:Study):
     framework = Variants(THIS_DIR)
     framework.add_variant('test_variants', turbo_electric_variant)
     studies = framework.generate_variants()
-    variant_path = os.path.join(VARIANTS_DIR, "test_variants", "data.json")    
+    variant_path = os.path.join(VARIANTS_DIR, "test_variants", "data.json")
     study = Study.from_json(variant_path)
     eng = Engine(study, os.path.join(VARIANTS_DIR, "test_variants", "work"))
     plugins = {}

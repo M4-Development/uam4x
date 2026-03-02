@@ -1,5 +1,5 @@
 import pytest
-from uam4x.components import Component, Wing, Rotor, RotorBladeRegion, Aircraft, _Mode
+from uam4x.components import Subsystem, Wing, Rotor, RotorBladeRegion, Aircraft, _Mode
 import numpy as np
 from uam4x.vehicle import Vehicle, VehicleManager
 import  re
@@ -39,10 +39,10 @@ def demo_vehicle_manager():
     return VehicleManager()
 #-----------------------------------------------------------Test VehicleManager Class
 def test_adding_vehicle_to_vehicle_manager_attr_access(demo_vehicle_manager, demo_vehicle, demo_wing):
-    
+
     demo_vehicle.add_component(demo_wing)
     demo_vehicle_manager.add_vehicle(demo_vehicle)
-    
+
     assert demo_vehicle_manager.vehicle_demo is  demo_vehicle
     assert demo_vehicle_manager.get_vehicle('vehicle_demo') is  demo_vehicle
 
@@ -63,39 +63,39 @@ def test_vehicle_manager_repr_with_vehicles(demo_vehicle_manager, demo_vehicle):
     assert repr(vm) == expected_repr
 
 def test_vehicle_iteration(demo_vehicle_manager):
-    
+
     arr = np.arange(1, 20)
     veh_names = []
     for num in arr:
         demo_vehicle_manager.add_vehicle(Vehicle(f'test_veh_{num}'))
         veh_names.append(f'test_veh_{num}')
-    
+
     assert len(veh_names) == len(demo_vehicle_manager)
     for vehicle in  demo_vehicle_manager:
         assert vehicle.name in  veh_names
-    
+
 def test_nonexistent_vehicle_access(demo_vehicle_manager, demo_vehicle, demo_wing):
     demo_vehicle.add_component(demo_wing)
     demo_vehicle_manager.add_vehicle(demo_vehicle)
-    
+
     with pytest.raises(ValueError):
         demo_vehicle_manager.get_vehicle('non_existent_vehicle')
-        
+
     with pytest.raises(AttributeError):
         demo_vehicle_manager.non_existent_vehicle
-        
+
 def test_adding_same_vehicle(demo_vehicle_manager):
 
     test_veh1 = Vehicle('TestVehicle')
     test_veh2 = Vehicle('TestVehicle')
     assert test_veh1 is  not test_veh2
-    
+
     demo_vehicle_manager.add_vehicle(test_veh1)
     with pytest.raises(ValueError):
         demo_vehicle_manager.add_vehicle(test_veh2)
-        
 
-        
+
+
 #-------------------------------------------------Test Vehicle Class
 
 # Expected behavior checks
@@ -103,11 +103,11 @@ def test_adding_same_vehicle(demo_vehicle_manager):
 def test_adding_vehicle_components_good(demo_rotor, demo_wing, demo_aircraft):
     veh = Vehicle('SampleVehicle', [demo_wing, demo_aircraft])
     veh.add_component(demo_rotor)
-    
+
     assert veh.wing_demo is demo_wing
     assert veh.aircraft_demo is  demo_aircraft
     assert veh.rotor_demo is demo_rotor
-    
+
 
 
 #Check querying of attributes via name
@@ -270,7 +270,7 @@ def test_vehicle_component_attribute_values(
 
     # default
     assert demo_vehicle.aircraft_demo.wpass == demo_aircraft.wpass == 200.0
-    
+
 
 def test_vehicle_component_attribute_identity(
     demo_vehicle, demo_wing, demo_rotor, demo_rotor_blade_region, demo_aircraft
@@ -420,7 +420,7 @@ def test_vehicle_component_attribute_identity(
     # default
     assert demo_vehicle.aircraft_demo.wpass is demo_aircraft.wpass
 
-    
+
 #Check adding component then querying
 def test_vehicle_component_access(demo_vehicle,demo_wing):
 
@@ -430,9 +430,9 @@ def test_vehicle_component_access(demo_vehicle,demo_wing):
     assert demo_vehicle.get_component('wing_demo').span is demo_wing.span
     assert demo_vehicle.get_component('wing_demo') is demo_vehicle.wing_demo
 
-# Ensure test_get_component_names is correct
+# Ensure test_get_subsystem_names is correct
 def test_get_component_names(demo_vehicle,demo_wing,demo_aircraft):
-    
+
 
     demo_vehicle.add_component(demo_wing)
     demo_vehicle.add_component(demo_aircraft)
@@ -461,7 +461,7 @@ def test_components_property(demo_vehicle,demo_wing,demo_aircraft):
 #check expected positive behavior of check_all_parameter_types
 def test_check_all_parameter_types_positive(demo_vehicle,demo_wing):
     demo_vehicle.add_component(demo_wing)
-    
+
     demo_vehicle.check_all_parameter_types()
 
 
@@ -484,7 +484,7 @@ def test_vehicle_to_dict(demo_vehicle, demo_wing):
     # ---- Component-level checks ----
     component_dict = demo_dict["components"][0]
     assert component_dict["name"] == demo_wing.name
-    assert component_dict["component_type"] == "Wing"
+    assert component_dict["subsystem_type"] == "Wing"
     assert isinstance(component_dict["parameters"], dict)
 
     wing_param_dict = component_dict["parameters"]
@@ -600,38 +600,38 @@ def test_vehicle_from_dict_roundtrip(demo_wing, demo_aircraft):
 
 #----------------------------------------------------------Negative checks
 def test_component_access_wrong_name(demo_vehicle, demo_wing):
-    
+
     demo_vehicle.add_component(demo_wing)
     name = 'random_name'
     msg = f'Component with name {name} not found in vehicle {demo_vehicle._name}'
-    
+
     with  pytest.raises(ValueError, match=re.escape(msg)):
         demo_vehicle.get_component(name)
-        
-        
-    
+
+
+
 
 def test_component_duplicate_names():
-    
+
     test_wing1 = Wing('duplicate_name')
     test_wing2 = Wing('duplicate_name')
-    
+
     assert test_wing1 is  not test_wing2
     with  pytest.raises(NameError):
         sample_veh = Vehicle('SampleVehicle',[test_wing1, test_wing2])
-        
+
     sample_veh = Vehicle('SampleVehicle',[test_wing1])
     with  pytest.raises(NameError):
         sample_veh.add_component(test_wing2)
-    
+
     sample_veh = Vehicle('SampleVehicle')
     sample_veh.add_component(test_wing1)
     with  pytest.raises(NameError):
         sample_veh.add_component(test_wing2)
-        
-    
-    
-    
+
+
+
+
 
 @pytest.mark.parametrize("var_name", [
     (67),
@@ -639,14 +639,14 @@ def test_component_duplicate_names():
     ('has[init')
 ])
 def test_vehicle_invalid_name(var_name):
-    
+
     with  pytest.raises(ValueError):
         bad_name_veh = Vehicle(var_name)
-        
-    
-#Test non existent attribute access    
+
+
+#Test non existent attribute access
 def test_bad_component_accesss(demo_vehicle, demo_rotor):
-    
+
     with pytest.raises(AttributeError):
         demo_vehicle.non_existent_attribute
 
@@ -654,6 +654,5 @@ def test_bad_component_accesss(demo_vehicle, demo_rotor):
 
 
 if __name__ == '__main__':
-    
+
     test_component_duplicate_names()
-       

@@ -2,7 +2,7 @@ import numpy as np
 from uam4x.execution_engine import  Engine
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
-from uam4x.components import  Component, Wing, register_component
+from uam4x.components import  Subsystem, Wing, register_subsystem
 from uam4x.solution import Plugin, register_plugin, Solution
 import pytest
 from uam4x.control import Optimization, ParameterSweep
@@ -10,7 +10,7 @@ import numpy as np
 import os
 #@pytest.fixture
 #def sample_study():
-    
+
     #class Aero(Component):
         #def setup(self):
             ##Flow params:
@@ -19,31 +19,31 @@ import os
             ##Mass params:
             #self.add_parameter('Mass', 1000., dtype=float)
             #self.add_parameter('Iyy', 3000., dtype=float)
-            
+
             ##Derivatives
             #self.add_parameter('ClA', default_value=2*np.pi, dtype=float)
             #self.add_parameter('CMa', default_value=-3.5., dtype=float)
             #self.add_parameter('vert_control_derivs', np.array([5., 6.]), float)
             #self.add_parameter('pitch_control_derivs', np.array([1., 2.]), float)
-            
+
             ##Fixed aero states (note rates are assumed zero already and 2D problem)
             #self.add_parameter('AOA', 0.0, dtype=float)
             #self.add_parameter('URDD3', default_value=386.09, dtype=float)
 
-            
-            ##Free aero states: angle of flaps and elevators 
-            #self.add_parameter('control_states', default_value=np.zeros(), float)            
 
-    
+            ##Free aero states: angle of flaps and elevators
+            #self.add_parameter('control_states', default_value=np.zeros(), float)
+
+
     #W = Wing('sample_wing')
     #W.set_parameter('chord', 70.)
     #W.set_parameter('span', 400.)
     #W.set_parameter('area', 2800.)
-    
-    
+
+
     #class VerticalTrim(Plugin):
         #def setup_plugin(self):
-            ##flight point: 
+            ##flight point:
             #self.declare_input('Mach', float)
             #self.declare_input('Q', float)
             #self.declare_input('AOA', float)
@@ -51,26 +51,26 @@ import os
             #self.declare_input('Mass', float)
             #self.declare_input('CLA', float)
             #self.declare_input('DPitch', float)
-            
+
             #self.declare_input('chord', float)
             #self.declare_input('span', float)
             #self.declare_input('area', float)
             #self.declare_input('vert_control_derivs', np.ndarray, shape=(2, ))
-            
+
             #self.declare_output('objective', float)
-            
+
         #def run_plugin(self, links, workdir):
-            
+
             ##solve simple vertical trim equation: qS*(CSPITCH*dpitch+ANGLEA*AOA)-mg=0 so steady level flight at a presribed angle of attack
-            ##what elevator needed to balance. 
+            ##what elevator needed to balance.
             #obj = links['Q'] * links['area'] * (links['CSPITCH'] * links['Dpitch'])
             #obj += links['Q'] * links['area'] *(links['CLA'] * links['AOA']) - links['Mass'] * links['URDD3']
-            
+
             #return {'objective': obj}
-            
+
     #class PitchTrim(Plugin):
         #def setup_plugin(self):
-            
+
 @pytest.fixture
 def sample_engine_setup():
     """
@@ -99,7 +99,7 @@ def sample_engine_setup():
     # -------------------------
     # 1) Vehicle + components
     # -------------------------
-    class CustomComponent(Component):
+    class CustomComponent(Subsystem):
         def setup(self):
             # 5 scalar parameters
             self.add_parameter("p1", default_value=1.0, dtype=float)
@@ -322,14 +322,14 @@ def sample_engine_setup():
 #------Positive checks
 def test_check_link_types_good(sample_engine_setup):
     study, engine, plugins, state = sample_engine_setup
-    
+
     engine.check_link_types(plugins)
-    
+
 def test_check_links_to_plugins_good(sample_engine_setup):
     study, engine, plugins, state = sample_engine_setup
-    
+
     engine.check_links_to_plugins(plugins)
-    
+
 
 
 def test_check_link_types_indexed_array_to_scalar_ok(sample_engine_setup):
@@ -378,9 +378,9 @@ def test_check_link_types_indexed_array_to_scalar_ok(sample_engine_setup):
 
     # This should not raise
     engine.check_link_types(plugins)
-    
-    
-    
+
+
+
 def test_check_link_indices_ok(sample_engine_setup):
     """
     Existing sample_engine_setup has:
@@ -392,8 +392,8 @@ def test_check_link_indices_ok(sample_engine_setup):
 
     # Should not raise
     engine.check_link_indices(plugins)
- 
- 
+
+
 def test_check_link_indices_plugin_src_value_array_ok(sample_engine_setup):
     """
     Force plugin1.array_out to have a concrete value so that the
@@ -410,8 +410,8 @@ def test_check_link_indices_plugin_src_value_array_ok(sample_engine_setup):
     #   plugin1.array_out[0,:] -> plugin2.array_from_p1_slice
     # and should not raise
     engine.check_link_indices(plugins)
-    
-    
+
+
 def test_check_link_indices_plugin_src_declared_shape_ok(sample_engine_setup):
     """
     Force plugin1.array_out to have value=None but shape=(2,2) so that the
@@ -424,9 +424,9 @@ def test_check_link_indices_plugin_src_declared_shape_ok(sample_engine_setup):
 
     # Again uses plugin1.array_out[0,:] -> plugin2.array_from_p1_slice
     engine.check_link_indices(plugins)
-    
-    
-    
+
+
+
 def test_check_link_indices_scalar_index_to_float_ok(sample_engine_setup):
     """
     Index a single scalar from a plugin array output and send it to a float input.
@@ -451,9 +451,9 @@ def test_check_link_indices_scalar_index_to_float_ok(sample_engine_setup):
     # Should not raise
     engine.check_link_indices(plugins)
 
-    
-    
-    
+
+
+
 
 def test_check_desvars_scalar_ok(sample_engine_setup):
     """
@@ -476,8 +476,8 @@ def test_check_desvars_scalar_ok(sample_engine_setup):
     }
 
     # Should not raise
-    engine.check_desvars(plugins, state)    
-    
+    engine.check_desvars(plugins, state)
+
 def test_check_desvars_array_ok(sample_engine_setup):
     """
     Design var on an ndarray vehicle parameter with matching ndarray bounds.
@@ -502,7 +502,7 @@ def test_check_desvars_array_ok(sample_engine_setup):
     }
 
     engine.check_desvars(plugins, state)
-    
+
 def test_check_constraints_scalar_ok(sample_engine_setup):
     """
     Simple scalar float constraint on a vehicle parameter should pass.
@@ -521,7 +521,7 @@ def test_check_constraints_scalar_ok(sample_engine_setup):
 
     # Should not raise
     engine.check_constraints(plugins, state)
-    
+
 def test_check_constraints_non_continuous_type_raises(sample_engine_setup):
     """
     Constraint backed by a non-continuous type (e.g. int) should raise TypeError.
@@ -574,7 +574,7 @@ def test_check_upper_lower_array_scalar_bounds_return(sample_engine_setup):
         plugins,
         study,
     )
-    
+
 def test_check_objective_continuous_ok(sample_engine_setup):
     """
     Objective is a standard float output: plugin3.objective.
@@ -589,8 +589,8 @@ def test_check_objective_continuous_ok(sample_engine_setup):
 
     # Should NOT raise
     engine.check_objective(plugins, state)
-    
-    
+
+
 def test_check_optimization_discrete_all_continuous_passes(sample_engine_setup):
     """
     All plugin-to-plugin links use continuous outputs (float or float arrays),
@@ -604,10 +604,10 @@ def test_check_optimization_discrete_all_continuous_passes(sample_engine_setup):
 
     # Should not raise
     engine.check_optimization_discrete(plugins, state)
-    
-    
-    
-    
+
+
+
+
 def test_check_model_full_optimization_path_passes(sample_engine_setup):
     """
     End-to-end positive test for Engine.check_model.
@@ -653,8 +653,8 @@ def test_check_model_full_optimization_path_passes(sample_engine_setup):
     # - check_objective
     # - check_optimization_discrete
     engine.check_model(plugins, state)
-    
-    
+
+
 def test_sort_steps_orders_by_links(sample_engine_setup):
     """
     sort_steps should reorder steps into a topological order determined
@@ -691,7 +691,7 @@ def test_sort_steps_orders_by_links(sample_engine_setup):
     # Assert on the internal sorted representation
     sorted_order_internal = list(study.solution._steps.keys())
     assert sorted_order_internal == ["plugin1", "plugin2", "plugin3"]
-#----------------------Negative checks    
+#----------------------Negative checks
 def test_check_links_to_plugins_bad_input(sample_engine_setup):
     """
     Add a link whose destination (plugin input) is NOT declared in the plugin,
@@ -707,7 +707,7 @@ def test_check_links_to_plugins_bad_input(sample_engine_setup):
 
     with pytest.raises(ValueError):
         engine.check_links_to_plugins(plugins)
-        
+
 def test_check_links_to_plugins_bad_output(sample_engine_setup):
     """
     Ensure Engine.check_links_to_plugins raises ValueError when a link
@@ -721,7 +721,7 @@ def test_check_links_to_plugins_bad_output(sample_engine_setup):
 
     with pytest.raises(ValueError):
         engine.check_links_to_plugins(plugins)
-    
+
 def test_check_link_types_invalid_indexing_on_scalar_output(sample_engine_setup):
     """
     Negative test 1:
@@ -739,7 +739,7 @@ def test_check_link_types_invalid_indexing_on_scalar_output(sample_engine_setup)
 
     with pytest.raises(ValueError, match="Indexes may only be specified for arrays"):
         engine.check_link_types(plugins)
-        
+
 def test_check_link_types_mismatched_types_vehicle_array_to_scalar_input(sample_engine_setup):
     """
     Negative test 2:
@@ -762,8 +762,8 @@ def test_check_link_types_mismatched_types_vehicle_array_to_scalar_input(sample_
         engine.check_link_types(plugins)
 
     assert "Link types must match" in str(excinfo.value)
-    
-    
+
+
 def test_check_link_indices_invalid_parameter_indices(sample_engine_setup):
     """
     Invalid parameter indexing:
@@ -805,8 +805,8 @@ def test_check_link_indices_dest_value_mismatch(sample_engine_setup):
 
     with pytest.raises(ValueError, match=r"The source indices must match the target shape\. The input plugin1\.array_out\[0,:]"):
         engine.check_link_indices(plugins)
-        
-        
+
+
 def test_check_link_indices_dest_declared_shape_mismatch(sample_engine_setup):
     """
     Force plugin2.array_from_p1_slice to have value=None but a declared shape
@@ -825,7 +825,7 @@ def test_check_link_indices_dest_declared_shape_mismatch(sample_engine_setup):
 
     with pytest.raises(ValueError, match=r"The source indices must match the target shape\. The input plugin1\.array_out\[0,:]"):
         engine.check_link_indices(plugins)
-        
+
 def test_check_link_indices_plugin_src_value_invalid_index(sample_engine_setup):
     """
     Plugin-out case: a is not None, but indices are invalid for its shape,
@@ -849,8 +849,8 @@ def test_check_link_indices_plugin_src_value_invalid_index(sample_engine_setup):
 
     with pytest.raises(ValueError):
         engine.check_link_indices(plugins)
-        
-        
+
+
 def test_check_link_indices_plugin_src_shape_invalid_index(sample_engine_setup):
     """
     Plugin-out case: a is None but a_shape is not None, and the indices are
@@ -875,7 +875,7 @@ def test_check_link_indices_plugin_src_shape_invalid_index(sample_engine_setup):
 
     with pytest.raises(ValueError):
         engine.check_link_indices(plugins)
-        
+
 def test_check_desvars_non_continuous_type_raises(sample_engine_setup):
     """
     Design var whose underlying type is non-continuous (e.g. int).
@@ -905,7 +905,7 @@ def test_check_desvars_non_continuous_type_raises(sample_engine_setup):
 
     with pytest.raises(TypeError, match=r"Only floats allowed as design variables"):
         engine.check_desvars(plugins, state)
-        
+
 def test_check_constraints_array_bound_shape_mismatch_raises(sample_engine_setup):
     """
     When a constraint is on an ndarray variable, lower/upper array bounds must
@@ -933,8 +933,8 @@ def test_check_constraints_array_bound_shape_mismatch_raises(sample_engine_setup
     # This should hit the "Constraint shapes must match" branch in check_upper_lower
     with pytest.raises(ValueError, match=r"Constraint shapes must match"):
         engine.check_constraints(plugins, state)
-        
-        
+
+
 def test_check_upper_lower_array_lower_vs_value_shape_mismatch_raises(sample_engine_setup):
     """
     If the variable has an ndarray value and the lower bound is an ndarray with
@@ -964,7 +964,7 @@ def test_check_upper_lower_array_lower_vs_value_shape_mismatch_raises(sample_eng
             plugins,
             study,
         )
-        
+
 def test_check_upper_lower_array_upper_vs_declared_shape_mismatch_raises(sample_engine_setup):
     """
     If the variable has no value but a declared shape, and the upper bound's shape
@@ -1023,7 +1023,7 @@ def test_check_upper_lower_array_upper_vs_value_shape_mismatch_raises(sample_eng
             plugins,
             study,
         )
-        
+
 
 def test_check_upper_lower_scalar_var_with_array_bounds_raises(sample_engine_setup):
     """
@@ -1050,7 +1050,7 @@ def test_check_upper_lower_scalar_var_with_array_bounds_raises(sample_engine_set
             plugins,
             study,
         )
-        
+
 def test_check_upper_lower_array_lower_vs_declared_shape_mismatch_raises(sample_engine_setup):
     """
     If the variable has no value but a declared shape, and the LOWER bound's shape
@@ -1082,7 +1082,7 @@ def test_check_upper_lower_array_lower_vs_declared_shape_mismatch_raises(sample_
             plugins,
             study,
         )
-        
+
 def test_check_objective_non_continuous_raises(sample_engine_setup):
     study, engine, plugins, _ = sample_engine_setup
 
@@ -1131,7 +1131,7 @@ def test_check_optimization_discrete_discrete_indexed_link_raises(sample_engine_
     #   plugin1.array_out[0,:] -> plugin2.array_from_p1_slice
     with pytest.raises(TypeError, match=r"Links between optimization components must be continuous"):
         engine.check_optimization_discrete(plugins, state)
-        
+
 def test_sort_steps_circular_dependency_raises(sample_engine_setup):
     """
     sort_steps should raise RuntimeError if there is a circular dependency

@@ -12,7 +12,7 @@ from uam4x.solution import Solution
 from uam4x.control import Control
 from uam4x.vehicle import Vehicle, VehicleManager
 from uam4x.control import ParameterSweep
-from uam4x.components import Component, _Mode, Parameter, Wing, Rotor, RotorBladeRegion, Aircraft
+from uam4x.components import Subsystem, _Mode, Parameter, Wing, Rotor, RotorBladeRegion, Aircraft
 
 
 
@@ -59,11 +59,11 @@ SAMPLE_PARAM_STATE = {
 def sample_param_state():
     return copy.deepcopy(SAMPLE_PARAM_STATE)
 
-    
+
 #--------------------------------------------------------Study
 @pytest.fixture
 def sample_study():
-    class ExtraComponent(Component):
+    class ExtraComponent(Subsystem):
         def setup(self):
             self.add_parameter(
                 name='sample_array',
@@ -116,19 +116,19 @@ def sample_study():
     S = Study()
     S.vehicles.append(Vehicle1)
     S.add_vehicle(Vehicle2)
-    
+
     return S
 
 def test_Study_instance():
-    
+
     s = Study()
-    
+
     assert isinstance(s.vehicles, VehicleManager)
     assert isinstance(s.solution, Solution)
     assert isinstance(s.control, Control)
-    
-    
-    
+
+
+
 def test_Study_get_environment():
     s = Study()
     s._capture_environment('sample_trade')
@@ -163,42 +163,42 @@ def test_Study_get_environment():
         assert isinstance(name, str)
         assert isinstance(version, str)
 
-        
+
 def test_Study_add_trade():
     sample_param_dict = {'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],
                     'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}
-    
+
     PS = ParameterSweep(sample_param_dict)
-    
+
     S = Study()
-    
+
     S.add_trade('sample_trade', PS)
-    
+
     assert S.control.trade_studies['sample_trade'] is PS
-    
+
 
 def test_Study_add_vehicle():
     v1 = Vehicle('sample_vehicle1')
     v2 = Vehicle('sample_vehicle2')
-    
+
     S = Study()
     S.add_vehicle(v1)
     S.add_vehicle(v2)
-    
+
     assert S.vehicles.sample_vehicle1 is v1
     assert S.vehicles.get_vehicle('sample_vehicle2') is v2
-    
+
 def test_Study_get_vehicle():
     v1 = Vehicle('sample_vehicle1')
     v2 = Vehicle('sample_vehicle2')
-    
+
     S = Study()
     S.add_vehicle(v1)
     S.add_vehicle(v2)
-    
+
     assert S.get_vehicle('sample_vehicle1') is v1
     assert S.get_vehicle('sample_vehicle2') is v2
-    
+
 #Test to dict
 
 #Test from dict
@@ -206,9 +206,9 @@ def test_Study_get_vehicle():
 #Test save to json
 
 #Test load from json
-    
+
 def test_Study_get_plugin_input_and_output_names_positive():
-    S = Study()	
+    S = Study()
 
     # --- Add seven links in UAM4x style: add_link(source, target) ---
 
@@ -260,12 +260,12 @@ def test_Study_get_plugin_input_and_output_names_positive():
 
     assert inputs == expected_inputs
     assert outputs == expected_outputs
-    
+
 def test_Study_get_value(sample_study):
-    
-    
+
+
     S = sample_study
-    
+
     # ---------- Wing parameters ----------
     assert S.get_value('vehicles.commercial_uam.swept_wing.area') == 12.5
     assert S.get_value('vehicles.commercial_uam.swept_wing.span') == 10.0
@@ -301,7 +301,7 @@ def test_Study_get_value(sample_study):
     elem = S.get_value(
         'vehicles.commercial_uam.array_based_component.sample_array[3]'
     )
-    assert elem == expected_arr[3]    
+    assert elem == expected_arr[3]
 
 def test_Study_get_all_names_by_category(sample_study):
     # sample_study fixture returns ONLY the Study instance
@@ -460,8 +460,8 @@ def test_Study_get_all_names(sample_study):
         from uam4x.study import Study
         from uam4x.vehicle import Vehicle
         from uam4x.components import Wing
-        
-        
+
+
 def test_Study_from_dict_roundtrip():
     # --- Build original study ---
     study = Study()

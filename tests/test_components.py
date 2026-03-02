@@ -1,20 +1,20 @@
 import pytest
 from uam4x.components import Wing, Rotor, RotorBladeRegion, Aircraft
-from uam4x.components import Parameter, get_commponent_class, Component, _Mode, _component_registry, register_component
+from uam4x.components import Parameter, get_subsystem_class, Subsystem, _Mode, _subsystem_registry, register_subsystem
 from uam4x import  check_and_get_config
 import os
 import numpy as np
-from uam4x.units import ( 
+from uam4x.units import (
 
-    UnitType, LengthUnit, AngleUnit, MassUnit, TimeUnit, ForceUnit, TemperatureUnit, PressureUnit, EnergyUnit, PowerUnit, VolumeUnit, AreaUnit, SpeedUnit, AccelerationUnit 
+    UnitType, LengthUnit, AngleUnit, MassUnit, TimeUnit, ForceUnit, TemperatureUnit, PressureUnit, EnergyUnit, PowerUnit, VolumeUnit, AreaUnit, SpeedUnit, AccelerationUnit
 
-) 
- 
+)
+
 from operator import attrgetter
-#----------------------------------Parameter Class Checks   
+#----------------------------------Parameter Class Checks
 #Positive checks
 def test_Parameter_class():
-    
+
     test_parameter = Parameter(name='test_param', default_value=1.0, dtype=float, unit_type=LengthUnit,unit='in', description='this is a test parameter')
     assert test_parameter.name == 'test_param'
     assert test_parameter.value == 1.0
@@ -26,12 +26,12 @@ def test_Parameter_class():
     test_parameter.value=5.0
     assert test_parameter.value == 5.0
     assert test_parameter._value == test_parameter.value == 5.0
-     
+
 #def test_Parameter_check_type():
     #test_parameter = Parameter(name='test_param', default_value=1.0, dtype=float, unit_type=LengthUnit,unit='in', description='this is a test parameter')
     #assert test_parameter.check_type() == True
-    
-    
+
+
 @pytest.mark.parametrize(
     "value, dtype, unit_type, unit, desc, expected_unit_type, expected_unit, expected_desc",
     [
@@ -142,7 +142,7 @@ def test_Parameter_from_dict_roundtrip(value, dtype, unit_type, unit, desc):
 
     # Value check (scalar types)
     assert restored.value == orig.value
-    
+
 def test_Parameter_from_dict_ndarray():
     # Manually build a dict as it would appear in JSON
     data = {
@@ -167,18 +167,18 @@ def test_Parameter_from_dict_ndarray():
     # Value must be a numpy array with the same contents
     assert isinstance(param.value, np.ndarray)
     assert np.array_equal(param.value, np.array([1.0, 2.0, 3.0]))
-#negative checks    
+#negative checks
 def test_value_type_incoherance_in_constructor():
-    
+
     with pytest.raises(check=TypeError):
         Parameter(name='lol', default_value='idk', dtype=float)
 
 def test_value_type_incoherance_setter():
     test_parameter = Parameter(name='test_param', default_value=1.0, dtype=float, unit_type=LengthUnit,unit='in', description='this is a test parameter')
-    
+
     with  pytest.raises(TypeError):
         test_parameter.value = '67'
-        
+
 
 # TODO parameter to/from dict
 # Unclear if check_type method required for parameter based on allowed access...
@@ -188,7 +188,7 @@ def test_Mode_instantiation():
     #Mode should really be instantiated through a component
     W = Wing('test_wing')
     W.add_mode('vertical_mode')
-    
+
     assert W.vertical_mode.name == 'vertical_mode'
     assert W.vertical_mode._overrides == {}
     assert W.vertical_mode.component is  W
@@ -199,14 +199,14 @@ def test_Mode_set_parameter_good():
     W = Wing('test_wing')
     W.set_parameter('chord', 11.0)
     W.set_parameter('span', 15.0)
-        
+
     W.add_mode('vertical_mode')
     assert W.vertical_mode.chord == 11.0
     assert W.vertical_mode.span == 15.0
-    
+
     W.vertical_mode.span = 14.0
     W.vertical_mode.set_parameter('chord', 15.0)
-    
+
     assert W.vertical_mode.chord == 15.0
     assert W.vertical_mode.span == 14.0
 
@@ -214,14 +214,14 @@ def test_Mode_get_parameter():
     W = Wing('test_wing')
     W.set_parameter('chord', 11.0)
     W.set_parameter('span', 15.0)
-        
-        
+
+
     W.add_mode('vertical_mode')
     assert W.vertical_mode.chord == 11.0
     assert W.vertical_mode.span == 15.0
-    
+
     W.vertical_mode.span = 14.0
-    
+
     assert W.vertical_mode.chord is W.vertical_mode.get_parameter('chord')
     assert W.vertical_mode.span is W.vertical_mode.get_parameter('span')
 
@@ -230,7 +230,7 @@ def test_Mode_parameters_property():
     R = Rotor('test_rotor')
     R.set_parameter('vtip', 670.)
     R.set_parameter('nblade', 8)
-    
+
     assert R.vtip == 670.
     assert R.nblade == 8
     assert R.tilt == 1.0
@@ -238,22 +238,22 @@ def test_Mode_parameters_property():
     assert R.rpm == 1000.0
     assert R.blade_chord == 0.1
     assert R.collective_pitch == 0.0
-    
+
     R.add_mode('vertical_rotor')
     R.vertical_rotor.set_parameter('tilt', 90.0)
     R.vertical_rotor.set_parameter('vtip', 80.0)
-    
+
     vt_mode_params = R.vertical_rotor.parameters
-    
+
     rotor_param_names = ['vtip', 'tilt', 'radius', 'nblade', 'rpm', 'blade_chord', 'collective_pitch']
     for param_name in  rotor_param_names:
         assert param_name in  vt_mode_params.keys()
-        
+
     assert vt_mode_params['vtip'].value == 80.0
     assert vt_mode_params['tilt'].value == 90.0
     assert vt_mode_params['radius'].value == 1.0
     assert vt_mode_params['rpm'].value == 1000.0
-    
+
 def test_Mode_str():
     A = Wing('Main')
     A.add_mode('vertical')
@@ -267,56 +267,56 @@ def test_Mode_str():
 
     # Exact string match with both overrides in order
     assert str(A.vertical) == "Mode('vertical') overrides: chord: 32.0, aspect_ratio: 13.0"
-    
+
 #----------Negative mode checks
 def test_Mode_set_parameter_bad_name():
     W = Wing('test_wing')
     W.set_parameter('chord', 11.0)
     W.set_parameter('span', 15.0)
-        
+
     W.add_mode('vertical_mode')
     with pytest.raises(AttributeError):
         W.vertical_mode.set_parameter('random_param', 1.0)
-    
+
     with  pytest.raises(AttributeError):
         W.vertical_mode.random_param = 1.0
-        
-        
+
+
 def test_Mode_set_parameter_bad_value():
     W = Wing('test_wing')
     W.set_parameter('chord', 11.0)
     W.set_parameter('span', 15.0)
-        
+
     W.add_mode('vertical_mode')
     with pytest.raises(TypeError):
         W.vertical_mode.set_parameter('span', 1)
-        
+
     with  pytest.raises(TypeError):
         W.vertical_mode.chord = 'five'
 
 def test_Mode_get_parameter_bad():
-        
+
     W = Wing('test_wing')
     W.set_parameter('chord', 11.0)
     W.set_parameter('span', 15.0)
-        
+
     W.add_mode('vertical_mode')
-    
+
     with pytest.raises(AttributeError):
         W.vertical_mode.get_parameter('random_var')
-        
+
     with  pytest.raises(AttributeError):
         W.vertical_mode.random_var
 
 @pytest.mark.parametrize('name,value,error', [
     ('vtip', 90, TypeError),
     ('random_var', 67., AttributeError)
-])        
+])
 def test_Mode_parameters_property_bad(name, value, error):
     R = Rotor('test_rotor')
     R.set_parameter('vtip', 670.)
     R.set_parameter('nblade', 8)
-    
+
     assert R.vtip == 670.
     assert R.nblade == 8
     assert R.tilt == 1.0
@@ -324,7 +324,7 @@ def test_Mode_parameters_property_bad(name, value, error):
     assert R.rpm == 1000.0
     assert R.blade_chord == 0.1
     assert R.collective_pitch == 0.0
-    
+
     R.add_mode('vertical_rotor')
     #User really shouldn't mess with encapsulation, but we cover this
     R.vertical_rotor._overrides[name] = value
@@ -333,45 +333,45 @@ def test_Mode_parameters_property_bad(name, value, error):
 
 #-----------------------------------Component checks
 def test_Component_instantiation():
-    
-    C = Component('sample_component')
+
+    C = Subsystem('sample_component')
     assert  C._parameters == {}
     assert C._modes == {}
     assert C._is_setup == False
     assert C._parent is  None
 
 def test_Component_add_param():
-    
-    class CustomComponent(Component):
+
+    class CustomComponent(Subsystem):
         def setup(self):
             self.add_parameter('king',3.0, float)
             self.add_parameter('ace', 4.0, float)
-            
+
     C = CustomComponent('bridge')
     assert C.king == 3.0
-    
+
     C.ace = 5.0
-    
+
     assert C.ace == 5.0
-    
+
 def test_Component_set_parameter():
-    
+
     W = Wing('sample_wing')
-    
-    assert W._parameters['chord'].unit == ''
+
+    assert W._parameters['chord'].unit == ""
     assert W._parameters['chord'].unit_type is UnitType.LENGTH
-    
+
     W.set_parameter('chord', 4.0, LengthUnit.INCH)
-    
+
     assert W._parameters['chord'].unit is LengthUnit.INCH
     assert W._parameters['chord'].unit_type is UnitType.LENGTH
-    
-    
+
+
 def test_Component_add_mode():
     R = Rotor('sample_rotor')
-    
+
     R.add_mode('vertical')
-    
+
     R.vertical.vtip = 5.0
     R.vertical.set_parameter('rpm', 2000.0)
 
@@ -379,7 +379,7 @@ def test_Component_add_mode():
     assert R.vtip == 550.
     assert R.rpm == 1000.
     assert R.vertical.rpm == 2000.0
-    
+
 
 def test_RotorBladeRegion_get_parameter_defaults():
     RBR = RotorBladeRegion('sample_rotor_blade_region')
@@ -445,23 +445,23 @@ def test_RotorBladeRegion_get_parameter_after_set():
     assert RBR.get_parameter("airfoil_start") == "NACA2412"
     assert RBR.airfoil_start == "NACA2412"
     assert RBR._parameters["airfoil_start"].value == "NACA2412"
-    
-    
+
+
 def test_Component_get_parameter_type():
-    class CustomComponent(Component):
+    class CustomComponent(Subsystem):
         def setup(self):
             self.add_parameter('sample_array', np.arange(1, 10), np.ndarray)
-        
+
     RBR = RotorBladeRegion('sample_rotor_blade_region')
     assert RBR.get_parameter_type('spanwise_start') is float
     assert RBR.get_parameter_type('airfoil_start') is  str
-    
+
     R = Rotor('sample_rotor')
     assert R.get_parameter_type('nblade') is int
-    
+
     CC = CustomComponent('sample_custom')
     assert CC.get_parameter_type('sample_array') is np.ndarray
- 
+
 def test_check_all_parameter_types_good():
     W = Wing('sample_wing')
 
@@ -505,7 +505,7 @@ def test_Component_str_with_mode():
     for pname, param in rbr._parameters.items():
         expected_fragment = f"{pname}: {param.value}"
         assert expected_fragment in s, f"Missing '{expected_fragment}' in Component.__str__ output"
-        
+
 def test_Component_to_dict_with_mode():
     rbr = RotorBladeRegion("sample_rotor_blade_region")
 
@@ -522,7 +522,7 @@ def test_Component_to_dict_with_mode():
 
     # Top-level keys
     assert data["name"] == "sample_rotor_blade_region"
-    assert data["component_type"] == "RotorBladeRegion"
+    assert data["subsystem_type"] == "RotorBladeRegion"
     assert "parameters" in data
     assert "modes" in data
 
@@ -559,7 +559,7 @@ def test_Component_from_dict():
     # Hand-crafted dict mimicking JSON for a Wing with a mode + overrides
     data = {
         "name": "test_wing",
-        "component_type": "Wing",
+        "subsystem_type": "Wing",
         "parameters": {
             "span": {
                 "name": "span",
@@ -587,8 +587,8 @@ def test_Component_from_dict():
         },
     }
 
-    # Call the generic Component loader; it should resolve Wing via get_commponent_class
-    comp = Component._from_dict(data)
+    # Call the generic Subsystem loader; it should resolve Wing via get_subsystem_class
+    comp = Subsystem._from_dict(data)
 
     # We got a Wing with the right name
     assert isinstance(comp, Wing)
@@ -623,8 +623,8 @@ def test_Component_from_dict():
     # And get_parameter should see the override, not the base component value
     assert cruise.get_parameter("sweep") == 30.0
     # Base component still has 25.0
-    assert comp.sweep == 25.0    
-    
+    assert comp.sweep == 25.0
+
 def test_Wing_get_param_dict():
     W = Wing("test_wing")
 
@@ -649,20 +649,20 @@ def test_Wing_get_param_dict():
 #--------------Negative checks
 def test_Component_bad_name():
     with pytest.raises(ValueError):
-        C = Component('rand[om')
-        
+        C = Subsystem('rand[om')
+
 def test_Component_bad_add_parameter():
-    class CustomComponent(Component):
+    class CustomComponent(Subsystem):
         def setup(self):
             self.add_parameter('ki[ng',3.0, float)
             self.add_parameter('ace', 4.0, float)
 
     with pytest.raises(ValueError):
         C = CustomComponent('bridge')
-   
-   
+
+
 def test_Component_bad_add_parameter_outside_setup():
-    class CustomComponent(Component):
+    class CustomComponent(Subsystem):
         def setup(self):
             self.add_parameter('king',3.0, float)
             self.add_parameter('ace', 4.0, float)
@@ -670,24 +670,24 @@ def test_Component_bad_add_parameter_outside_setup():
     C = CustomComponent('sample_component')
     with pytest.raises(RuntimeError):
         C.add_parameter('jack', 1.0, float)
-    
+
 def test_Component_set_parameter_bad_unit():
-    
+
     W = Wing('sample_wing')
-    
+
     assert W._parameters['chord'].unit == ''
     assert W._parameters['chord'].unit_type is UnitType.LENGTH
-    
+
     with pytest.raises(ValueError):
-        
+
         W.set_parameter('chord', 4.0, 'hello')
-        
+
 def test_Component_set_parameter_bad_name():
     W = Wing('sample_wing')
 
     with  pytest.raises(AttributeError):
         W.set_parameter('random_var', 8.)
-    
+
 @pytest.mark.parametrize(
     "name,error",
     [
@@ -711,33 +711,33 @@ def test_Component_add_mode_bad_name(name, error):
 
     with pytest.raises(error):
         R.add_mode(name)
-    
-    
+
+
 def test_Component_get_parameter_missing_name():
-    
+
     RBR = RotorBladeRegion('sample_rotor_blade_region')
-    
+
     with pytest.raises(AttributeError):
         RBR.get_parameter('random_param')
-        
-        
+
+
 def test_Component_get_parameter_type_missing_param():
-    class CustomComponent(Component):
+    class CustomComponent(Subsystem):
         def setup(self):
             self.add_parameter('sample_array', np.arange(1, 10), np.ndarray)
-        
+
     RBR = RotorBladeRegion('sample_rotor_blade_region')
     with pytest.raises(AttributeError):
         RBR.get_parameter_type('random_var')
-       
+
     CC = CustomComponent('sample_custom')
-    
+
     with pytest.raises(AttributeError):
         CC.get_parameter('non_existent_param')
-        
-        
-        
-        
+
+
+
+
 def test_check_all_parameter_types_bad_param_name():
     W = Wing('sample_wing')
     vertical_mode = W.add_mode('vertical_mode')
@@ -799,24 +799,24 @@ def test_register_component_good():
         os.remove(config_path)
 
     config = check_and_get_config(config_path)
-    assert config == {"PLUGINS": {},"COMPONENTS": {}}
+    assert config == {"PLUGINS": {},"SUBSYSTEMS": {}}
 
 
-    @register_component
-    class C(Component):
+    @register_subsystem
+    class C(Subsystem):
         pass
 
     config = check_and_get_config(config_path)
-    assert config == {"PLUGINS": {},"COMPONENTS": {C.__name__: file_path,}}
-    assert _component_registry[C.__name__] == C
+    assert config == {"PLUGINS": {},"SUBSYSTEMS": {C.__name__: file_path,}}
+    assert _subsystem_registry[C.__name__] == C
 
 
-def test_component_registry():
-    assert get_commponent_class("Wing") is Wing
-    assert get_commponent_class("Rotor") is Rotor
-    assert get_commponent_class("Aircraft") is Aircraft
+def test_subsystem_registry():
+    assert get_subsystem_class("Wing") is Wing
+    assert get_subsystem_class("Rotor") is Rotor
+    assert get_subsystem_class("Aircraft") is Aircraft
     with pytest.raises(ImportError):
-        get_commponent_class("NotAComponent")
+        get_subsystem_class("NotAComponent")
 if __name__ == "__main__":
     test_Component_set_parameter()
     pass

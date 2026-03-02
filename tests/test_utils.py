@@ -5,26 +5,26 @@ import os
 import json
 from uam4x.study import  Study
 from uam4x.solution import Plugin, register_plugin
-from uam4x.components import Component, Wing, register_component, Rotor, RotorBladeRegion, Aircraft
+from uam4x.components import Subsystem, Wing, register_subsystem, Rotor, RotorBladeRegion, Aircraft
 from uam4x.vehicle import Vehicle
 
 def test_check_and_get_config_good():
     file_path = os.path.abspath(__file__)
     test_dir = os.path.dirname(file_path)
     proj_dir = os.path.dirname(test_dir)
-    
-    
+
+
     config_path = os.path.join(proj_dir,'uam4x', 'conf.json')
-    
+
     if os.path.exists(config_path):
         os.remove(config_path)
-    
+
     config = check_and_get_config(config_path)
-    assert config == {"PLUGINS": {},"COMPONENTS": {}}
-    
-    
+    assert config == {"PLUGINS": {},"SUBSYSTEMS": {}}
+
+
     sample_dict = {
-    "COMPONENTS": {
+    "SUBSYSTEMS": {
         "Wing": "e:\\nasa_uam\\uam4x\\uam4x\\components.py",
         "Rotor": "e:\\nasa_uam\\uam4x\\uam4x\\components.py",
         "Aircraft": "e:\\nasa_uam\\uam4x\\uam4x\\components.py",
@@ -51,7 +51,7 @@ def test_check_and_get_config_good():
     }
     with  open(config_path, 'w') as  f:
         json.dump(sample_dict, f, indent=4)
-        
+
     config = check_and_get_config(config_path)
 
     assert config == sample_dict
@@ -59,37 +59,37 @@ def test_check_and_get_config_good():
 @pytest.mark.parametrize("inp,expected_result", [
     (np.ndarray, True),
     (None, False),
-    (bool, False), 
+    (bool, False),
     (list, False),
     (int, False),
     (float, True),
-    (tuple, False), 
+    (tuple, False),
     (1., True),
     (1, False),
-    ('bad', False), 
-    ([1., 1., 1.], False), 
+    ('bad', False),
+    ([1., 1., 1.], False),
     (np.full(5, 1), False),
-    (np.full(5, 1.), True), 
+    (np.full(5, 1.), True),
     (True, False),
     (False, False)
 ])
 def test_check_continuous(inp, expected_result):
-    
+
     assert check_continuous(inp) ==  expected_result
-    
-    
-    
+
+
+
 @pytest.mark.parametrize("inp,expected_result", [
-    
-    (np.ndarray, False), 
+
+    (np.ndarray, False),
     (float, True),
     (int, True),
     (bool, False),
     (tuple, False),
     (list, False),
-    (None, False), 
+    (None, False),
     (np.full(6, 7.), False),
-    (np.full(6, 7), False), 
+    (np.full(6, 7), False),
     (1., True),
     (1, True),
     (-1, True),
@@ -99,7 +99,7 @@ def test_check_continuous(inp, expected_result):
 ])
 def test_check_scalar(inp, expected_result):
     assert check_if_scalar(inp) == expected_result
-    
+
 @pytest.mark.parametrize("name,expected_type", [
     ('int', int),
     ('float', float),
@@ -110,7 +110,7 @@ def test_check_scalar(inp, expected_result):
 def test_type_string_to_type_good(name, expected_type):
     assert type_string_to_type(name) == expected_type
 
-    
+
 # Test convert numpy to python
 
 
@@ -118,21 +118,21 @@ def test_type_string_to_type_good(name, expected_type):
 @pytest.mark.parametrize("value,expected_output", [
     (6, True),
     (7., False),
-    (-1, False),    
-    (np.nan, False), 
+    (-1, False),
+    (np.nan, False),
     (True, False),
     (False, False),
     ((1, 'five'), False),
     ((1, 4, 5, 7), True),
     ((1., 4, 5, 6), False),
-    ((1, False, 3), False), 
+    ((1, False, 3), False),
     ([1, 2, 3], False),
     ((1, -1, 2), False)
 ])
 def test_check_numpy_shape(value, expected_output):
     assert check_numpy_shape(value) == expected_output
- 
- 
+
+
 #test normalize_shape
 @pytest.mark.parametrize("value,expected_result", [
     ((1, 5, 6), (1, 5, 6)),
@@ -140,7 +140,7 @@ def test_check_numpy_shape(value, expected_output):
 ])
 def test_normalize_shape(value, expected_result):
     assert normalize_shape(value) == expected_result
-    
+
 # is_bool
 @pytest.mark.parametrize("value,expected_output", [
     (True, True),
@@ -229,11 +229,11 @@ def test_is_tuple(value, expected_output):
 ])
 def test_is_numpy_array(value, expected_output):
     assert is_numpy_array(value) is expected_output
-    
+
 
 @pytest.mark.parametrize("value,expected", [
     (1, int.__name__),
-    (67., float.__name__), 
+    (67., float.__name__),
     (['hello', 1, 99.], list.__name__),
     ((1, 'a', [1, 2.]), tuple.__name__),
     (np.array([1, 2, 3]), np.ndarray.__name__),
@@ -241,7 +241,7 @@ def test_is_numpy_array(value, expected_output):
 ])
 def test_value_to_type_name(value, expected):
     assert value_to_type_name(value) == expected
-    
+
 
 @pytest.mark.parametrize('value', [
     ('[1,2,3,4]'),
@@ -252,7 +252,7 @@ def test_value_to_type_name(value, expected):
 ])
 def test_is_valid_square_brackets_positive(value):
     assert is_valid_square_brackets(value) == True
-    
+
 
 @pytest.mark.parametrize('value', [
     ('[1,2,3,4]'),
@@ -263,8 +263,8 @@ def test_is_valid_square_brackets_positive(value):
 ])
 def test_is_valid_index_positive(value):
     assert is_valid_index(value) == True
-    
-    
+
+
 @pytest.mark.parametrize("value, expected_output", [
     # Simple lists (no slices, no nested brackets) -> True
     ("1", True),
@@ -288,8 +288,8 @@ def test_is_valid_index_positive(value):
 ])
 def test_is_simple(value, expected_output):
     assert is_simple(value) is expected_output
-    
-    
+
+
 @pytest.mark.parametrize("value, expected_output", [
     # No colon → not a slice
     ("1", False),
@@ -310,7 +310,7 @@ def test_is_simple(value, expected_output):
 ])
 def test_is_slice(value, expected_output):
     assert is_slice(value) is expected_output
-    
+
 @pytest.mark.parametrize("value, expected_output", [
     # No brackets -> not fancy
     ("1", False),
@@ -330,8 +330,8 @@ def test_is_slice(value, expected_output):
 ])
 def test_is_fancy(value, expected_output):
     assert is_fancy(value) is expected_output
-    
-    
+
+
 @pytest.mark.parametrize("value, expected_output", [
     # Single indices -> int
     ("1", 1),
@@ -349,8 +349,8 @@ def test_is_fancy(value, expected_output):
 ])
 def test_parse_simple(value, expected_output):
     assert parse_simple(value) == expected_output
-    
-    
+
+
 @pytest.mark.parametrize("value, expected_output", [
     # Simple fancy indexing
     ("[1]", [1]),
@@ -368,7 +368,7 @@ def test_parse_simple(value, expected_output):
 ])
 def test_parse_fancy(value, expected_output):
     assert parse_fancy(value) == expected_output
-    
+
 @pytest.mark.parametrize("value, expected_output", [
     ("[1]", [1]),
     ("[0]", [0]),
@@ -379,11 +379,11 @@ def test_parse_fancy(value, expected_output):
 ])
 def test_parse_fancy(value, expected_output):
     assert parse_fancy(value) == expected_output
-    
-    
-    
-    
-    
+
+
+
+
+
 @pytest.mark.parametrize("value, expected", [
     # Full start:stop:step
     ("1:5:2",  (1, 5, 2)),
@@ -420,9 +420,9 @@ def test_parse_slice_valid(value, expected):
     s = parse_slice(value)
     assert isinstance(s, slice)
     assert (s.start, s.stop, s.step) == expected
-    
-    
-    
+
+
+
 @pytest.mark.parametrize("value, expected", [
     # Mixed: slice + simple scalars
     ("[1:,2,3]",
@@ -464,9 +464,9 @@ def test_parse_complicated_valid(value, expected):
     result = parse_complicated(value)
     assert isinstance(result, tuple)
     assert result == expected
-    
-    
-    
+
+
+
 @pytest.mark.parametrize("value, expected", [
     # 1) Pure simple indexing (is_simple branch)
     ("[3]", 3),                          # single index -> int
@@ -551,7 +551,7 @@ def test_handle_brackets_positive(dotted_path, expected_path, expected_inds):
     path, inds = handle_brackets(dotted_path)
     assert path == expected_path
     assert inds == expected_inds
-    
+
 @pytest.mark.parametrize(
     "value, expected, check_idempotence",
     [
@@ -653,9 +653,9 @@ def test_convert_numpy_to_python_parametrized(value, expected, check_idempotence
         # Running it again should not change the already-converted structure
         result2 = convert_numpy_to_python(result)
         assert result2 == result
-        
+
 def test_get_param_type():
-    
+
     @register_plugin
     class TestPlug(Plugin):
         """
@@ -674,10 +674,10 @@ def test_get_param_type():
             results = {}
             results["testout_cont"] = 0.06
             results["testout_discrete"] = 6
-            return results         
+            return results
 
-    @register_component
-    class BridgeComponent(Component):
+    @register_subsystem
+    class BridgeComponent(Subsystem):
         def setup(self):
             self.add_parameter("Ace",   default_value=4.0, dtype=float)
             self.add_parameter("King",  default_value=3.0, dtype=float)
@@ -806,16 +806,16 @@ def test_get_param_type():
 def test_type_string_to_type_bad():
     with pytest.raises(KeyError):
         type_string_to_type('random')
-        
-        
+
+
 @pytest.mark.parametrize('value',[
-    ('[[]['), 
+    ('[[]['),
     ('[]]')
-])        
+])
 def test_is_valid_square_brackets_vio(value):
     with  pytest.raises(ValueError):
         is_valid_square_brackets(value)
-        
+
 
 @pytest.mark.parametrize('value', [
     ('[1:::3]'),
@@ -823,18 +823,18 @@ def test_is_valid_square_brackets_vio(value):
     ('[1,b,3]'),
     ('[4.,5]'),
     ('6,7,9'),
-    ('[6,07,9]'), 
+    ('[6,07,9]'),
     ('[[[1,2,3,4]]]'),
     ('[1,,2,4,5]'),
     ('1,2,3,4]'),
     ('[1,2,3,4'),
     ('[[1,2,3]4,5]')
-    
-])    
+
+])
 def test_is_valid_index_vio(value):
     with pytest.raises(ValueError):
         is_valid_index(value)
-        
+
 @pytest.mark.parametrize("value", [
     "[1:5]",
     "[1:5:2]",
@@ -844,9 +844,9 @@ def test_is_valid_index_vio(value):
 ])
 def test_is_fancy_vio(value):
     with pytest.raises(ValueError):
-        is_fancy(value)        
-    
-    
+        is_fancy(value)
+
+
 
 @pytest.mark.parametrize("value", [
     "1:2:3:4",   # more than 2 colons
@@ -856,8 +856,8 @@ def test_is_fancy_vio(value):
 def test_parse_slice_vio(value):
     with pytest.raises(ValueError):
         parse_slice(value)
-        
-        
+
+
 
 @pytest.mark.parametrize("value", [
     # Slicing inside fancy indexing is explicitly disallowed by is_fancy
@@ -867,7 +867,7 @@ def test_parse_slice_vio(value):
 def test_parse_complicated_fancy_slice_violation(value):
     with pytest.raises(ValueError, match="Slicing not allowed in fancy indexing"):
         parse_complicated(value)
-        
+
 
 @pytest.mark.parametrize("value", [
     # 1) Bad brackets (is_valid_square_brackets)
@@ -901,26 +901,26 @@ def test_parse_complicated_fancy_slice_violation(value):
 def test_parse_index_negative(value):
     with pytest.raises(ValueError):
         parse_index(value)
-        
-        
-        
+
+
+
 def test_check_and_get_config_bad_json():
     file_path = os.path.abspath(__file__)
     test_dir = os.path.dirname(file_path)
     proj_dir = os.path.dirname(test_dir)
-    
-    
+
+
     config_path = os.path.join(proj_dir,'uam4x', 'conf.json')
     os.remove(config_path)
     with  open(config_path, 'w') as  f:
         f.writelines('bogus stuff')
-        
+
     with pytest.raises(IOError):
         check_and_get_config(config_path)
-        
+
     if os.path.exists(config_path):
         os.remove(config_path)
-    
+
 def test_get_param_type_raises():
 
     @register_plugin
@@ -978,8 +978,8 @@ def test_get_param_type_raises():
     for dotted_path, expected in error_cases:
         with pytest.raises(expected):
             get_param_type(dotted_path, study, plugins)
-        
+
 if __name__ == '__main__':
-    
+
     test_check_and_get_config_good()
 
