@@ -2,7 +2,7 @@ import numpy as np
 from uam4x.execution_engine import  Engine
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
-from uam4x.components import  Subsystem, Wing, register_subsystem
+from uam4x.subsystems import  Subsystem, Wing, register_subsystem
 from uam4x.solution import Plugin, register_plugin, Solution
 import pytest
 from uam4x.control import Optimization, ParameterSweep

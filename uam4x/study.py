@@ -33,14 +33,14 @@ class Study:
         self.control = Control()
         self.results = Results(self)
         self._runtime_meta_data = defaultdict(dict)
-        
-    
+
+
     def _add_runtime_plugin_checksums(self, trade_name,plugin_to_checksum):
         self._runtime_meta_data[trade_name]['step_plugin_hashes'] = plugin_to_checksum
-    
+
     def _add_runtime_external_executable_data(self, trade_name,external_executable_to_data):
         self._runtime_meta_data[trade_name]['step_external_executable_data'] = external_executable_to_data
-        
+
     def _capture_environment(self,trade_name):
         '''
         Fully defines environment
@@ -54,13 +54,13 @@ class Study:
             'machine': platform.machine(),
             'processor': platform.processor(),
         }
-        
+
         code = "import sys; print(sys.executable)"
         out = subprocess.check_output(["python", "-c", code]).decode().strip()
-               
+
         python_dict = { 'python_spec': sys.version,
             "python_executable": str(Path(out))}
-        
+
         environ_dict = {dist.name: dist.version for dist in distributions()}
 
         dt=datetime.now(tz=ZoneInfo("America/Los_Angeles"))
@@ -75,9 +75,9 @@ class Study:
                 message+=','
             if keyword=='Y':
                 message+=' at'
-            
+
         message+=' Pacific Standard Time'
-        
+
         if trade_name in self._runtime_meta_data:
             self._runtime_meta_data[trade_name]['environment'] = {
             'Machine': machine_dict,
@@ -114,18 +114,18 @@ class Study:
     def _to_dict(self) -> dict:
         """Convert the study to a dictionary representation."""
         self.log.debug('write to dict')
-        
-        study_dict = { 
+
+        study_dict = {
             "control": convert_numpy_to_python(self.control._to_dict()),
             "vehicles": convert_numpy_to_python({v.name: convert_numpy_to_python(v._to_dict()) for v in self.vehicles}),
             "solution": convert_numpy_to_python(self.solution._to_dict()),
             'results': convert_numpy_to_python(self.results._to_dict()),
             "execution_meta_data": convert_numpy_to_python(self._runtime_meta_data),
         }
-        
-            
+
+
         return study_dict
-        
+
     @classmethod
     def _from_dict(cls, data: dict, work_dir = None) -> 'Study':
         cls.log.debug('study from dict')
@@ -147,65 +147,65 @@ class Study:
         with open(json_path, 'w') as f:
             json.dump(data, f, indent=4)
         if commit:
-            self._commit_json_to_branch(json_path, commit_message)            
+            self._commit_json_to_branch(json_path, commit_message)
 
     def save_model_to_json(self, json_path: str, commit=False):
-        
+
         msg = f'AutoCommit: Created data for variant {self.control.variant_name}'
         self._save_to_json(json_path, commit=commit, commit_message=msg if commit else None)
-        
+
     def save_results_to_json(self, json_path: str, commit=False):
         msg = f'AutoCommit: Writing results for variant {self.control.variant_name}'
         self._save_to_json(json_path, commit=commit, commit_message=msg if commit else None)
 
 
     def _commit_json_to_branch(self, json_path, commit_message):
-        
+
         if not os.path.isdir(self.control.repo_root):
             raise NotADirectoryError(f'The provided repository root path {self.control.repo_root} is not a directory.\n'
                              f'The repo root must be a directory.')
-        
+
         assert os.path.isdir(os.path.join(self.control.repo_root, ".git"))
-        
+
         try:
             repo_path = pygit2.discover_repository(self.control.repo_root)
         except KeyError:
             repo_path = None
-            
+
         if repo_path is  None:
             raise ValueError('No repository found with provided path')
-        
-        
+
+
         expected_git_dir = os.path.join(self.control.repo_root, '.git')
         repo_path_norm = os.path.normcase(os.path.normpath(os.path.realpath(repo_path)))
-        
-        
+
+
         expected_norm = os.path.normcase(os.path.normpath(os.path.realpath(expected_git_dir)))
-        
+
         if repo_path_norm != expected_norm:
             raise ValueError(f'Provided path: {self.control.repo_root} does not have a repo')
-        
+
         repo = pygit2.Repository(repo_path)
         if repo.head_is_detached:
-            raise RuntimeError("Cannot commit: repo is in detached HEAD state.")        
+            raise RuntimeError("Cannot commit: repo is in detached HEAD state.")
         if repo.head_is_unborn:
             parents = []
         else:
             parents = [repo.head.target]
-        
+
         #stage the JSON file
         index = repo.index
-        
+
         # rel path
         rel_path = os.path.relpath(json_path, repo.workdir)
         rel_path = rel_path.replace(os.sep, '/')
         #same as git add path
         index.add(rel_path)
         index.write()
-        
+
         #this is the snapshot of your repo as a hash
         tree = index.write_tree()
-                
+
         author = pygit2.Signature(self.control.author, 'fake@email')
         committer = pygit2.Signature(self.control.author, 'fake@email')
         repo.create_commit("HEAD",author, committer, commit_message, tree, parents)
@@ -253,15 +253,15 @@ class Study:
         Retrieve a value from the study using a dotted path string, e.g.:
         'vehicles.multi_objective_vehicle.wing1.aspect_ratio'
         """
-        self.log.debug(f'get the value of {dotted_path}')        
+        self.log.debug(f'get the value of {dotted_path}')
         inds = None
         if '[' in  dotted_path:
             #Functionality exists that checks for brackets in: step name (plugins)
             # vehicles names, component names, mode names, and parameter names. which [ is not allowed
             # are all not allowed.
-            #This handles and has checks for the brackets. 
+            #This handles and has checks for the brackets.
             dotted_path, inds = handle_brackets(dotted_path)
-        
+
         value = attrgetter(dotted_path)(self)
         if inds is not None:
             value = value[inds]
@@ -364,7 +364,7 @@ class Study:
         """
         all_names = self.get_all_names_by_category()
         return all_names['vehicle_names'] + all_names['step_inputs'] + all_names['step_outputs']
-    
+
 class Variants:
     log = get_log(log, object_name='variants')
     def __init__(self, dir: str) -> None:
@@ -407,7 +407,7 @@ class Variants:
 
 if __name__ == "__main__":
     from uam4x.vehicle import Vehicle
-    from uam4x.components import Wing
+    from uam4x.subsystems import Wing
     from uam4x.solution import Solution
     from uam4x.control import Control, ParameterSweep, Optimization
 
@@ -417,7 +417,7 @@ if __name__ == "__main__":
     left_wing.span = 5.
     left_wing.add_mode("happy")
     left_wing.happy.span = 10.
-    right_wing = Wing("right_wing") 
+    right_wing = Wing("right_wing")
     v.add_component(left_wing)
     v.add_component(right_wing)
 
@@ -511,6 +511,6 @@ if __name__ == "__main__":
     engine = Engine(study, "test_work")
     print(get_param_type("vehicles.TestVehicle.left_wing.happy.span",study))
     print(get_param_type("vehicles.TestVehicle.left_wing.span",study))
-    
-    
-    
+
+
+

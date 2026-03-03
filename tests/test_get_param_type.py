@@ -1,5 +1,5 @@
 import pytest
-from uam4x.components import Wing, Rotor, Aircraft
+from uam4x.subsystems import Wing, Rotor, Aircraft
 from uam4x.vehicle import Vehicle
 from uam4x.study import Study, Variants
 import os

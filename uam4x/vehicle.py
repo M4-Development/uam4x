@@ -1,4 +1,4 @@
-from uam4x.components import Subsystem
+from uam4x.subsystems import Subsystem
 from uam4x.log import get_log
 from uam4x.utils import log
 from collections import  Counter
@@ -163,7 +163,7 @@ class Vehicle:
 
 
 if __name__ == "__main__":
-    from uam4x.components import Wing
+    from uam4x.subsystems import Wing
 
     # Create a vehicle
     v = Vehicle("DemoVehicle")

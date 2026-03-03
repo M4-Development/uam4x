@@ -1,7 +1,7 @@
 from uam4x.solution import Plugin, register_plugin, get_plugin_class, _plugin_registry
 from uam4x.utils import *
 import pytest
-from uam4x.components import Subsystem, register_subsystem, _subsystem_registry
+from uam4x.subsystems import Subsystem, register_subsystem, _subsystem_registry
 
 
 def test_registery_good():

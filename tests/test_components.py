@@ -1,6 +1,6 @@
 import pytest
-from uam4x.components import Wing, Rotor, RotorBladeRegion, Aircraft
-from uam4x.components import Parameter, get_subsystem_class, Subsystem, _Mode, _subsystem_registry, register_subsystem
+from uam4x.subsystems import Wing, Rotor, RotorBladeRegion, Aircraft
+from uam4x.subsystems import Parameter, get_subsystem_class, Subsystem, _Mode, _subsystem_registry, register_subsystem
 from uam4x import  check_and_get_config
 import os
 import numpy as np

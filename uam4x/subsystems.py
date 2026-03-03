@@ -606,7 +606,7 @@ def register_subsystem(cls):
 
     if subsystem  in _config['SUBSYSTEMS'] and _config['SUBSYSTEMS'][subsystem] != importlib.util.find_spec(cls.__module__).origin:
         log.warning(f"WARNING: Subsystem '{subsystem }' already registered\nOverwritting existing data")
-    if not "uam4x.components" in cls.__module__.replace('.', '/'):
+    if not "uam4x.subsystems" in cls.__module__.replace('.', '/'):
         _config['SUBSYSTEMS'][subsystem] = importlib.util.find_spec(cls.__module__).origin
         if is_main_process() and registry_writes_enabled():
             with open(config_path, 'w') as configfile:

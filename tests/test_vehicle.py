@@ -1,5 +1,5 @@
 import pytest
-from uam4x.components import Subsystem, Wing, Rotor, RotorBladeRegion, Aircraft, _Mode
+from uam4x.subsystems import Subsystem, Wing, Rotor, RotorBladeRegion, Aircraft, _Mode
 import numpy as np
 from uam4x.vehicle import Vehicle, VehicleManager
 import  re

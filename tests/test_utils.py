@@ -5,7 +5,7 @@ import os
 import json
 from uam4x.study import  Study
 from uam4x.solution import Plugin, register_plugin
-from uam4x.components import Subsystem, Wing, register_subsystem, Rotor, RotorBladeRegion, Aircraft
+from uam4x.subsystems import Subsystem, Wing, register_subsystem, Rotor, RotorBladeRegion, Aircraft
 from uam4x.vehicle import Vehicle
 
 def test_check_and_get_config_good():

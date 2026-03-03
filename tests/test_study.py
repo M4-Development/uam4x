@@ -12,7 +12,7 @@ from uam4x.solution import Solution
 from uam4x.control import Control
 from uam4x.vehicle import Vehicle, VehicleManager
 from uam4x.control import ParameterSweep
-from uam4x.components import Subsystem, _Mode, Parameter, Wing, Rotor, RotorBladeRegion, Aircraft
+from uam4x.subsystems import Subsystem, _Mode, Parameter, Wing, Rotor, RotorBladeRegion, Aircraft
 
 
 
@@ -459,7 +459,7 @@ def test_Study_get_all_names(sample_study):
 
         from uam4x.study import Study
         from uam4x.vehicle import Vehicle
-        from uam4x.components import Wing
+        from uam4x.subsystems import Wing
 
 
 def test_Study_from_dict_roundtrip():

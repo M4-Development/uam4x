@@ -1,5 +1,5 @@
 
-from uam4x.components import register_subsystem, Subsystem, _subsystem_registry
+from uam4x.subsystems import register_subsystem, Subsystem, _subsystem_registry
 from uam4x.solution import register_plugin, Plugin, _plugin_registry
 from uam4x.utils import check_and_get_config, log
 from uam4x.node import register_node, Node, _node_registry
@@ -30,7 +30,7 @@ for _comp_name, _python_file_path in _config['SUBSYSTEMS'].items():
             log.warning(f"Component load error ({_comp_name}). Could not find path {_python_file_path}")
         except AttributeError:
             log.warning(f"Component load error. Could not find {_comp_name} in {_python_file_path}")
-    # Built-in components are already loaded via "from uam4x.components import ..." at the top
+    # Built-in components are already loaded via "from uam4x.subsystems import ..." at the top
 
 
 for _plugin_name, _python_file_path in _config['PLUGINS'].items():
