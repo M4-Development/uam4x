@@ -5,7 +5,7 @@ import json
 import os
 import copy
 from uam4x.log import get_log
-from uam4x.utils import convert_numpy_to_python,log, is_numpy_array, parse_index, handle_brackets, replace_none_with_empty_quotes, replace_empty_quotes_with_none
+from uam4x.utils import convert_numpy_to_python, get_param_type,log, is_numpy_array, parse_index, handle_brackets, replace_none_with_empty_quotes
 from operator import  attrgetter
 import  sys
 import platform
@@ -227,7 +227,7 @@ class Study:
         cls.log.debug('create study from json')
         work_dir = os.path.dirname(json_path)
         with open(json_path, 'r') as f:
-            data = replace_empty_quotes_with_none(json.load(f))
+            data = json.load(f)
         return cls._from_dict(data, work_dir)
 
     #def get_plugin_input_and_output_names(self, step_name):
@@ -266,30 +266,30 @@ class Study:
         if inds is not None:
             value = value[inds]
         return value
-    
+
     def set_value(self,dotted_path:str,value):
         split_up_path=dotted_path.split('.')
-   
+
         param=split_up_path[-1]
         comp='.'.join(split_up_path[:-1])
         if len(split_up_path) not in [4,5]:
             #vehicles.vehicle.component.mode.parameter
             #vehicles.vehicle.component.parameter
             raise ValueError(f'Invalid vehicle parameter provided {dotted_path}')
-        
+
         #Will need to add array based logic back in (indexed strings)
         attrgetter(comp)(self).set_parameter(param,value)
-        
+
     def get_param_type(self,dotted_path:str):
         split_up_path=dotted_path.split('.')
-   
+
         param=split_up_path[-1]
         comp='.'.join(split_up_path[:-1])
         if len(split_up_path) not in [4,5]:
             #vehicles.vehicle.component.mode.parameter
             #vehicles.vehicle.component.parameter
             raise ValueError(f'Invalid vehicle parameter provided {dotted_path}')
-        
+
         #Will need to add array based logic back in (indexed strings)
         param_type=attrgetter(comp)(self).get_parameter_type(param)
 

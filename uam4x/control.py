@@ -70,6 +70,14 @@ class Optimization:
             if isinstance(des_var_vals['upper'], list):
                 des_var_vals['upper'] = np.array(des_var_vals['upper'])
 
+        for name, constraint in data['constraints'].items():
+            if constraint['indices'] == "":
+                constraint['indices'] = None
+
+        for name, desvar in data['des_vars'].items():
+            if desvar['indices'] == "":
+                desvar['indices'] = None
+
         obj.type = data['type']
         obj.des_vars = data['des_vars']
         obj.constraints = data['constraints']
@@ -226,13 +234,13 @@ class ParameterSweep:
         return {
             "type": "ParameterSweep",
             "param_name_to_value_list": self.param_name_to_value_list,
-            "child": self.child._to_dict() if self.child else None
+            "child": self.child._to_dict() if self.child else ""
         }
     @classmethod
     def _from_dict(cls, data):
         cls.log.debug('parameter sweep from dict')
         child_dict = data["child"]
-        if child_dict is None:
+        if not child_dict:
             child = None
         elif child_dict['type'] == "ParameterSweep":
             child = ParameterSweep._from_dict(child_dict)
