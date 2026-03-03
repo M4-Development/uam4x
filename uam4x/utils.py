@@ -456,3 +456,42 @@ def handle_brackets(dotted_path):
 
     return dotted_path, inds
 
+def replace_none_with_empty_quotes(data):
+    for trade_study in data['control']['trade_studies'].values():
+        if trade_study['type'] == 'ParameterSweep' and 'child' in trade_study and trade_study['child']['type'] == "Optimization":
+            for desvar in trade_study['child']['des_vars'].values():
+                desvar['indices'] = desvar['indices'] or ""
+            for constraint in trade_study['child']['constraints'].values():
+                constraint['indices'] = constraint['indices'] or ""
+        elif trade_study['type'] == "Optimization":
+            for desvar in trade_study['des_vars'].values():
+                desvar['indices'] = desvar['indices'] or ""
+            for constraint in trade_study['constraints'].values():
+                constraint['indices'] = constraint['indices'] or ""
+
+    for trade_study in data['results'].values():
+        for point in trade_study['points']:
+            if 'optimization' in point['input_state'] and point['input_state']['optimization']:
+                for desvar in point['input_state']['des_vars'].values():
+                    desvar['indices'] = desvar['indices'] or ""
+                for constraint in point['input_state']['constraints'].values():
+                    constraint['indices'] = constraint['indices'] or ""
+
+    return data
+
+def replace_empty_quotes_with_none(data):
+    if 'control' in data:
+        for optimization in data['control']['trade_studies'].values():
+            if optimization['type'] == 'ParameterSweep' and optimization['child'] and optimization['child']['type'] == 'Optimization':
+                for desvar in optimization['child']['des_vars'].values():
+                    desvar['indices'] = desvar['indices'] or None
+                for constraint in optimization['child']['constraints'].values():
+                    constraint['indices'] =constraint['indices'] or None
+
+            if optimization['type'] == 'Optimization':
+                for desvar in optimization['des_vars'].values():
+                    desvar['indices'] = desvar['indices'] or None
+                for constraint in optimization['constraints'].values():
+                    constraint['indices'] =constraint['indices'] or None
+
+    return data

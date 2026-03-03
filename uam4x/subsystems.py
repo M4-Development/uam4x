@@ -425,7 +425,8 @@ class Subsystem:
                 if unit not in unit_class.__dict__.values():
                     self.log.error(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
                     raise ValueError(f"Unit '{unit}' does not match unit type '{unit_type}' for parameter '{name}'.")
-            param.unit = unit
+                else:
+                    param.unit = unit if unit is not None else ""
         else:
             self.log.error(f"Parameter '{name}' not defined for {self.__class__.__name__}.")
             raise AttributeError(f"Parameter '{name}' not defined for {self.__class__.__name__}.")

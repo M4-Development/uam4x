@@ -5,7 +5,7 @@ import json
 import os
 import copy
 from uam4x.log import get_log
-from uam4x.utils import convert_numpy_to_python,log, is_numpy_array, parse_index, handle_brackets
+from uam4x.utils import convert_numpy_to_python,log, is_numpy_array, parse_index, handle_brackets, replace_none_with_empty_quotes, replace_empty_quotes_with_none
 from operator import  attrgetter
 import  sys
 import platform
@@ -142,7 +142,7 @@ class Study:
     def _save_to_json(self, json_path: str, commit=False,commit_message=''):
         """Save the study to a JSON file."""
         self.log.debug('save to json')
-        data = self._to_dict()
+        data = replace_none_with_empty_quotes(self._to_dict())
 
         with open(json_path, 'w') as f:
             json.dump(data, f, indent=4)
@@ -227,7 +227,7 @@ class Study:
         cls.log.debug('create study from json')
         work_dir = os.path.dirname(json_path)
         with open(json_path, 'r') as f:
-            data = json.load(f)
+            data = replace_empty_quotes_with_none(json.load(f))
         return cls._from_dict(data, work_dir)
 
     #def get_plugin_input_and_output_names(self, step_name):
@@ -507,7 +507,7 @@ if __name__ == "__main__":
     assert svtlhs is svtlhs2
     assert svtlhs is svtlhs3
 
-    from execution_engine import Engine
+    from uam4x.execution_engine import Engine
     engine = Engine(study, "test_work")
     print(get_param_type("vehicles.TestVehicle.left_wing.happy.span",study))
     print(get_param_type("vehicles.TestVehicle.left_wing.span",study))

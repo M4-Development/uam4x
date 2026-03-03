@@ -53,12 +53,12 @@ class Optimization:
 
     def get_desvar_names(self):
         return list(self.des_vars.keys())
-    
+
     @classmethod
     def _from_dict(cls, data: dict) -> 'Optimization':
         obj = cls()
         # if upper/lower for DV or constraints are lists, must be
-        #desired to be arrays, so convert. 
+        #desired to be arrays, so convert.
         for constraint, constraint_vals in data['constraints'].items():
             if isinstance(constraint_vals['lower'], list):
                 constraint_vals['lower'] = np.array(constraint_vals['lower'])
@@ -69,7 +69,7 @@ class Optimization:
                 des_var_vals['lower'] = np.array(des_var_vals['lower'])
             if isinstance(des_var_vals['upper'], list):
                 des_var_vals['upper'] = np.array(des_var_vals['upper'])
-        
+
         obj.type = data['type']
         obj.des_vars = data['des_vars']
         obj.constraints = data['constraints']
@@ -82,51 +82,51 @@ class Optimization:
             for name,value in data['optimizer_options'].items():
                 obj.add_optimizer_option(name,value)
         return obj
-    
+
     def add_design_var(self, name: str, lower: np.ndarray|float|np.floating|None=None,
                        upper:np.ndarray|float|np.floating|None=None, indices: list|None=None):
-        
-        self.check_upper_lower(name, 'design variable', lower=lower, upper=upper, indices=indices)      
+
+        self.check_upper_lower(name, 'design variable', lower=lower, upper=upper, indices=indices)
         self.des_vars[name] = {
             'lower': lower,
             'upper': upper,
             'indices': indices
         }
-        
+
     def add_constraint(self, name: str, lower: np.ndarray|float|np.floating|None=None,
                        upper: np.ndarray|float|np.floating|None=None, indices=None):
-        
-        self.check_upper_lower(name, const_or_dv='constraint', lower=lower, upper=upper, indices=indices)        
+
+        self.check_upper_lower(name, const_or_dv='constraint', lower=lower, upper=upper, indices=indices)
         self.constraints[name] = {
             'lower': lower,
             'upper': upper,
             'indices': indices,
         }
-    
+
     @staticmethod
     def check_upper_lower(name: str, const_or_dv, lower: np.ndarray|float|np.floating|None=None, upper: np.ndarray|float|np.floating|None=None,
                           indices: list|np.ndarray|None=None):
-        
+
         # At least one bound must be declared on a constraint
-        
+
         if lower is  None and  upper is  None and  const_or_dv == 'constraint':
             raise ValueError(f'At least one constraint must be declared. The constraint {name}\n'
-                             f'does not have at least a lower or upper bound declared.')        
-       
+                             f'does not have at least a lower or upper bound declared.')
+
         # Check continuity within our paradigm (here user would not be able to declare constraints as lists, ints etc.)
-        #without, relies on MDAO to consolidate mismatch e.g declared as array but some weird list is provided. 
+        #without, relies on MDAO to consolidate mismatch e.g declared as array but some weird list is provided.
         if lower is not None and  not check_continuous(lower):
             raise TypeError(f'The lower bound for {name} is not continuos.\n'
                             f'Only floats and floating point arrays are accepted.')
         if upper is not None and  not check_continuous(upper):
             raise TypeError(f'The upper bound for {name} is not continuos.\n'
-                            f'Only floats and floating point arrays are accepted.')        
-        
+                            f'Only floats and floating point arrays are accepted.')
+
         elif lower is not None and  upper is  not None:
             if type(lower) != type(upper):
                 raise TypeError(f'Upper and lower bounds must be of the same type. The {const_or_dv}:{name}\n'
                                 f'has a lower bound of type {value_to_type_name(lower)} and an upper bound of type {value_to_type_name(upper)}\n')
-            
+
             # Note, if one is an np.ndarray the other must be as well
             if is_numpy_array(lower) and  is_numpy_array(upper):
                 if lower.shape != upper.shape:
@@ -138,11 +138,11 @@ class Optimization:
             else:
                 if upper - lower < 0:
                     raise ValueError(f'{const_or_dv} upper bounds must be greater than or equal to the lower bounds.\n'
-                                     f'The following {const_or_dv} {name} has lower={lower} and upper={upper}.')                    
-    
+                                     f'The following {const_or_dv} {name} has lower={lower} and upper={upper}.')
+
     def add_objective(self, name: str):
         self.objective_name = name
-        
+
 class ParameterSweep:
     log = get_log(log, object_name='parameter sweep')
     def __init__(self, param_name_to_value_list: Dict[str, Any], child:Union['ParameterSweep', Optimization]=None) -> None:
@@ -176,7 +176,7 @@ class ParameterSweep:
             return child.get_optim_child()
         if isinstance(child,Optimization):
             return child
-        
+
 
     def get_desvar_names(self):
         #assumes optimization cannot have child
@@ -185,7 +185,7 @@ class ParameterSweep:
                 return []
         else:
             return child.get_desvar_names()
-        
+
     def get_all_param_names(self):
         #assumes optimization cannot have child
         child=self.child
@@ -211,7 +211,7 @@ class ParameterSweep:
                 # want a cartesian product of states (for every in parent, create a state
                 # for for every in child).
                 child_states = self.child.get_states()
-                states_to_add = [] 
+                states_to_add = []
                 for child_state in  child_states:
                     sample_state = copy.deepcopy(state)
                     sample_state.update(child_state)
@@ -246,7 +246,7 @@ class Control:
         self.title = title
         self.author = author
         self.description = description
-        self.repo_root = repo_root
+        self.repo_root = repo_root if repo_root is not None else ""
         self.trade_studies = {}
         self.log = Control.log
         self.variant_name=''
