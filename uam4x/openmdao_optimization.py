@@ -1,3 +1,5 @@
+from tabnanny import check
+
 import openmdao.api as om
 from uam4x.study import Study
 import os
@@ -132,7 +134,6 @@ class Optimization:
         #            result._add_template_checksum(path, checksum)
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
-
         driver_name = self.state['optimizer']
         driver_cls = driver_name_to_driver[driver_name]
         problem.driver = driver_cls()
@@ -160,7 +161,22 @@ class Optimization:
                 
                 result._add_result(tracked_output, problem.get_val(no_ind_tracked_output.replace(".", "~"))[inds])
             else:  
-                result._add_result(tracked_output, problem.get_val(tracked_output.replace(".", "~"))[0])
+                name_start=tracked_output.split('.')[0]
+                if name_start=='vehicles':
+                    var_type=self.study.get_param_type(tracked_output)
+                else:
+                    var_type=self.study.solution.get_var_type(tracked_output,self.plugins)
+                value=problem.get_val(tracked_output.replace(".", "~"))
+
+                #assumes outputs to openmdao are essentially always arrays for scalars
+                #strings might be treated differently
+                if not var_type is np.ndarray:
+                    if isinstance(value, np.ndarray) and check_if_scalar(var_type):
+                        value=value[0]
+                    else:
+                        value=var_type(value)
+
+                result._add_result(tracked_output, value)
                     
         return result
 
