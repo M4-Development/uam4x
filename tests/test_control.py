@@ -95,8 +95,6 @@ def test_to_dict_good():
         'objective_name': 'random_objective',
         'driver_options': {
             'optimizer': 'SLSQP',
-            'maxiter': 200,
-            'tol': 1e-6,
         },
         'optimizer_options': {},
         'optimizer': 'ScipyOptimizeDriver',
@@ -166,6 +164,21 @@ def test_Optimization_from_dict_array_and_scalar_bounds():
     assert not isinstance(c2["upper"], np.ndarray)
     assert c2["lower"] == -1.0
     assert c2["upper"] == 2.0    
+
+
+def test_optimization_from_dict_applies_optimizer_options():
+    data = {
+        "type": "Optimization",
+        "des_vars": {},
+        "constraints": {},
+        "objective_name": "obj",
+        "driver_options": {"optimizer": "SLSQP"},
+        "optimizer_options": {"print_level": 0},
+        "optimizer": "pyOptSparseDriver",
+    }
+    opt = Optimization._from_dict(data)
+    assert opt.optimizer == "pyOptSparseDriver"
+    assert opt._optimizer_options["print_level"] == 0
 
 # -------------------- Failure paths: shared validator branches --------------------
 
@@ -261,6 +274,19 @@ def test_add_design_var_indices_passthrough():
     assert opt.des_vars[DESIGN_VAR_NAME]["indices"] is indices
 
 
+def test_optimization_setters_and_get_desvar_names():
+    opt = Optimization()
+    opt.set_optimizer("pyOptSparseDriver")
+    opt.add_driver_option("maxiter", 25)
+    opt.add_optimizer_option("tol", 1e-8)
+    opt.add_design_var("x", lower=0.0, upper=1.0)
+
+    assert opt.optimizer == "pyOptSparseDriver"
+    assert opt._mdao_driver_options["maxiter"] == 25
+    assert opt._optimizer_options["tol"] == 1e-8
+    assert opt.get_desvar_names() == ["x"]
+
+
 def test_add_constraint_indices_passthrough():
     opt = Optimization()    
     indices = np.array([1, 3])
@@ -307,6 +333,74 @@ def test_set_child_good():
 def test_get_states():
     pass
 
+
+def test_parameter_sweep_get_optim_child_and_names():
+    opt = Optimization()
+    opt.add_design_var("x", lower=0.0, upper=2.0)
+
+    inner = ParameterSweep({"b": [3.0, 4.0]}, child=opt)
+    outer = ParameterSweep({"a": [1.0, 2.0]}, child=inner)
+
+    assert outer.get_optim_child() is opt
+    assert inner.get_desvar_names() == ["x"]
+    assert outer.get_desvar_names() == ["x"]
+    assert outer.get_all_param_names() == {"a", "b"}
+
+
+def test_parameter_sweep_get_optim_child_none_and_desvars_none():
+    ps = ParameterSweep({"a": [1.0, 2.0]})
+    assert ps.get_optim_child() is None
+    assert ps.get_desvar_names() == []
+    assert ps.get_all_param_names() == {"a"}
+
+
+def test_parameter_sweep_get_states_with_optimization_child():
+    opt = Optimization()
+    opt.add_design_var("x", lower=0.0, upper=1.0)
+    opt.add_constraint("c", lower=0.0)
+    opt.add_objective("obj")
+
+    ps = ParameterSweep({"a": [1.0, 2.0]}, child=opt)
+    states = ps.get_states()
+
+    assert len(states) == 2
+    assert states[0]["optimization"] is True
+    assert "des_vars" in states[0]
+    assert states[1]["a"] == 2.0
+
+
+def test_parameter_sweep_get_states_with_nested_child_sweep():
+    inner = ParameterSweep({"b": [10.0, 20.0]})
+    outer = ParameterSweep({"a": [1.0, 2.0]}, child=inner)
+
+    states = outer.get_states()
+    assert len(states) == 4
+    assert {s["a"] for s in states} == {1.0, 2.0}
+    assert {s["b"] for s in states} == {10.0, 20.0}
+    assert all(s["optimization"] is False for s in states)
+
+
+def test_parameter_sweep_from_dict_branches():
+    no_child_data = {
+        "type": "ParameterSweep",
+        "param_name_to_value_list": {"a": [1.0, 2.0]},
+        "child": None,
+    }
+    ps = ParameterSweep._from_dict(no_child_data)
+    assert ps.child is None
+
+    nested_data = {
+        "type": "ParameterSweep",
+        "param_name_to_value_list": {"a": [1.0, 2.0]},
+        "child": {
+            "type": "ParameterSweep",
+            "param_name_to_value_list": {"b": [3.0, 4.0]},
+            "child": None,
+        },
+    }
+    ps_nested = ParameterSweep._from_dict(nested_data)
+    assert isinstance(ps_nested.child, ParameterSweep)
+
 #-------Negative checks
 @pytest.mark.parametrize('input_dict,err_type', [
     ({'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],
@@ -343,6 +437,17 @@ def test_Control_instance():
     assert C.description == 'Default Description'
     
     assert C.trade_studies == {}
+
+
+def test_control_add_metadata_and_reserved_trade_name():
+    c = Control()
+    c.add_metadata(title="T", author="A", description="D")
+    assert c.title == "T"
+    assert c.author == "A"
+    assert c.description == "D"
+
+    with pytest.raises(ValueError, match="reserved"):
+        c.add_tradestudy("Default State", Optimization())
     
 
 def test_Control_add_trade():

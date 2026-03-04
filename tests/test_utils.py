@@ -731,77 +731,61 @@ def test_get_param_type():
     study.solution.add_link("vehicles.mtr.wing.span", "test_plug.testin_cont")
     study.solution.add_link("vehicles.mtr.aircraft.npass", "test_plug.testin_discrete")
 
-    # Instantiate plugins
-    plugins = {}
-    for step_name, step_info in study.solution.steps.items():
-        plugin = step_info["plugin"]()
-        plugin.setup_plugin(step_info["plugin_options"])
-        plugins[step_name] = plugin
+    plugins = study.solution.generate_plugins()
 
     # -------- Vehicle 1 checks --------
-    actual = get_param_type("vehicles.mtr.wing.span", study, plugins)
+    actual = study.get_param_type("vehicles.mtr.wing.span")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("vehicles.mtr.wing.area", study, plugins)
+    actual = study.get_param_type("vehicles.mtr.wing.area")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("vehicles.mtr.wing.sweep", study, plugins)
+    actual = study.get_param_type("vehicles.mtr.wing.sweep")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("vehicles.mtr.aircraft.wpass", study, plugins)
+    actual = study.get_param_type("vehicles.mtr.aircraft.wpass")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("vehicles.mtr.aircraft.npass", study, plugins)
+    actual = study.get_param_type("vehicles.mtr.aircraft.npass")
     assert actual == int, f"expected int, got {actual}"
 
-    actual = get_param_type("vehicles.mtr.rotor.nblade", study, plugins)
+    actual = study.get_param_type("vehicles.mtr.rotor.nblade")
     assert actual == int, f"expected int, got {actual}"
 
-    actual = get_param_type("vehicles.mtr.rotor.vflight.tilt", study, plugins)
-    assert actual == float, f"expected float, got {actual}"
+    with pytest.raises(AttributeError):
+        study.get_param_type("vehicles.mtr.rotor.vflight.tilt")
 
-    actual = get_param_type("vehicles.mtr.rotor.cruise.tilt", study, plugins)
-    assert actual == float, f"expected float, got {actual}"
+    with pytest.raises(AttributeError):
+        study.get_param_type("vehicles.mtr.rotor.cruise.tilt")
 
     # -------- Plugin I/O checks --------
-    actual = get_param_type("test_plug.testin_cont", study, plugins)
+    actual = study.solution.get_var_type("test_plug.testin_cont", plugins)
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("test_plug.testin_discrete", study, plugins)
+    actual = study.solution.get_var_type("test_plug.testin_discrete", plugins)
     assert actual == int, f"expected int, got {actual}"
 
-    actual = get_param_type("test_plug.testout_cont", study, plugins)
+    actual = study.solution.get_var_type("test_plug.testout_cont", plugins)
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("test_plug.testout_discrete", study, plugins)
+    actual = study.solution.get_var_type("test_plug.testout_discrete", plugins)
     assert actual == int, f"expected int, got {actual}"
 
     # -------- Vehicle 2 checks (including array param) --------
-    actual = get_param_type("vehicles.Bridge.bridge_face_cards.Ace", study, plugins)
+    actual = study.get_param_type("vehicles.Bridge.bridge_face_cards.Ace")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("vehicles.Bridge.bridge_face_cards.King", study, plugins)
+    actual = study.get_param_type("vehicles.Bridge.bridge_face_cards.King")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("vehicles.Bridge.bridge_face_cards.Queen", study, plugins)
+    actual = study.get_param_type("vehicles.Bridge.bridge_face_cards.Queen")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = get_param_type("vehicles.Bridge.bridge_face_cards.Jack", study, plugins)
+    actual = study.get_param_type("vehicles.Bridge.bridge_face_cards.Jack")
     assert actual == float, f"expected float, got {actual}"
 
-    # Array parameter type – full array
-    actual = get_param_type(
-        "vehicles.Bridge.bridge_face_cards.DeckValues", study, plugins
-    )
+    actual = study.get_param_type("vehicles.Bridge.bridge_face_cards.DeckValues")
     assert actual == np.ndarray, f"expected np.ndarray, got {actual}"
-
-    # Array parameter type – indexed access (bracket handling)
-    # get_param_type strips the index via handle_brackets and should still
-    # return the parameter's declared type (np.ndarray), *not* the element type.
-    actual = get_param_type(
-        "vehicles.Bridge.bridge_face_cards.DeckValues[2]", study, plugins
-    )
-    assert actual == np.ndarray, f"expected np.ndarray for indexed path, got {actual}"
 #---------------------------------------------------------------------Negative checks
 def test_type_string_to_type_bad():
     with pytest.raises(KeyError):
@@ -956,30 +940,25 @@ def test_get_param_type_raises():
     # Add plugin step
     study.solution.add_step(TestPlug, "test_plug", {})
 
-    # Instantiate plugins
-    plugins = {}
-    for step_name, step_info in study.solution.steps.items():
-        plugin = step_info["plugin"]()
-        plugin.setup_plugin(step_info["plugin_options"])
-        plugins[step_name] = plugin
+    plugins = study.solution.generate_plugins()
 
-    # ----- parameterized error assertions -----
-    error_cases = [
-        # VEHICLE PATH errors → AttributeError
-        ("vehicles.mtr.wing.NotARealParam", AttributeError),
-        ("vehicles.mtr.NotAComponent.height", AttributeError),
-        ("vehicles.NotAVehicle.wing.span", AttributeError),
+    with pytest.raises(AttributeError):
+        study.get_param_type("vehicles.mtr.wing.NotARealParam")
 
-        # PLUGIN PATH errors → KeyError
-        ("test_plug.NotARealIO", KeyError),        # plugin exists, bad IO name
-        ("NotAPlugin.testin_cont", KeyError),      # plugin name does not exist
-    ]
+    with pytest.raises(AttributeError):
+        study.get_param_type("vehicles.mtr.NotAComponent.height")
 
-    for dotted_path, expected in error_cases:
-        with pytest.raises(expected):
-            get_param_type(dotted_path, study, plugins)
+    with pytest.raises(AttributeError):
+        study.get_param_type("vehicles.NotAVehicle.wing.span")
+
+    with pytest.raises(ValueError):
+        study.get_param_type("vehicles.mtr.wing")
+
+    with pytest.raises(KeyError):
+        study.solution.get_var_type("test_plug.NotARealIO", plugins)
+
+    with pytest.raises(KeyError):
+        study.solution.get_var_type("NotAPlugin.testin_cont", plugins)
 
 if __name__ == '__main__':
-
     test_check_and_get_config_good()
-

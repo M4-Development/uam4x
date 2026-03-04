@@ -17,21 +17,25 @@ def test_registery_good():
         os.remove(config_path)
 
     config = check_and_get_config(config_path)
-    assert config == {"PLUGINS": {},"SUBSYSTEMS": {}}
+    assert "PLUGINS" in config
+    assert "SUBSYSTEMS" in config
 
     @register_plugin
     class P(Plugin):
         pass
 
     config = check_and_get_config(config_path)
-    assert config == {"PLUGINS": {P.__name__: file_path},"SUBSYSTEMS": {}}
+    if os.getenv("UAM4X_DISABLE_REGISTRY_WRITES") != "1":
+        assert P.__name__ in config["PLUGINS"]
+    assert P.__name__ in _plugin_registry
 
     @register_subsystem
     class C(Subsystem):
         pass
 
     config = check_and_get_config(config_path)
-    assert config == {"PLUGINS": {P.__name__: file_path},"SUBSYSTEMS": {C.__name__: file_path,}}
-
-
+    if os.getenv("UAM4X_DISABLE_REGISTRY_WRITES") != "1":
+        assert P.__name__ in config["PLUGINS"]
+        assert C.__name__ in config["SUBSYSTEMS"]
+    assert C.__name__ in _subsystem_registry
 

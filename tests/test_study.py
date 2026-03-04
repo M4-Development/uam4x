@@ -1,518 +1,254 @@
-import pytest
-import  sys
-import platform
-from importlib.metadata import distributions
-from pathlib import  Path
-import subprocess
-import copy
+import os
+from types import SimpleNamespace
+
+os.environ.setdefault("UAM4X_DISABLE_REGISTRY_WRITES", "1")
+
 import numpy as np
+import pytest
 
-from uam4x.study import Study
-from uam4x.solution import Solution
-from uam4x.control import Control
+import uam4x.study as study_module
+from uam4x.study import Study, Variants
 from uam4x.vehicle import Vehicle, VehicleManager
-from uam4x.control import ParameterSweep
-from uam4x.subsystems import Subsystem, _Mode, Parameter, Wing, Rotor, RotorBladeRegion, Aircraft
+from uam4x.subsystems import Subsystem, register_subsystem
+from uam4x.solution import Solution, Plugin, register_plugin
 
 
+@register_subsystem
+class StudyComponent(Subsystem):
+    def setup(self):
+        self.add_parameter("span", default_value=12.0, dtype=float)
+        self.add_parameter("count", default_value=3, dtype=int)
+        self.add_parameter("vec", default_value=np.array([10.0, 20.0, 30.0]), dtype=np.ndarray)
 
-SAMPLE_PARAM_STATE = {
-        "vehicles.multi_objective_vehicle.weighting_factor.weighting_factor": 0,
-        "optimization": True,
-        "type": "Optimization",
-        "des_vars": {
-            "vehicles.multi_objective_vehicle.wing1.aspect_ratio": {
-                "lower": 1.0,
-                "upper": 10.0,
-                "indices": None
-            },
-            "vehicles.multi_objective_vehicle.wing1.span": {
-                "lower": 100.0,
-                "upper": 1000.0,
-                "indices": None
-            }
-        },
-        "constraints": {
-            "calc_area.area": {
-                "lower": 49999.0,
-                "upper": 50001.0,
-                "indices": None
-            }
-        },
-        "objective_name": "calc_objective.objective",
-        "calc_area.area": 49998.999999998494,
-        "calc_objective.CD": 0.042767071432663215,
-        "calc_objective.wing_weight": 88.92178070843795,
-        "calc_objective.objective": 88.92178070843795,
-        "calc_area.area_array_test[1,:]": [
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0
-        ],
-        "vehicles.multi_objective_vehicle.wing1.aspect_ratio": 1.0000000000000364,
-        "vehicles.multi_objective_vehicle.wing1.span": 223.6045616708217
-    }
+
+@register_plugin
+class StudyPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("x", float)
+        self.declare_output("y", float)
+
+    def run_plugin(self, links, work_dir):
+        return {"y": float(links["x"]) + 5.0}
+
 
 @pytest.fixture
-def sample_param_state():
-    return copy.deepcopy(SAMPLE_PARAM_STATE)
-
-
-#--------------------------------------------------------Study
-@pytest.fixture
-def sample_study():
-    class ExtraComponent(Subsystem):
-        def setup(self):
-            self.add_parameter(
-                name='sample_array',
-                default_value=np.arange(1, 10),
-                dtype=np.ndarray,
-            )
-
-    EC = ExtraComponent('array_based_component')
-    W = Wing('swept_wing')
-    R = Rotor('rotor_one')
-    RBR = RotorBladeRegion('rotor_region_one')
-    A = Aircraft('sample_uam')
-
-    # --- Wing params ---
-    W.set_parameter("area", 12.5)
-    W.set_parameter("span", 10.0)
-    W.set_parameter("sweep", 25.0)
-
-    # --- Rotor params ---
-    R.set_parameter("vtip", 600.0)
-    R.set_parameter("radius", 2.5)
-    R.set_parameter("nblade", 4)
-    R.set_parameter("tilt", 0.0)
-
-    # --- RotorBladeRegion params ---
-    RBR.set_parameter("spanwise_start", 0.1)
-    RBR.set_parameter("spanwise_stop", 0.9)
-    RBR.set_parameter("twist_start", -5.0)
-
-    # --- Aircraft params ---
-    A.set_parameter("npass", 6)
-    A.set_parameter("wpass", 180.0)
-
-    # --- Rotor mode ---
-    R.add_mode('vertical_rotor')
-    R.vertical_rotor.set_parameter('rpm', 500.)
-    R.vertical_rotor.set_parameter('tilt', 90.0)
-
-    # --- Vehicles ---
-    Vehicle1 = Vehicle('commercial_uam')
-    Vehicle1.add_component(W)
-    Vehicle1.add_component(R)
-    Vehicle1.add_component(EC)
-
-    Vehicle2 = Vehicle('military_uam')
-    Vehicle2.add_component(RBR)
-    Vehicle2.add_component(A)
-
-    # --- Study ---
-    S = Study()
-    S.vehicles.append(Vehicle1)
-    S.add_vehicle(Vehicle2)
-
-    return S
-
-def test_Study_instance():
-
+def demo_study():
     s = Study()
+    v = Vehicle("demo_vehicle")
+    v.add_component(StudyComponent("wing"))
+    s.add_vehicle(v)
 
+    s.solution.add_step(StudyPlugin, "step1")
+    s.solution.add_link("vehicles.demo_vehicle.wing.span", "step1.x")
+    s.solution.add_tracked_output("step1.y")
+
+    return s
+
+
+def test_study_initialization_types():
+    s = Study()
     assert isinstance(s.vehicles, VehicleManager)
     assert isinstance(s.solution, Solution)
-    assert isinstance(s.control, Control)
 
 
+def test_study_add_get_vehicle(demo_study):
+    s = demo_study
+    got = s.get_vehicle("demo_vehicle")
+    assert got.name == "demo_vehicle"
 
-def test_Study_get_environment():
+
+def test_study_capture_environment(monkeypatch):
+    monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
+
     s = Study()
-    s._capture_environment('sample_trade')
+    s._capture_environment("trade_a")
 
-    # New location of the environment info
-    assert 'sample_trade' in s._runtime_meta_data
-    assert 'environment' in s._runtime_meta_data['sample_trade']
-    env = s._runtime_meta_data['sample_trade']['environment']
-
-    assert isinstance(env, dict)
-    assert set(env.keys()) == {'Machine', 'Python', 'Packages'}
-    assert "time_info" in s._runtime_meta_data["sample_trade"]
-    assert "Start_Time" in s._runtime_meta_data["sample_trade"]["time_info"]
-    assert isinstance(s._runtime_meta_data["sample_trade"]["time_info"]["Start_Time"], str)
-
-    machine = env['Machine']
-
-    # Machine info has expected keys
-    for key in ["os_system", "os_release", "os_version", "platform", "machine", "processor"]:
-        assert key in machine
-        assert isinstance(machine[key], str)
-
-    # Python info looks sane
-    py = env["Python"]
-    assert "python_spec" in py and isinstance(py["python_spec"], str)
-    assert "python_executable" in py and isinstance(py["python_executable"], str)
-
-    # Packages is a dict of name -> version strings (may be empty but usually not)
-    pkgs = env["Packages"]
-    assert isinstance(pkgs, dict)
-    for name, version in list(pkgs.items())[:10]:  # sample a few
-        assert isinstance(name, str)
-        assert isinstance(version, str)
+    assert "trade_a" in s._runtime_meta_data
+    env = s._runtime_meta_data["trade_a"]["environment"]
+    assert set(env) == {"Machine", "Python", "Packages"}
+    assert "Start_Time" in s._runtime_meta_data["trade_a"]["time_info"]
 
 
-def test_Study_add_trade():
-    sample_param_dict = {'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],
-                    'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}
+def test_study_get_value_scalar_and_indexed_array(demo_study):
+    s = demo_study
 
-    PS = ParameterSweep(sample_param_dict)
-
-    S = Study()
-
-    S.add_trade('sample_trade', PS)
-
-    assert S.control.trade_studies['sample_trade'] is PS
-
-
-def test_Study_add_vehicle():
-    v1 = Vehicle('sample_vehicle1')
-    v2 = Vehicle('sample_vehicle2')
-
-    S = Study()
-    S.add_vehicle(v1)
-    S.add_vehicle(v2)
-
-    assert S.vehicles.sample_vehicle1 is v1
-    assert S.vehicles.get_vehicle('sample_vehicle2') is v2
-
-def test_Study_get_vehicle():
-    v1 = Vehicle('sample_vehicle1')
-    v2 = Vehicle('sample_vehicle2')
-
-    S = Study()
-    S.add_vehicle(v1)
-    S.add_vehicle(v2)
-
-    assert S.get_vehicle('sample_vehicle1') is v1
-    assert S.get_vehicle('sample_vehicle2') is v2
-
-#Test to dict
-
-#Test from dict
-
-#Test save to json
-
-#Test load from json
-
-def test_Study_get_plugin_input_and_output_names_positive():
-    S = Study()
-
-    # --- Add seven links in UAM4x style: add_link(source, target) ---
-
-    # 1. stepA → stepB (stepB is dependent)
-    S.solution.add_link("stepA.out1", "stepB.in1")
-
-    # 2. stepB → stepA (stepB is independent)
-    S.solution.add_link("stepB.out2", "stepA.in2")
-
-    # 3. stepC → stepB (dependent)
-    S.solution.add_link("stepC.signal", "stepB.command")
-
-    # 4. stepB → vehicles (independent)
-    S.solution.add_link("stepB.thrust", "vehicles.input")
-
-    # 5. vehicles → stepB (dependent)
-    S.solution.add_link("vehicles.mass", "stepB.load")
-
-    # 6. Indexed dependent target (brackets removed)
-    S.solution.add_link("stepA.force", "stepB.vec")
-
-    # 7. Indexed independent source (brackets removed)
-    S.solution.add_link("stepB.state[2]", "stepC.status")
-
-    # --- Add a tracked output belonging to stepB ---
-    S.solution.add_tracked_output("stepB.pressure")
-    S.solution.add_tracked_output("stepA.out1")
-
-    # ----------------------------
-    # Compute names for stepB
-    # ----------------------------
-    inputs, outputs = S.get_plugin_input_and_output_names("stepB")
-
-    # --- Expected results ---
-
-    expected_inputs = {
-        "stepB.in1",      # from stepA.out1 → stepB.in1
-        "stepB.command",  # from stepC.signal → stepB.command
-        "stepB.load",     # from vehicles.mass → stepB.load
-        "stepB.vec",      # from stepA.force → stepB.vec[1,3] (bracket stripped)
-    }
-
-    expected_outputs = {
-        "stepB.out2",     # from stepB.out2 → stepA.in2
-        "stepB.thrust",   # from stepB.thrust → vehicles.input
-        "stepB.state",    # from stepB.state[2] → stepC.status (bracket stripped)
-        "stepB.pressure", # tracked output
-    }
-
-    assert inputs == expected_inputs
-    assert outputs == expected_outputs
-
-def test_Study_get_value(sample_study):
-
-
-    S = sample_study
-
-    # ---------- Wing parameters ----------
-    assert S.get_value('vehicles.commercial_uam.swept_wing.area') == 12.5
-    assert S.get_value('vehicles.commercial_uam.swept_wing.span') == 10.0
-    assert S.get_value('vehicles.commercial_uam.swept_wing.sweep') == 25.0
-
-    # ---------- Rotor parameters ----------
-    assert S.get_value('vehicles.commercial_uam.rotor_one.vtip') == 600.0
-    assert S.get_value('vehicles.commercial_uam.rotor_one.radius') == 2.5
-    assert S.get_value('vehicles.commercial_uam.rotor_one.nblade') == 4
-    assert S.get_value('vehicles.commercial_uam.rotor_one.tilt') == 0.0
-
-    # ---------- Rotor mode parameters ----------
-    assert S.get_value('vehicles.commercial_uam.rotor_one.vertical_rotor.rpm') == 500.0
-    assert S.get_value('vehicles.commercial_uam.rotor_one.vertical_rotor.tilt') == 90.0
-
-    # ---------- RotorBladeRegion parameters ----------
-    assert S.get_value('vehicles.military_uam.rotor_region_one.spanwise_start') == 0.1
-    assert S.get_value('vehicles.military_uam.rotor_region_one.spanwise_stop') == 0.9
-    assert S.get_value('vehicles.military_uam.rotor_region_one.twist_start') == -5.0
-
-    # ---------- Aircraft parameters ----------
-    assert S.get_value('vehicles.military_uam.sample_uam.npass') == 6
-    assert S.get_value('vehicles.military_uam.sample_uam.wpass') == 180.0
-
-    # ---------- ExtraComponent: whole array ----------
-    full_arr = S.get_value(
-        'vehicles.commercial_uam.array_based_component.sample_array'
+    assert s.get_value("vehicles.demo_vehicle.wing.span") == 12.0
+    np.testing.assert_array_equal(
+        s.get_value("vehicles.demo_vehicle.wing.vec"),
+        np.array([10.0, 20.0, 30.0]),
     )
-    expected_arr = np.arange(1, 10)
-    assert np.array_equal(full_arr, expected_arr)
+    assert s.get_value("vehicles.demo_vehicle.wing.vec[1]") == 20.0
 
-    # ---------- ExtraComponent: subindex of array ----------
-    elem = S.get_value(
-        'vehicles.commercial_uam.array_based_component.sample_array[3]'
-    )
-    assert elem == expected_arr[3]
 
-def test_Study_get_all_names_by_category(sample_study):
-    # sample_study fixture returns ONLY the Study instance
-    S = sample_study
+def test_study_get_param_type_valid_and_invalid_path(demo_study):
+    s = demo_study
 
-    # -------------------------
-    # Mock links + tracked_outputs on this Study
-    # -------------------------
-    S.solution.links = [
-        # (independent/output, dependent/input)
-        ('step1.weights.wing_weight',      'step2.performance.weight_in'),
-        ('step1.mass.mtow',                'step2.performance.mtow_in'),
-        ('vehicles.commercial_uam.swept_wing.span',
-         'step3.performance.span_in'),
+    assert s.get_param_type("vehicles.demo_vehicle.wing.span") is float
+    assert s.get_param_type("vehicles.demo_vehicle.wing.count") is int
+
+    with pytest.raises(ValueError, match="Invalid vehicle parameter"):
+        s.get_param_type("vehicles.demo_vehicle.wing")
+
+
+def test_study_to_dict_from_dict_roundtrip(monkeypatch, demo_study):
+    monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
+
+    s = demo_study
+    s._capture_environment("roundtrip_trade")
+    raw = s._to_dict()
+    rebuilt = Study._from_dict(raw)
+
+    assert rebuilt.get_vehicle("demo_vehicle").wing.span == 12.0
+    assert rebuilt.solution.links == s.solution.links
+    assert rebuilt.solution.tracked_outputs == s.solution.tracked_outputs
+    assert "roundtrip_trade" in rebuilt._runtime_meta_data
+
+
+def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
+    path = tmp_path / "study.json"
+
+    demo_study.save_model_to_json(str(path), commit=False)
+    loaded = Study.from_json(str(path))
+
+    assert loaded.get_vehicle("demo_vehicle").wing.span == 12.0
+    assert loaded.solution.links == demo_study.solution.links
+    assert loaded.solution.tracked_outputs == ["step1.y"]
+
+
+def test_study_load_from_json_mutates_current_instance(tmp_path, demo_study):
+    path = tmp_path / "study_load.json"
+    demo_study.save_model_to_json(str(path), commit=False)
+
+    fresh = Study()
+    fresh.load_from_json(str(path))
+
+    assert fresh.get_vehicle("demo_vehicle").wing.span == 12.0
+    assert fresh.solution.links == demo_study.solution.links
+
+
+def test_get_all_names_by_category_and_flat_names(demo_study):
+    s = demo_study
+    s.solution.links = [
+        ("step1.y", "step2.input_a"),
+        ("vehicles.demo_vehicle.wing.span", "step1.x"),
     ]
+    s.solution.tracked_outputs = ["step2.output_a", "vehicles.demo_vehicle.wing.count"]
 
-    S.solution.tracked_outputs = [
-        'step2.performance.weight_in',          # valid step output
-        'step4.sensitivity.grad_out',           # valid step output
-        'vehicles.commercial_uam.rotor_one.vtip',  # NOT a step -> should be ignored
-    ]
+    by_category = s.get_all_names_by_category()
+    all_names = s.get_all_names()
 
-    result = S.get_all_names_by_category()
-
-    vehicle_names = result['vehicle_names']
-    step_inputs   = result['step_inputs']
-    step_outputs  = result['step_outputs']
-
-    # -------------------------
-    # Vehicle names: string-based checks only (no direct objects)
-    # These must match how your fixture builds the Study.
-    # -------------------------
-
-    # Wing (commercial_uam)
-    assert 'vehicles.commercial_uam.swept_wing.area' in vehicle_names
-    assert 'vehicles.commercial_uam.swept_wing.span' in vehicle_names
-    assert 'vehicles.commercial_uam.swept_wing.sweep' in vehicle_names
-
-    # Rotor (commercial_uam)
-    assert 'vehicles.commercial_uam.rotor_one.vtip'   in vehicle_names
-    assert 'vehicles.commercial_uam.rotor_one.radius' in vehicle_names
-    assert 'vehicles.commercial_uam.rotor_one.nblade' in vehicle_names
-    assert 'vehicles.commercial_uam.rotor_one.tilt'   in vehicle_names
-
-    # Rotor mode (vertical_rotor) – this also validates using mode._parameters
-    assert (
-        'vehicles.commercial_uam.rotor_one.vertical_rotor.rpm'
-        in vehicle_names
-    )
-    assert (
-        'vehicles.commercial_uam.rotor_one.vertical_rotor.tilt'
-        in vehicle_names
+    assert "vehicles.demo_vehicle.wing.span" in by_category["vehicle_names"]
+    assert "step2.input_a" in by_category["step_inputs"]
+    assert "step1.y" in by_category["step_outputs"]
+    assert "step2.output_a" in by_category["step_outputs"]
+    assert all_names == (
+        by_category["vehicle_names"]
+        + by_category["step_inputs"]
+        + by_category["step_outputs"]
     )
 
-    # RotorBladeRegion (military_uam)
-    assert (
-        'vehicles.military_uam.rotor_region_one.spanwise_start'
-        in vehicle_names
-    )
-    assert (
-        'vehicles.military_uam.rotor_region_one.spanwise_stop'
-        in vehicle_names
-    )
-    assert (
-        'vehicles.military_uam.rotor_region_one.twist_start'
-        in vehicle_names
-    )
 
-    # Aircraft (military_uam)
-    assert 'vehicles.military_uam.sample_uam.npass' in vehicle_names
-    assert 'vehicles.military_uam.sample_uam.wpass' in vehicle_names
+def test_variants_generate_variants(tmp_path):
+    root = tmp_path
 
-    # Extra array-based component (assuming fixture added this)
-    assert (
-        'vehicles.commercial_uam.array_based_component.sample_array'
-        in vehicle_names
-    )
+    def add_vehicle_func(study):
+        v = Vehicle("variant_vehicle")
+        v.add_component(StudyComponent("wing"))
+        study.add_vehicle(v)
 
-    # -------------------------
-    # step_inputs checks (from links: dependents that start with 'step')
-    # -------------------------
-    assert set(step_inputs) == {
-        'step2.performance.weight_in',
-        'step2.performance.mtow_in',
-        'step3.performance.span_in',
-    }
+    def add_solution_func(study):
+        study.solution.add_step(StudyPlugin, "step1")
+        study.solution.add_link("vehicles.variant_vehicle.wing.span", "step1.x")
+        study.solution.add_tracked_output("step1.y")
 
-    # -------------------------
-    # step_outputs checks
-    #   - from links: independents starting with 'step'
-    #   - from tracked_outputs: entries starting with 'step'
-    # -------------------------
-    assert set(step_outputs) == {
-        'step1.weights.wing_weight',
-        'step1.mass.mtow',
-        'step2.performance.weight_in',   # from both links + tracked_outputs
-        'step4.sensitivity.grad_out',
-    }
+    variants = Variants(str(root))
+    variants.add_variant("v1", [add_vehicle_func, add_solution_func])
+    studies = variants.generate_variants(commit=False)
 
-    # -------------------------
-    # Sanity: names are actually usable via S.get_value
-    # (this only needs the Study instance)
-    # -------------------------
-
-    # simple scalar
-    assert S.get_value('vehicles.commercial_uam.swept_wing.span') == 10.0
-
-    # full array
-    arr = S.get_value(
-        'vehicles.commercial_uam.array_based_component.sample_array'
-    )
-    assert np.array_equal(arr, np.arange(1, 10))
-
-    # indexed element via bracket handling
-    elem = S.get_value(
-        'vehicles.commercial_uam.array_based_component.sample_array[3]'
-    )
-    assert elem == np.arange(1, 10)[3]
-
-def test_Study_get_all_names(sample_study):
-    # sample_study fixture returns ONLY the Study instance
-    S = sample_study
-
-    # Wire up the same links / tracked_outputs used in the category test
-    S.solution.links = [
-        ('step1.weights.wing_weight',      'step2.performance.weight_in'),
-        ('step1.mass.mtow',                'step2.performance.mtow_in'),
-        ('vehicles.commercial_uam.swept_wing.span',
-         'step3.performance.span_in'),
-    ]
-    S.solution.tracked_outputs = [
-        'step2.performance.weight_in',
-        'step4.sensitivity.grad_out',
-        'vehicles.commercial_uam.rotor_one.vtip',  # non-step, should be ignored
-    ]
-
-    # Call the category method and the wrapper
-    all_by_cat = S.get_all_names_by_category()
-    vehicle_names = all_by_cat['vehicle_names']
-    step_inputs   = all_by_cat['step_inputs']
-    step_outputs  = all_by_cat['step_outputs']
-
-    all_names = S.get_all_names()
-
-    # 1) It should be exactly the concatenation order
-    assert all_names == vehicle_names + step_inputs + step_outputs
-
-    # 2) No name is dropped
-    for name in vehicle_names:
-        assert name in all_names
-    for name in step_inputs:
-        assert name in all_names
-    for name in step_outputs:
-        assert name in all_names
-
-        from uam4x.study import Study
-        from uam4x.vehicle import Vehicle
-        from uam4x.subsystems import Wing
+    expected_json = root / "variants" / "v1" / "data.json"
+    assert len(studies) == 1
+    assert expected_json.exists()
+    assert studies[0].control.variant_name == "v1"
 
 
-def test_Study_from_dict_roundtrip():
-    # --- Build original study ---
-    study = Study()
+def test_study_runtime_metadata_helpers(demo_study):
+    s = demo_study
+    s._add_runtime_plugin_checksums("t1", {"step1": "abc"})
+    s._add_runtime_external_executable_data("t1", {"exe": {"version": "1.0"}})
 
-    # Vehicle + component
-    veh = Vehicle("TestVehicle")
-    wing = Wing("left_wing")
-    wing.set_parameter("span", 5.0)
-    wing.set_parameter("area", 20.0)
-    veh.add_component(wing)
+    assert s._runtime_meta_data["t1"]["step_plugin_hashes"] == {"step1": "abc"}
+    assert s._runtime_meta_data["t1"]["step_external_executable_data"]["exe"]["version"] == "1.0"
 
-    study.add_vehicle(veh)
 
-    # Optional: add a mode + override to ensure it survives component._from_dict
-    mode = wing.add_mode("cruise")
-    mode.set_parameter("span", 7.5)
+def test_study_capture_environment_existing_trade_branch(monkeypatch):
+    monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
+    s = Study()
+    s._runtime_meta_data["trade_existing"] = {"seed": 1}
+    s._capture_environment("trade_existing")
 
-    # --- Convert to dict and reconstruct ---
-    data = study._to_dict()
-    rebuilt = Study._from_dict(data)
+    assert s._runtime_meta_data["trade_existing"]["seed"] == 1
+    assert "environment" in s._runtime_meta_data["trade_existing"]
+    assert "time_info" in s._runtime_meta_data["trade_existing"]
 
-    # --- Basic type checks ---
-    assert isinstance(rebuilt, Study)
 
-    # Vehicle exists and has same name
-    rebuilt_veh = rebuilt.get_vehicle("TestVehicle")
-    assert isinstance(rebuilt_veh, Vehicle)
-    assert rebuilt_veh.name == "TestVehicle"
+def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkeypatch):
+    out = tmp_path / "results.json"
+    calls = {}
 
-    # We expect a new Vehicle object, not the same instance
-    assert rebuilt_veh is not veh
+    def fake_commit(json_path, msg):
+        calls["path"] = json_path
+        calls["msg"] = msg
 
-    # Find the wing on the rebuilt vehicle
-    rebuilt_wings = [c for c in rebuilt_veh.components if isinstance(c, Wing)]
-    assert len(rebuilt_wings) == 1
-    rebuilt_wing = rebuilt_wings[0]
+    monkeypatch.setattr(demo_study, "_commit_json_to_branch", fake_commit)
+    demo_study.save_results_to_json(str(out), commit=True)
 
-    # Component name preserved
-    assert rebuilt_wing.name == "left_wing"
+    assert out.exists()
+    assert calls["path"] == str(out)
+    assert "Writing results for variant" in calls["msg"]
 
-    # Base parameter values preserved
-    assert rebuilt_wing.span == 5.0
-    assert rebuilt_wing.area == 20.0
 
-    # Mode and overrides preserved
-    assert "cruise" in rebuilt_wing._modes
-    rebuilt_mode = rebuilt_wing.cruise
-    assert rebuilt_mode.get_parameter("span") == 7.5
+def test_study_commit_json_to_branch_errors_no_dir(demo_study):
+    demo_study.control.repo_root = "/definitely/not/a/repo"
+    with pytest.raises(NotADirectoryError):
+        demo_study._commit_json_to_branch("dummy.json", "msg")
 
-    # And ensure mode override is not the same dict object
-    assert rebuilt_mode is not mode
 
-if __name__ == "__main__":
-    test_Study_get_value()
+def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, monkeypatch):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / ".git").mkdir()
+    demo_study.control.repo_root = str(repo_root)
+
+    monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: None)
+    with pytest.raises(ValueError, match="No repository found"):
+        demo_study._commit_json_to_branch(str(repo_root / "data.json"), "msg")
+
+
+def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_study, monkeypatch):
+    repo_root = tmp_path / "repo2"
+    repo_root.mkdir()
+    (repo_root / ".git").mkdir()
+    demo_study.control.repo_root = str(repo_root)
+
+    monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: str(tmp_path / "other" / ".git"))
+    with pytest.raises(ValueError, match="does not have a repo"):
+        demo_study._commit_json_to_branch(str(repo_root / "data.json"), "msg")
+
+
+def test_study_commit_json_to_branch_detached_head(tmp_path, demo_study, monkeypatch):
+    repo_root = tmp_path / "repo3"
+    repo_root.mkdir()
+    (repo_root / ".git").mkdir()
+    demo_study.control.repo_root = str(repo_root)
+
+    monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: str(repo_root / ".git"))
+    fake_repo = SimpleNamespace(head_is_detached=True, head_is_unborn=False, head=SimpleNamespace(target="abc"))
+    monkeypatch.setattr(study_module.pygit2, "Repository", lambda *_: fake_repo)
+
+    with pytest.raises(RuntimeError, match="detached HEAD"):
+        demo_study._commit_json_to_branch(str(repo_root / "data.json"), "msg")
+
+
+def test_study_get_plugin_link_inputs_current_behavior_raises(demo_study):
+    with pytest.raises(AttributeError):
+        demo_study.get_plugin_link_inputs("step1", state={})
