@@ -8,7 +8,7 @@ from uam4x.custom_errors import PluginException
 import inspect
 import hashlib
 import numpy as  np
-from uam4x.utils import check_continuous, get_param_type, check_if_scalar,log, parse_index, handle_brackets
+from uam4x.utils import check_continuous, check_if_scalar,log, parse_index, handle_brackets
 from collections import  defaultdict
 from uam4x.results import Results, Result, Tradestudy  
 from uam4x.log import FileLogger
@@ -16,7 +16,7 @@ import concurrent.futures
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
+from uam4x.solution import Group
 class Engine:
     """
     Execution engine for running UAM4X studies and trade studies.
@@ -103,7 +103,7 @@ class Engine:
         out_dir = os.path.join(self.work_dir, f"check_partials")
         os.makedirs(out_dir, exist_ok=True)
 
-        plugins=self._generate_plugins()
+        plugins=self.study.solution.generate_plugins()
 
             
         # May need to refactor this, but def want a check here. 
@@ -118,14 +118,15 @@ class Engine:
         os.chdir(cwd)
 
 
-    def _generate_plugins(self):
-        plugins = {}
-        for step_name, step_info in self.study.solution.steps.items():
-            self.log.debug(f'setup {step_name} plugin')
-            plugin = step_info["plugin"]()
-            plugin.setup_plugin(step_info["plugin_options"])
-            plugins[step_name] = plugin
-        return plugins
+    #def _generate_plugins(self):
+    #    plugins = {}
+    #    for step_name, step_info in self.study.solution.steps.items():
+    #        
+    #        self.log.debug(f'setup {step_name} plugin')
+    #        plugin = step_info["plugin"]()
+    #        plugin.setup_plugin(step_info["plugin_options"])
+    #        plugins[step_name] = plugin
+    #    return plugins
 
     def _run_state(self, state, iteration=None, check=True):
         """
@@ -152,6 +153,9 @@ class Engine:
         subdirectory. Otherwise, outputs go to the main work directory.
         """
         self.log.debug('run solution')
+        # Parallel workers rebuild Study from a serialized form, which does not
+        # preserve the derived execution order stored in `_execution_steps`.
+        # Recompute it here so serial and parallel runs build the same model.
         if not iteration is None:
             out_dir = os.path.join(self.work_dir, f"out_{iteration}")
         else:
@@ -159,7 +163,8 @@ class Engine:
 
         os.makedirs(out_dir, exist_ok=True)
 
-        plugins=self._generate_plugins()
+        plugins=self.study.solution.generate_plugins()
+        self.study.solution.sort_steps()
         
         if state.get('optimization',False):
             result=self._run_optimization(state, plugins, out_dir)
@@ -253,7 +258,7 @@ class Engine:
         """
         self.log.debug('run single point')
         temp_state=copy.deepcopy(state)
-        for step_name, step_info in self.study.solution.steps.items():
+        for step_name, step_info in self.study.solution._execution_steps.items():
             self.log.debug(f'run single point: {step_name}')
             plugin = plugins[step_name]
             work_dir = os.path.join(out_dir, step_name)
@@ -295,8 +300,8 @@ class Engine:
         trade_name='Default State'
         self.log.debug('run solution')
         self.capture_execution_data(trade_name)
-        self.sort_steps()
-        plugins=self._generate_plugins()
+        self.study.solution.sort_steps()
+        plugins=self.study.solution.generate_plugins()
         state={}
         out_dir=self.work_dir
         result=self._run_single_point(state, plugins, out_dir=out_dir)
@@ -341,23 +346,27 @@ class Engine:
         # hash plugins at runtime
         plugin_name_to_hash = {}
         external_executable_to_versioning_data = {}
-        for step_name, step_info in self.study.solution.steps.items():
-            self.log.debug(f'setup {step_name} plugin')
-            plugin_class = step_info["plugin"]
+        all_plugin_name_to_class=self.study.solution.get_all_plugin_names_to_classes()
+        all_plugin_name_to_hash=self.study.solution.get_all_plugin_names_to_hashes()
+        for plugin_name, plugin_class in all_plugin_name_to_class.items():
             #get the hash
             src = inspect.getsource(plugin_class)
             h = hashlib.sha256()
             h.update(src.encode("utf-8"))
             plug_hash = h.hexdigest()
-            plugin_name_to_hash[step_name] = plug_hash
-            if self.study.solution.steps[step_name]['plugin_hash'] != plug_hash:
-                log.warning(f"Plugin '{plugin_class.__name__}' contains a different checksum from the one generated at branching script. Check plugin code for changes")
+            plugin_name_to_hash[plugin_name] = plug_hash
 
-            plugin = step_info["plugin"]()
-            plugin.setup_plugin(step_info["plugin_options"])
-            if plugin._executable_to_data and not 'step_external_executable_data' in self.study._runtime_meta_data:
-                #copying here because i don't want to carry and accidentally modify state
-                external_executable_to_versioning_data[step_name] = copy.deepcopy(plugin._executable_to_data)
+            #NEED TO UPDATE TO REFLECT NEW STRUCTURE FOR COMPARISON
+            if all_plugin_name_to_hash[plugin_name] != plug_hash:
+                log.warning(f"Plugin '{plugin_class.__name__}' contains a different checksum from the one generated at branching script. Check plugin code for changes")
+#
+            #NEED TO UPDATE THIS TO ALIGN WITH GROUPS, MAYBE NEED A MORE CENTRALIZED
+            #SET UP TO MINIMIZE REPETITION 
+            #plugin = step_info["plugin"]()
+            #plugin.setup_plugin(step_info["plugin_options"])
+            #if plugin._executable_to_data and not 'step_external_executable_data' in self.study._runtime_meta_data:
+            #    #copying here because i don't want to carry and accidentally modify state
+            #    external_executable_to_versioning_data[step_name] = copy.deepcopy(plugin._executable_to_data)
 
         if external_executable_to_versioning_data:
             self.study._add_runtime_external_executable_data(trade_name,external_executable_to_versioning_data)        
@@ -384,7 +393,7 @@ class Engine:
         """
         start_time = time.perf_counter()
         self.log.debug(f'run tradestudy: {trade_name}')
-        self.sort_steps()
+        self.study.solution.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
         # addition for UQ workflows where orchestration is more complex
         if hasattr(tradestudy,'_check_analysis'):
@@ -406,7 +415,7 @@ class Engine:
             #run optimization as defined by the base state
             state=tradestudy._to_dict()
             state['optimization']=True
-            plugins=self._generate_plugins()
+            plugins=self.study.solution.generate_plugins()
             
             if check:
                 self.check_model(plugins, state)
@@ -521,51 +530,6 @@ class Engine:
         # self.log.info(f'succesful states: {successful_states}')
         # self.log.info(f'failed states: {failed_states}')
 
-    def sort_steps(self):
-        """
-        Sort solution steps to ensure proper execution order.
-
-        Uses a topological sort algorithm to determine the correct order
-        of plugin execution based on the links between steps. Detects
-        circular dependencies and raises an error if found.
-
-        Raises
-        ------
-        RuntimeError
-            If a circular solution sequence is detected.
-
-        Notes
-        -----
-        This method modifies the study.solution._steps dictionary
-        to reflect the sorted execution order.
-        """
-        self.log.debug(f'sort steps')
-        step_names = self.study.solution.get_step_names()
-        new_step_order = []
-        num_steps = 0
-        changes = True
-        while num_steps < len(self.study.solution.get_step_names()) and changes:
-            changes = False
-            for step_name in step_names:
-                add = True
-                for link in self.study.solution.links:
-                    left_link_split = link[0].split(".")
-                    right_link_split = link[1].split(".")
-                    if right_link_split[0] == step_name:
-                        if left_link_split[0] in step_names:
-                            add = False
-                if add:
-                    new_step_order.append((step_name, self.study.solution.steps[step_name]))
-                    step_names.remove(step_name)
-                    num_steps += 1
-                    changes = True
-        if not changes:
-            self.log.error("Circular Solution Sequence Detected!")
-            raise RuntimeError("Circular Solution Sequence Detected!")
-        else:
-            self.study.solution._steps = dict(new_step_order)
-
-
     def check_model(self, plugins, state):
         """
         Perform comprehensive model validation checks.
@@ -591,12 +555,12 @@ class Engine:
         self.log.debug('check model')
         self.check_links_to_plugins(plugins)
         self.check_link_types(plugins)
-        self.check_link_indices(plugins)
+        #self.check_link_indices(plugins)
         if state.get('optimization',False):
             self.check_desvars(plugins, state)
             self.check_constraints(plugins, state)
             self.check_objective(plugins, state)
-            self.check_optimization_discrete(plugins, state)
+            #self.check_optimization_discrete(plugins, state)
 
     def check_links_to_plugins(self, plugins):
         """
@@ -616,30 +580,31 @@ class Engine:
             If input or output names are not declared in plugins.
         """
         self.log.debug(f'check links to plugins')
-        for step_name in self.study.solution.steps:
-            # Check that links matched declared plugin I/O
-            input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
-            
-            #check coherance of declared I/O from plugin and from branching script
-            for input_name in  input_names:
-                name = '.'.join(input_name.split('.')[1:])
-                if name not  in plugins[step_name].plugin_input_names:
-                    self.log.error(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-                                     f"Check your plugin's setup() step for I/O declaration")
-                    raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-                                     f"Check your plugin's setup() step for I/O declaration")
-            for output_name in  output_names:
-                name = '.'.join(output_name.split('.')[1:])
-                if '[' in  name:
-                    #any time where indexes are specified in the link, this is required to be
-                    # an index specification, nothing to do with the variable name. 
-                    name, _ = handle_brackets(name)                
-                if name not  in plugins[step_name].plugin_output_names:
-                    self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-                                     f"Check your plugin's setup() step for I/O declaration")
-                    raise ValueError(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-                                     f"Check your plugin's setup() step for I/O declaration")
-
+        self.study.solution._check_links_to_plugins(plugins)
+        #for step_name in self.study.solution.steps:
+        #    # Check that links matched declared plugin I/O
+        #    input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
+        #    
+        #    #check coherance of declared I/O from plugin and from branching script
+        #    for input_name in  input_names:
+        #        name = '.'.join(input_name.split('.')[1:])
+        #        if name not  in plugins[step_name].plugin_input_names:
+        #            self.log.error(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+        #                             f"Check your plugin's setup() step for I/O declaration")
+        #            raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+        #                             f"Check your plugin's setup() step for I/O declaration")
+        #    for output_name in  output_names:
+        #        name = '.'.join(output_name.split('.')[1:])
+        #        if '[' in  name:
+        #            #any time where indexes are specified in the link, this is required to be
+        #            # an index specification, nothing to do with the variable name. 
+        #            name, _ = handle_brackets(name)                
+        #        if name not  in plugins[step_name].plugin_output_names:
+        #            self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+        #                             f"Check your plugin's setup() step for I/O declaration")
+        #            raise ValueError(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+        #                             f"Check your plugin's setup() step for I/O declaration")
+#
     def check_link_types(self, plugins):
         """
         Validate that linked parameters have compatible types.
@@ -657,29 +622,32 @@ class Engine:
         TypeError
             If linked parameters have incompatible types.
         """
-        self.log.debug('check link types')
-        bad_links = []
-        for link in  self.study.solution.links:
-            output_link = link[0]
-            input_link = link[1]
-            indexes_specified = False
-            if '[' in  output_link:
-                output_link, _ = handle_brackets(output_link)
-                indexes_specified = True
-            output_type = get_param_type(output_link, self.study, plugins)
-            input_type = get_param_type(input_link,self.study, plugins)
-            #Since only float arrays are allowed, always assumed that the elements of the arrays are floats
-            if indexes_specified and output_type != np.ndarray:
-                raise ValueError(f'Indexes may only be specified for arrays. The link: {link[1]} is not valid')
-            if indexes_specified and  output_type == np.ndarray and  check_continuous(input_type) and input_type != np.ndarray:
-                pass
-            elif output_type != input_type:
-                bad_links.append((output_link,output_type, input_link, input_type))
-
-        if bad_links:
-            msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
-            self.log.error(msg)
-            raise TypeError(msg)
+        self.study.solution._check_link_types(plugins,self.study)
+        #self.log.debug('check link types')
+        #bad_links = []
+        #for link in  self.study.solution.links:
+        #    output_link = link[0]
+        #    input_link = link[1]
+        #    indexes_specified = False
+        #    if '[' in  output_link:
+        #        output_link, _ = handle_brackets(output_link)
+        #        indexes_specified = True
+        #    if output_link.split('.')[0]=='vehicles':
+        #        self.study.get_type(output_link)
+        #    output_type = get_param_type(output_link, self.study, plugins)
+        #    input_type = get_param_type(input_link,self.study, plugins)
+        #    #Since only float arrays are allowed, always assumed that the elements of the arrays are floats
+        #    if indexes_specified and output_type != np.ndarray:
+        #        raise ValueError(f'Indexes may only be specified for arrays. The link: {link[1]} is not valid')
+        #    if indexes_specified and  output_type == np.ndarray and  check_continuous(input_type) and input_type != np.ndarray:
+        #        pass
+        #    elif output_type != input_type:
+        #        bad_links.append((output_link,output_type, input_link, input_type))
+#
+        #if bad_links:
+        #    msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
+        #    self.log.error(msg)
+        #    raise TypeError(msg)
         
                 
     def check_link_indices(self, plugins):
@@ -768,7 +736,7 @@ class Engine:
         """
         # add desvars
         for name,data in  state['des_vars'].items():
-            des_var_type = get_param_type(name,self.study, plugins)
+            des_var_type = self.study.get_param_type(name)
             if not check_continuous(des_var_type):
                 self.log.error(f'The design variable: {name} is of type {des_var_type}. Only floats allowed as design variables')
                 raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
@@ -778,7 +746,7 @@ class Engine:
             
     def check_constraints(self, plugins, state):
         for name,data in  state['constraints'].items():
-            constraint_type = get_param_type(name,self.study, plugins)
+            constraint_type = self.study.solution.get_var_type(name,plugins)
             if not check_continuous(constraint_type):
                 raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
                                 f'Only floats allowed as constraints')
@@ -901,7 +869,7 @@ class Engine:
             If the objective is not of continuous type.
         """
         self.log.debug('check objective')
-        objective_type = get_param_type(state["objective_name"], self.study, plugins)
+        objective_type = self.study.solution.get_var_type(state["objective_name"],plugins)
         is_continuous = check_continuous(objective_type)
         if not is_continuous:
             self.log.error(f'The objective: {state["objective_name"]} is of type {objective_type}. Only floats allowed as objectives')

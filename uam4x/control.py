@@ -18,10 +18,7 @@ class Optimization:
         self.constraints = {}
         self.objective_name = ''
         self._mdao_driver_options={
-            'optimizer':'SLSQP',
-            'maxiter':200,
-            'tol':1e-6
-            }
+            'optimizer':'SLSQP'}
         self._optimizer_options={}
         self.optimizer='ScipyOptimizeDriver'
 

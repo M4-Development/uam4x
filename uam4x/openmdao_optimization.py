@@ -3,13 +3,17 @@ from uam4x.study import Study
 import os
 import shutil
 import numpy as np
-from uam4x.utils import check_continuous, check_if_scalar, get_param_type, handle_brackets
+from uam4x.utils import check_continuous, check_if_scalar, handle_brackets
 from uam4x.log import get_log
 from uam4x.utils import log
 from uam4x.results import Results, Result
+from uam4x.solution import Group
 
-driver_name_to_driver={#'pyOptSparseDriver':om.pyOptSparseDriver,
+driver_name_to_driver={'pyOptSparseDriver':om.pyOptSparseDriver,
                        'ScipyOptimizeDriver':om.ScipyOptimizeDriver}
+
+cycle_solver_name_to_solver={'NonlinearBlockGS':om.NonlinearBlockGS}
+
 class Optimization:
     log = get_log(log, object_name='optimization')
     def __init__(self, study:Study, state, plugins, out_dir,check_partials=False) -> None:
@@ -25,7 +29,7 @@ class Optimization:
         self.log.debug('run problem')
 
         #make vehicle step
-        should_be_no_inputs, used_vehicle_param_names = self.study.get_plugin_input_and_output_names('vehicles')
+        used_vehicle_param_names = self.study.solution.get_all_used_vehicle_params()
         vehicle_val_dict = {}
         vehicle_type_dict = {}
         for param_name in used_vehicle_param_names:
@@ -34,28 +38,42 @@ class Optimization:
             else:
                 value= self.study.get_value(param_name)
             vehicle_val_dict[param_name] = value
-            vehicle_type_dict[param_name] = get_param_type(param_name, self.study)
+            vehicle_type_dict[param_name] = self.study.get_param_type(param_name)
         # comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(self.log), promotes=['*'])
         comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(), promotes=['*'])
         comp.options["vehicle_val_dict"] = vehicle_val_dict
         comp.options["vehicle_type_dict"] = vehicle_type_dict
 
         #make plugin steps
-        for step_name in self.study.solution.steps:
-            input_names = set([step_name + '.' + input_name for input_name in self.plugins[step_name].plugin_input_names.keys()])
-            output_names = set([step_name + '.' + output_name for output_name in self.plugins[step_name].plugin_output_names.keys()])
-            comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(), promotes=['*'])
-            # comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(self.log), promotes=['*'])
-            comp.options["plugin"] = self.plugins[step_name]
-            comp.options["input_names"] = input_names
-            comp.options["output_names"] = output_names
+        for step_name,data in self.study.solution._execution_steps.items():
             work_dir = os.path.join(self.out_dir, step_name)
-            # clean the work dir between runs
-            comp.options["work_dir"] = work_dir
-            if os.path.isdir(work_dir):
-                shutil.rmtree(work_dir)
-            os.makedirs(work_dir)
-            comp.options["step_name"] = step_name
+
+            if isinstance(data,dict):
+                input_names = set([step_name + '.' + input_name for input_name in self.plugins[step_name].plugin_input_names.keys()])
+                output_names = set([step_name + '.' + output_name for output_name in self.plugins[step_name].plugin_output_names.keys()])
+                comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(), promotes=['*'])
+                # comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(self.log), promotes=['*'])
+                comp.options["plugin"] = self.plugins[step_name]
+                comp.options["input_names"] = input_names
+                comp.options["output_names"] = output_names
+                # clean the work dir between runs
+                comp.options["work_dir"] = work_dir
+                if os.path.isdir(work_dir):
+                    shutil.rmtree(work_dir)
+                os.makedirs(work_dir)
+                comp.options["step_name"] = step_name
+                
+            elif isinstance(data,Group):
+                group=problem.model.add_subsystem(step_name,UniversalOpenMDAOGroup(),promotes=['*'])
+                group.options['group']=data
+                group.options['step_name']=step_name
+                group.options["work_dir"] = work_dir
+                group.options["links"]=data.links
+                if isinstance(self.plugins[step_name],dict):
+                    group.options['sub_plugins']=self.plugins[step_name]
+                else:
+                    group.options['sub_plugins']=None
+
 
         # Add connections
         for independent, dependent in self.study.solution.links:
@@ -68,7 +86,7 @@ class Optimization:
 
         # add desvars
         for name, data in  self.state['des_vars'].items():
-            dv_type = get_param_type(name, self.study)
+            dv_type = self.study.get_param_type(name)
             lower, upper = data['lower'], data['upper']
             indices = data['indices']
             
@@ -88,7 +106,7 @@ class Optimization:
         # add constraints
         for name, data in  self.state['constraints'].items():
 
-            const_type = get_param_type(name, self.study, self.plugins)
+            const_type = self.study.solution.get_var_type(name,self.plugins)
             lower,upper = data['lower'], data['upper']
             indices = data['indices']
             
@@ -108,10 +126,10 @@ class Optimization:
 
         result=Result(state=self.state)
         #add template hashes to results before template files are run in optimization
-        for plug_name,plug in self.plugins.items():
-            if plug._template_to_checksum:
-                for path, checksum in  plug._template_to_checksum.items():
-                    result._add_template_checksum(path, checksum)
+        #for plug_name,plug in self.plugins.items():
+        #    if plug._template_to_checksum:
+        #        for path, checksum in  plug._template_to_checksum.items():
+        #            result._add_template_checksum(path, checksum)
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
 
@@ -189,8 +207,10 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             self.set_check_partial_options(wrt=['*'], form=self.plugin.check_form, step=self.plugin.check_step)
 
         for input_name in self.input_names:
-            plugin_name = input_name.split('.')[0]
-            name = '.'.join(input_name.split('.')[1:])
+            #plugin_name = input_name.split('.')[0]
+            plugin_name=self.options['step_name']
+            start_ind=len(plugin_name.split('.'))
+            name = '.'.join(input_name.split('.')[start_ind:])
             input_type = self.plugin.plugin_input_names[name]['type']
             input_shape = self.plugin.plugin_input_names[name]['shape']
             if not check_continuous(input_type):
@@ -204,8 +224,9 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 self.add_input(input_name.replace(".", "~"), shape=input_shape)
 
         for output_name in self.output_names:
-            plugin_name = output_name.split('.')[0]
-            name = '.'.join(output_name.split('.')[1:])
+            plugin_name=self.options['step_name']
+            start_ind=len(plugin_name.split('.'))
+            name = '.'.join(output_name.split('.')[start_ind:])
             output_type = self.plugin.plugin_output_names[name]['type']
             output_shape = self.plugin.plugin_output_names[name]['shape']
             
@@ -220,11 +241,13 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 self.add_output(output_name.replace(".", "~"), shape=output_shape)
 
         if cont_input and cont_output:
-            partials = self.plugin.build_partials(self.input_names, self.output_names)
+            partials = self.plugin.build_partials(self.input_names, self.output_names,self.step_name)
             self.plugin.categorize_partials()
             for pair,data in  partials.items():
-                of = self.step_name + '~' + pair[0].replace('.', '~')
-                wrt = self.step_name + '~' + pair[1].replace('.', '~')
+                #note since strings are immutable
+                # self.step_name.replace does not modify original step name attribute
+                of = self.step_name.replace('.','~') + '~' + pair[0].replace('.', '~')
+                wrt = self.step_name.replace('.','~') + '~' + pair[1].replace('.', '~')
                 method = data['method']
                 step,form = data['step'], data['form']
                 rows,cols = data['rows'], data['cols']
@@ -234,20 +257,22 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
     def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
         self.log.debug('compute')
         self.plugin_dict = {}
+        plugin_name=self.step_name.split('.')
+        start_ind=len(plugin_name)
         for name, value in inputs.items():
-            plugin_name = name.replace("~", ".")
-            plugin_name = ".".join(plugin_name.split(".")[1:])
-            var_type=self.plugin.plugin_input_names[plugin_name]['type']
-            if not self.plugin.plugin_input_names[plugin_name]['type'] is np.ndarray:
+            var_name = name.replace("~", ".")
+            var_name='.'.join(var_name.split('.')[start_ind:])
+            var_type=self.plugin.plugin_input_names[var_name]['type']
+            if not self.plugin.plugin_input_names[var_name]['type'] is np.ndarray:
                 if isinstance(value,np.ndarray) and check_if_scalar(var_type):
                     value=value[0]
                 else:
-                    value = self.plugin.plugin_input_names[plugin_name]['type'](value)
-            self.plugin_dict[plugin_name] = value
+                    value = self.plugin.plugin_input_names[var_name]['type'](value)
+            self.plugin_dict[var_name] = value
         for name, value in discrete_inputs.items():
-            plugin_name = name.replace("~", ".")
-            plugin_name = ".".join(plugin_name.split(".")[1:])
-            self.plugin_dict[plugin_name] = value
+            var_name = name.replace("~", ".")
+            var_name='.'.join(var_name.split('.')[start_ind:])
+            self.plugin_dict[var_name] = value
         results = self.plugin.run_plugin(self.plugin_dict, self.work_dir)
         for name, value in results.items():
             name_with_plugin = self.step_name + "." + name
@@ -275,3 +300,62 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 else:
                     self.log.error('Missing links somewhere')
                     raise ValueError('Missing links somewhere')
+                
+
+class UniversalOpenMDAOGroup(om.Group):
+    def initialize(self):
+        self.options.declare("group")
+        self.options.declare("step_name")
+        self.options.declare("sub_plugins")
+        self.options.declare("work_dir")
+        self.options.declare("links")
+
+    def setup(self):
+        
+        group_name=self.options['step_name']
+        group=self.options['group']
+        sub_plugs=self.options['sub_plugins']
+        work_dir=self.options['work_dir']
+        for step_name, data in group._execution_steps.items():
+            if isinstance(data,dict):
+                input_names = set([group_name+'.'+step_name+'.' + input_name for input_name in sub_plugs[step_name].plugin_input_names.keys()])
+                output_names = set([group_name+'.'+step_name+'.' + output_name for output_name in sub_plugs[step_name].plugin_output_names.keys()])
+                comp=self.add_subsystem(step_name,UniversalOpenmdaoComp(),promotes=['*'])
+                comp.options["plugin"] = sub_plugs[step_name]
+                comp.options["input_names"] = input_names
+                comp.options["output_names"] = output_names
+                # clean the work dir between runs
+                comp.options["work_dir"] = work_dir
+                if os.path.isdir(work_dir):
+                    shutil.rmtree(work_dir)
+                os.makedirs(work_dir)
+                comp.options["step_name"] = group_name+'.'+step_name
+            elif isinstance(data,Group):
+                group=self.add_subsystem(step_name,UniversalOpenMDAOGroup(),promotes=['*'])
+                group.options['group']=data
+                group.options['step_name']=group_name+'.'+step_name
+                group.options["work_dir"] = work_dir
+                group.options['links']=data.links
+                if isinstance(sub_plugs[step_name],dict):
+                    group.options['sub_plugins']=sub_plugs[step_name]
+                else:
+                    group.options['sub_plugins']=None
+
+        for independent, dependent in self.options['links']:
+            
+            # parse slices where applicable here:
+            inds = None
+            if '[' in  independent:
+                independent, inds = handle_brackets(independent)
+            independent=group_name+'.'+independent
+            dependent=group_name+'.'+dependent
+            self.connect(independent.replace(".", "~"), dependent.replace(".", "~"), src_indices=inds)
+        if group._is_cycle:
+            self.nonlinear_solver=cycle_solver_name_to_solver[group.cycle_solver]()
+        approx_totals_dict=group._approx_totals
+        if approx_totals_dict['compute']:
+            method=approx_totals_dict['method']
+            form=approx_totals_dict['form']
+            step=approx_totals_dict['step']            
+            self.approx_totals(method=method,form=form,step=step)
+

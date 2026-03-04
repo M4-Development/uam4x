@@ -3,7 +3,7 @@ from typing import Callable
 import os
 import json
 import importlib.util
-from uam4x.utils import check_and_get_config, check_numpy_shape, check_if_scalar, is_numpy_array, normalize_shape,is_main_process,registry_writes_enabled
+from uam4x.utils import check_and_get_config, check_numpy_shape, check_if_scalar, is_numpy_array, normalize_shape,is_main_process,registry_writes_enabled,check_continuous,handle_brackets
 from collections.abc import Sequence
 from numbers import  Real
 from itertools import  product
@@ -12,27 +12,36 @@ from uam4x.utils import log
 import numpy as np
 import inspect
 import hashlib
-
+import copy
 _plugin_registry = {}
 
+class Group:
+    log = get_log(log, object_name='group')
 
-class Solution:
-    log = get_log(log, object_name='solution')
-    def __init__(self) -> None:
-        self.tracked_outputs = []
-        self.links = []
-        self.steps = {}
-        self.log = Solution.log
+    def __init__(self):
+        self.log = Group.log
         self.log.debug(f'initialize')
+        self.links=[]
+        self.steps={}
+        self._execution_steps={}
+        self.cycle_solver=''
+        self._approx_totals={'compute':False}
+        self._is_cycle=False
+        self.group_name=''
+
+
+    def set_cycle_solver(self,solver_name):
+        self.cycle_solver=solver_name
+
+    def approx_totals(self,method='fd',step=None,form=None):
+        self._approx_totals={'compute':True,'method':method,'step':step,'form':form}
 
     def add_link(self, independent:str, dependent:str):
         self.log.debug(f'add link. independent link: {independent}, dependent link: {dependent}')
-
         # need slicing here dependent cannot
         if  '[' in dependent:
             raise ValueError(rf'Only independent variables can have indices specified. The independent variable {dependent}\n'
                              rf'has slices indices specified.')
-
         link = [independent, dependent]
         if link not in self.links:
             self.links.append(link)
@@ -47,22 +56,40 @@ class Solution:
         self.log.debug(f'get step names')
         return [step_name for step_name in self.steps]
 
-    def _make_step_info(self, plugin_class, plugin_options, plugin_hash=None):
-        if plugin_hash is None:
-            src = inspect.getsource(plugin_class)
-            h = hashlib.sha256()
-            h.update(src.encode("utf-8"))
-            plugin_hash = h.hexdigest()
+    def _make_step_info(self,subsystem, subsystem_options, plugin_hash=None):
+        if isinstance(subsystem,type) and issubclass(subsystem,Plugin):
 
-        return {
-            "plugin": plugin_class,
-            "plugin_options": plugin_options,
-            "plugin_hash": plugin_hash,
-        }
+            if plugin_hash is None:
+                src = inspect.getsource(subsystem)
+                h = hashlib.sha256()
+                h.update(src.encode("utf-8"))
+                plugin_hash = h.hexdigest()
 
-    def add_step(self, plugin_class, step_name=None, plugin_options:dict={}):
+            return {
+                "plugin": subsystem,
+                "plugin_options": subsystem_options,
+                "plugin_hash": plugin_hash,
+            }
+        
+        elif isinstance(subsystem,Group):
+            #group_dict={}
+            #for name,info in plugin_class.steps.items():
+            #    group_dict[name]=info
+            #return group_dict
+
+            # two approaches here: one is that the groups are fixed and added
+            #as they are added (logic above) or the group itself is added only
+            #which still allows for access to the groups plugin based data
+            #then the group will be resolve at the _to_dict stage
+            return subsystem
+        
+        else: 
+            raise TypeError(f'Only plugin classes and group objects are allowed')
+        
+
+    def add_step(self, subsystem, step_name=None, plugin_options:dict={}):
         self.log.debug(f'add step: {step_name}')
-        if not isinstance(plugin_class, Callable):
+        if isinstance(subsystem,type) and not issubclass(subsystem, Plugin):
             self.log.error("add_step: plugin_class should be a callable (class).")
             raise TypeError("plugin_class should be a callable (class).")
         if step_name is  not None and  ('[' in  step_name or  ']' in  step_name):
@@ -71,8 +98,10 @@ class Solution:
         # plugin_name should be a string, not a class
         if step_name is None:
             step_name = "step" + str(len(self.steps)+1)
+        if isinstance(subsystem,Group):
+            subsystem.group_name=step_name
 
-        step_info = self._make_step_info(plugin_class, plugin_options)
+        step_info = self._make_step_info(subsystem, plugin_options)
         self.steps[step_name] = step_info
 
 
@@ -81,16 +110,265 @@ class Solution:
         if step_name in self.steps:
             self.steps.pop(step_name)
 
-    def edit_step(self, step_name, plugin_options:dict=None):
-        self.log.debug(f'edit step: {step_name}')
-        if step_name in self.steps:
-            step = self.steps[step_name]
-            if plugin_options is not None:
-                current_options = step["plugin_options"]
-                for option_name, info in plugin_options.items():
-                    current_options[option_name] = info
+    #def edit_step(self, step_name, plugin_options:dict=None):
+    #    self.log.debug(f'edit step: {step_name}')
+    #    if step_name in self.steps:
+    #        step = self.steps[step_name]
+    #        if plugin_options is not None:
+    #            current_options = step["plugin_options"]
+    #            for option_name, info in plugin_options.items():
+    #                current_options[option_name] = info
+    #        else:
+    #            step['plugin_options'] = {}
+#
+    #def add_plugin_option(self, step_name:str, option_name:str, option_value):
+    #    self.log.debug(f'add plugin option {option_name} to step {step_name}')
+    #    if step_name in self.steps:
+    #        step = self.steps[step_name]
+    #        if option_name in  step['plugin_options']:
+    #            print(f'{option_name} already a plugin option. Overwriting value: {step["plugin_options"][option_name]}')
+    #        step["plugin_options"][option_name] = option_value
+#
+    #def remove_plugin_option(self, step_name:str, option_name:str):
+    #    self.log.debug(f'remove plugin option {option_name} to step {step_name}')
+    #    if step_name in self.steps:
+    #        step = self.steps[step_name]
+    #        step["plugin_options"].pop(option_name)
+#
+    def _to_dict(self) -> dict:
+        # Serialize steps, converting plugin class to its name
+        self.log.debug(f'write to dict')
+        steps_serialized = {}
+        for step_name, step_info in self.steps.items():
+            if isinstance(step_info,dict):
+                plugin_class = step_info["plugin"]
+                plugin_name = plugin_class.__name__
+                steps_serialized[step_name] = {
+                    "plugin": plugin_name,
+                    "plugin_options": step_info["plugin_options"],
+                    "plugin_hash": step_info["plugin_hash"],
+                    'specification':'plugin'
+                }
             else:
-                step['plugin_options'] = {}
+                #if its a group instead
+                steps_serialized[step_name]=step_info._to_dict()
+                steps_serialized[step_name]['specification']='group'
+        
+        return {
+            "steps": steps_serialized,
+            "links": self.links,
+            "cycle_solver":self.cycle_solver,
+            "approx_totals":self._approx_totals,
+            "group_name":self.group_name,
+        }
+
+    @classmethod
+    def _from_dict(cls, data: dict) -> 'Solution':
+        group = cls()
+        cls.log.debug('solution from dict')
+        # Reconstruct steps, mapping plugin name to class if possible
+        for step_name, step_data in data["steps"].items():
+            if step_data['specification']=='plugin':
+                plugin_name = step_data["plugin"]
+                subsystem = get_plugin_class(plugin_name)
+                subsystem_options = step_data["plugin_options"]
+                plugin_hash = step_data["plugin_hash"]
+            elif step_data['specification']=='group':
+                subsystem=Group._from_dict(step_data)
+                subsystem_options={}
+                plugin_hash=None
+
+
+            step_info = group._make_step_info(subsystem, subsystem_options, plugin_hash)
+            group.steps[step_name] = step_info
+
+        group.links = data["links"]
+        group.cycle_solver=data["cycle_solver"]
+        group._approx_totals=data["approx_totals"]
+        group.group_name=data["group_name"]
+        return group
+    
+    def generate_plugins(self):
+        plugins={}
+        for step_name,data in self.steps.items():
+            if isinstance(data,dict):
+                plugin=data["plugin"]()
+                plugin.setup_plugin(data['plugin_options'])
+                plugins[step_name]=plugin
+            elif isinstance(data,Group):
+                group_plugs=data.generate_plugins()
+                plugins[step_name]=group_plugs
+
+        return plugins
+            
+    def _get_all_plugin_names_to_classes(self,head_dict,group_name):
+        
+        for name,data in self.steps.items():
+            if isinstance(data,dict):
+                head_dict[f'{group_name}.{name}']=data["plugin"]
+            elif isinstance(data,Group):
+                data._get_all_plugin_names_to_classes(head_dict,f'{group_name}.{name}')     
+
+        
+            
+    def _get_all_plugin_names_to_hashes(self,head_dict,group_name):
+        
+        for name,data in self.steps.items():
+            if isinstance(data,dict):
+                head_dict[f'{group_name}.{name}']=data["plugin_hash"]
+            elif isinstance(data,Group):
+                data._get_all_plugin_names_to_hashes(head_dict,f'{group_name}.{name}')  
+
+    def sort_steps(self):
+        self._execution_steps={}
+        #generate a list of dependent links
+        for name,data in self.steps.items():
+            if isinstance(data,Group):
+                data.sort_steps()
+        
+        reduced_links=[]
+        counter=0
+        step_to_location={}
+        location_to_step={}
+        steps=set()
+        for independent,dependent in self.links:
+            independent=independent.split('.')[0]
+            dependent=dependent.split('.')[0]
+            steps.add(independent)
+            steps.add(dependent)
+            pair=[independent,dependent]
+            if pair not in reduced_links:
+                reduced_links.append(pair)
+            if independent not in step_to_location:
+                step_to_location[independent]=counter
+                location_to_step[counter]=independent
+                counter+=1
+            if dependent not in step_to_location:
+                step_to_location[dependent]=counter
+                location_to_step[counter]=dependent
+                counter+=1
+
+        adj = [[] for _ in range(len(steps))]
+        in_degree = [0]*len(steps) 
+        for independent,dependent in reduced_links:
+            adj[step_to_location[independent]].append(step_to_location[dependent])
+            in_degree[step_to_location[dependent]]+=1
+        
+        sources=[]
+        for loc in step_to_location.values():
+            if in_degree[loc]==0:
+                sources.append(loc)
+        
+        sorted_steps=[]
+        while sources:
+            source=sources.pop()
+            sorted_steps.append(source)
+            for check_node in adj[source]:
+                in_degree[check_node]-=1
+                if in_degree[check_node]==0:
+                    sources.append(check_node)
+            
+        if len(sorted_steps) != len(steps):
+            print(f"Cycle detected in group {self.group_name}, using declared step order in that group")
+            self._execution_steps=copy.deepcopy(self.steps)
+            self._is_cycle=True
+            if not self.cycle_solver:
+                raise ValueError(f'Cycle solver must be selected if cycle is used')
+        else:
+            for name,data in self.steps.items():
+                if name not in list(step_to_location.keys()):
+                    self._execution_steps[name]=data
+            for step_order in sorted_steps:
+                step=location_to_step[step_order]
+                if step!='vehicles':
+                    self._execution_steps[step]=self.steps[step]
+            
+        
+    def _check_links_to_plugins(self,plugins):
+        
+        for step_name in self._execution_steps:
+            #handle plugin case
+            if isinstance(self._execution_steps[step_name],dict):
+                input_names,output_names=self.get_plugin_input_and_output_names(step_name)
+                #check coherance of declared I/O from plugin and from branching script
+                for input_name in  input_names:
+                    name = '.'.join(input_name.split('.')[1:])
+                    if name not  in plugins[step_name].plugin_input_names:
+                        self.log.error(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                         f"Check your plugin's setup() step for I/O declaration")
+                        raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                         f"Check your plugin's setup() step for I/O declaration")
+                for output_name in  output_names:
+                    name = '.'.join(output_name.split('.')[1:])
+                    if '[' in  name:
+                        #any time where indexes are specified in the link, this is required to be
+                        # an index specification, nothing to do with the variable name. 
+                        name, _ = handle_brackets(name)                
+                    if name not  in plugins[step_name].plugin_output_names:
+                        self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                         f"Check your plugin's setup() step for I/O declaration")
+                        raise ValueError(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
+                                         f"Check your plugin's setup() step for I/O declaration")
+                    
+            elif isinstance(self._execution_steps[step_name],Group):
+                self._execution_steps[step_name]._check_links_to_plugins(plugins[step_name])
+        
+
+    def get_plugin_input_and_output_names(self,step_name):
+        input_names=[]
+        output_names=[]
+        for (independent, dependent) in self.links:
+            # remove indices from index based links
+            if '[' in  independent:
+                independent, _ = handle_brackets(independent)
+            if dependent.split('.')[0] == step_name:
+                input_names.append(dependent)
+            if independent.split('.')[0] == step_name:
+                output_names.append(independent)
+        return set(input_names), set(output_names)
+    
+    #def _check_link_types(self,plugins,study):
+    #    for name, group_or_plugin_dict in self._execution_steps.items():
+    #        if isinstance(group_or_plugin_dict,dict):
+    #            
+    #        elif isinstance(group_or_plugin_dict,Group):
+    #            step._check_link_types(plugins[name],study)
+    #        
+    #    pass
+
+            
+    def get_all_groups(self,name_to_group):
+        for name,step in self._execution_steps.items():
+            if isinstance(step,Group):
+                name_to_group[name]=step
+                step.get_all_groups(name_to_group)
+        return name_to_group
+    
+    def get_var_type(self,name,plugins):
+        split_name=name.split('.')
+        step_name=split_name[0]
+        rest_name='.'.join(split_name[1:])
+        step=plugins[step_name]
+        if isinstance(step,Plugin):
+            if rest_name in step.plugin_input_names:
+                var_type=step.plugin_input_names[rest_name]['type']
+            elif rest_name in step.plugin_output_names:
+                var_type=step.plugin_output_names[rest_name]['type']
+            else:
+                raise KeyError(f'Provided path is not an input/output to the plugin {step_name}')
+            return var_type
+        elif isinstance(step,dict):
+            local_plugins=plugins[step_name]
+            return self.get_var_type(rest_name,local_plugins)
+
+class Solution(Group):
+    log = get_log(log, object_name='solution')
+    def __init__(self) -> None:
+        super().__init__()
+        self.tracked_outputs = []
+        self.log = Solution.log
+        self.log.debug(f'initialize')
+        self.step_name='solution'
 
     def add_tracked_output(self, output:str):
         self.log.debug(f'add tracked output: {output}')
@@ -104,36 +382,30 @@ class Solution:
         if output in  self.tracked_outputs:
             self.tracked_outputs.remove(output)
 
-    def add_plugin_option(self, step_name:str, option_name:str, option_value):
-        self.log.debug(f'add plugin option {option_name} to step {step_name}')
-        if step_name in self.steps:
-            step = self.steps[step_name]
-            if option_name in  step['plugin_options']:
-                print(f'{option_name} already a plugin option. Overwriting value: {step["plugin_options"][option_name]}')
-            step["plugin_options"][option_name] = option_value
-
-    def remove_plugin_option(self, step_name:str, option_name:str):
-        self.log.debug(f'remove plugin option {option_name} to step {step_name}')
-        if step_name in self.steps:
-            step = self.steps[step_name]
-            step["plugin_options"].pop(option_name)
 
     def _to_dict(self) -> dict:
         # Serialize steps, converting plugin class to its name
         self.log.debug(f'write to dict')
         steps_serialized = {}
         for step_name, step_info in self.steps.items():
-            plugin_class = step_info["plugin"]
-            plugin_name = plugin_class.__name__
-            steps_serialized[step_name] = {
-                "plugin": plugin_name,
-                "plugin_options": step_info["plugin_options"],
-                "plugin_hash": step_info["plugin_hash"],
-            }
+            if isinstance(step_info,dict):
+                plugin_class = step_info["plugin"]
+                plugin_name = plugin_class.__name__
+                steps_serialized[step_name] = {
+                    "plugin": plugin_name,
+                    "plugin_options": step_info["plugin_options"],
+                    "plugin_hash": step_info["plugin_hash"],
+                    'specification':'plugin'
+                }
+            else:
+                #if its a group instead
+                steps_serialized[step_name]=step_info._to_dict()
+                steps_serialized[step_name]['specification']='group'
+        
         return {
             "steps": steps_serialized,
-            "tracked_outputs": self.tracked_outputs,
-            "links": self.links
+            "links": self.links,
+            'tracked_outputs':self.tracked_outputs
         }
 
     @classmethod
@@ -142,17 +414,116 @@ class Solution:
         cls.log.debug('solution from dict')
         # Reconstruct steps, mapping plugin name to class if possible
         for step_name, step_data in data["steps"].items():
-            plugin_name = step_data["plugin"]
-            plugin_class = get_plugin_class(plugin_name)
-            plugin_options = step_data["plugin_options"]
-            plugin_hash = step_data["plugin_hash"]
+            if step_data['specification']=='plugin':
+                plugin_name = step_data["plugin"]
+                subsystem = get_plugin_class(plugin_name)
+                subsystem_options = step_data["plugin_options"]
+                plugin_hash = step_data["plugin_hash"]
+            elif step_data['specification']=='group':
 
-            step_info = sol._make_step_info(plugin_class, plugin_options, plugin_hash)
+                subsystem=Group._from_dict(step_data)
+                subsystem_options={}
+                plugin_hash=None
+
+            step_info = sol._make_step_info(subsystem, subsystem_options, plugin_hash)
             sol.steps[step_name] = step_info
 
         sol.tracked_outputs = data["tracked_outputs"]
         sol.links = data["links"]
         return sol
+
+    def get_all_plugin_names_to_classes(self):
+        plugin_names_to_class={}
+        for name,data in self.steps.items():
+            if isinstance(data,dict):
+                plugin_names_to_class[name]=data["plugin"]
+            elif isinstance(data,Group):
+                data._get_all_plugin_names_to_classes(plugin_names_to_class,name)
+
+        return plugin_names_to_class
+    
+    def get_all_plugin_names_to_hashes(self):
+        plugin_names_to_hash={}
+        for name,data in self.steps.items():
+            if isinstance(data,dict):
+                plugin_names_to_hash[name]=data["plugin_hash"]
+            elif isinstance(data,Group):
+                data._get_all_plugin_names_to_hashes(plugin_names_to_hash,name)
+
+        return plugin_names_to_hash
+    
+
+    def get_plugin_input_and_output_names(self,step_name):
+        input_names=[]
+        output_names=[]
+        for (independent, dependent) in self.links:
+            # remove indices from index based links
+            if '[' in  independent:
+                independent, _ = handle_brackets(independent)
+            if dependent.split('.')[0] == step_name:
+                input_names.append(dependent)
+            if independent.split('.')[0] == step_name:
+                output_names.append(independent)
+        for independent in self.tracked_outputs:
+            if independent.split('.')[0] == step_name:
+                output_names.append(independent)
+        return set(input_names), set(output_names)
+    
+    def get_all_groups(self):
+        name_to_group={'solution':self}
+        for name,step in self._execution_steps.items():
+            if isinstance(step,Group):
+                name_to_group[name]=step
+                step.get_all_groups(name_to_group)
+        return name_to_group
+        
+    def _check_link_types(self,plugins,study):
+        groups=self.get_all_groups()
+        bad_links=[]
+        for group_name,group in groups.items():
+            if group_name=='solution':
+                local_plugins=plugins
+            else:
+                local_plugins=plugins[group_name]
+            for output_link,input_link in group.links:
+                indexes_specified = False
+
+                if '[' in  output_link:
+                    output_link, _ = handle_brackets(output_link)
+                    indexes_specified = True
+                if output_link.split('.')[0]=='vehicles':
+                    output_type=study.get_param_type(output_link)
+                else:
+                    output_type=self.get_var_type(output_link,local_plugins)
+                
+                input_type=self.get_var_type(input_link,local_plugins)
+                if indexes_specified and output_type != np.ndarray:
+                    raise ValueError(f'Indexes may only be specified for arrays. The link: {link[1]} is not valid')
+                if indexes_specified and  output_type == np.ndarray and  check_continuous(input_type) and input_type != np.ndarray:
+                    pass
+                elif output_type != input_type:
+                    bad_links.append((output_link,output_type, input_link, input_type))
+
+        if bad_links:
+            msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
+            self.log.error(msg)
+            raise TypeError(msg)
+        
+    def get_all_used_vehicle_params(self):
+        groups=self.get_all_groups()
+        all_used_vehicle_params=[]
+        for _,group in groups.items():
+            for independent,_ in group.links:
+                independent_group=independent.split('.')[0]
+                if independent_group=='vehicles':
+                    all_used_vehicle_params.append(independent)
+        return all_used_vehicle_params
+
+
+                
+                
+
+
 
 class Plugin():
     log = get_log(log, object_name='Plugin base class')
@@ -232,7 +603,7 @@ class Plugin():
 
 
 
-    def build_partials(self, input_names, output_names):
+    def build_partials(self, input_names, output_names,step_name):
         '''
         Builds a comprehensive dictionary of partials
         seperated by method (note only fd and exact allowed so far)
@@ -254,13 +625,27 @@ class Plugin():
         # Collect actual names
         local_output_names = set()
         local_input_names = set()
+        start_ind=len(step_name.split('.'))
+
         for output_name in  output_names:
-            output_name = '.'.join(output_name.split('.')[1:])
-            local_output_names.add(output_name)
+            local_output_name = '.'.join(output_name.split('.')[start_ind:])
+            local_output_names.add(local_output_name)
+            output_type=self.plugin_output_names[local_output_name]['type']
+            
+            if not check_continuous(output_type):
+                raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
+                               f'{output_name} is not continuous and has type {output_type}')
+
 
         for input_name in  input_names:
-            input_name = '.'.join(input_name.split('.')[1:])
-            local_input_names.add(input_name)
+            local_input_name = '.'.join(input_name.split('.')[start_ind:])
+            local_input_names.add(local_input_name)
+            input_type=self.plugin_input_names[local_input_name]['type']
+
+            if not check_continuous(input_type):
+                raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
+                               f'{input_name} is not continuous and has type {input_type}')
+
 
         #Note the empty set is a subset of all other sets
         if not partial_ins.issubset(local_input_names):
@@ -363,6 +748,8 @@ class Plugin():
             if value is not None and check_if_scalar(value) and var_type is  np.ndarray:
                 raise ValueError(f'If array value is declared with scalar, shape must be declared for broadcasting.\n'
                                  f'The variable {name} has value: {value} and type: {var_type} but no shape declared.')
+            elif value is not None and isinstance(value,np.ndarray) and var_type is np.ndarray:
+                shape=value.shape
 
         return shape
 

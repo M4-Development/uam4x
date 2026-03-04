@@ -1161,5 +1161,35 @@ def test_sort_steps_circular_dependency_raises(sample_engine_setup):
     # sort_steps should detect this (no step can be added) and raise.
     with pytest.raises(RuntimeError, match=r"Circular Solution Sequence Detected"):
         engine.sort_steps()
+
+
+def test_run_state_parallel_recomputes_execution_order(tmp_path):
+    @register_component
+    class ParallelWorkerComponent(Component):
+        def setup(self):
+            self.add_parameter("x", default_value=3.0, dtype=float)
+
+    @register_plugin
+    class ParallelWorkerPlugin(Plugin):
+        def setup_plugin(self, plugin_options=None):
+            self.declare_input("x", float)
+            self.declare_output("y", float)
+
+        def run_plugin(self, links, workdir):
+            return {"y": links["x"] * 2.0}
+
+    study = Study()
+    vehicle = Vehicle("parallel_vehicle", [ParallelWorkerComponent("core")])
+    study.add_vehicle(vehicle)
+
+    study.solution.add_step(ParallelWorkerPlugin, "calc")
+    study.solution.add_link("vehicles.parallel_vehicle.core.x", "calc.x")
+    study.solution.add_tracked_output("calc.y")
+
+    result = Engine._run_state_parallel(study._to_dict(), state={}, work_dir=str(tmp_path))
+
+    assert result.outputs["calc.y"] == 6.0
+
+
 if __name__ == '__main__':
     pass
