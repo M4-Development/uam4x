@@ -267,6 +267,19 @@ class Study:
             value = value[inds]
         return value
     
+    def set_value(self,dotted_path:str,value):
+        split_up_path=dotted_path.split('.')
+   
+        param=split_up_path[-1]
+        comp='.'.join(split_up_path[:-1])
+        if len(split_up_path) not in [4,5]:
+            #vehicles.vehicle.component.mode.parameter
+            #vehicles.vehicle.component.parameter
+            raise ValueError(f'Invalid vehicle parameter provided {dotted_path}')
+        
+        #Will need to add array based logic back in (indexed strings)
+        attrgetter(comp)(self).set_parameter(param,value)
+        
     def get_param_type(self,dotted_path:str):
         split_up_path=dotted_path.split('.')
    
