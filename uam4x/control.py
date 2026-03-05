@@ -158,6 +158,7 @@ class ParameterSweep:
         self.length: int = None
         self.param_name_to_value_list = param_name_to_value_list
         self.log = ParameterSweep.log
+        self.type = 'ParameterSweep'
         self.log.debug('initialize')
         for name, value_list in self.param_name_to_value_list.items():
             if not isinstance(value_list, list):

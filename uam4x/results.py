@@ -10,18 +10,32 @@ class Results:
         self.study=study
 
     def get_tradestudy(self,name):
-        return self.tradestudies[name]
-    
+        if name in self.tradestudies:
+            return self.tradestudies[name]
+        else:
+            return None
+
     def add_tradestudy(self,name,Trade):
         Trade._results_owner=self
         self.tradestudies[name]=Trade
+        if name in self.study.control.trade_studies:
+            Trade.control_data = self.study.control.trade_studies[name]
+            Trade.type = self.study.control.trade_studies[name].type
+            Trade.tracked_outputs = self.study.solution.tracked_outputs
+
+    def get_all_trade_studies(self):
+        tradestudies = list(self.tradestudies.keys())
+        return tradestudies
+
+    def get_swept_parameters(self, trade_name):
+        return list(self.study.control.trade_studies[trade_name].param_name_to_value_list.keys())
 
     def _to_dict(self):
         tradename_to_tradestudy={}
         for name,tradestudy in self.tradestudies.items():
             tradename_to_tradestudy[name]=tradestudy._to_dict()
         return tradename_to_tradestudy
-    
+
     @classmethod
     def _from_dict(cls,tradename_to_results,study):
         res=cls(study)
@@ -36,13 +50,17 @@ class Results:
         return res
 
 class Tradestudy:
-    
+
     def __init__(self,trade_name):
         self._results = []
         self._hash_to_result = {}
         self.trade_name=trade_name
         self._results_owner=None
-        
+        self._results_owner = None
+        self.control_data = None
+        self.tracked_outputs = None
+        self.type = None
+
         self.post=None
 
     def set_post(self,Post):
@@ -56,7 +74,7 @@ class Tradestudy:
             return self._results_owner.study
 
     def scatter(self,var1,var2,xlabel=None,ylabel=None,title='default_title',save_dir=None):
-        
+
         fig, ax=plt.subplots(figsize=(10, 6))
         x_values=self.get_variable(var1)
         y_values=self.get_variable(var2)
@@ -66,17 +84,28 @@ class Tradestudy:
         if xlabel is None:
             xlabel=var1
         if ylabel is None:
-            ylabel=var2      
+            ylabel=var2
         ax.set_xlabel(xlabel, fontsize=14)
         ax.set_ylabel(ylabel, fontsize=14)
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
 
         if save_dir is not None:
-            plt.savefig(f"{save_dir}/{title.replace(' ','_')}.png", dpi=300, bbox_inches='tight')   
-        return ax   
-      
+            plt.savefig(f"{save_dir}/{title.replace(' ','_')}.png", dpi=300, bbox_inches='tight')
+        return ax
+
     def get_result_by_state(self, state):
         pass
+
+    def get_changing_varaibles(self):
+
+        if self.type == 'Optimization':
+            changing_variables = self.tracked_outputs + self.control_data.get_desvar_names()
+        elif self.type == 'ParameterSweep':
+            changing_variables = self.tracked_outputs + list(self.control_data.get_all_param_names())
+            if hasattr(self.control_data, "child") and self.control_data.child.type== 'Optimization' :
+                changing_variables = changing_variables + self.control_data.get_desvar_names()
+
+        return changing_variables
 
     def set_study_reference(self,study):
         self.study=study
@@ -93,12 +122,12 @@ class Tradestudy:
         values=[]
         #handle tradestudy desvars more robustly
         if self.trade_name in self.study.control.trade_studies:
-            trade = self.study.control.trade_studies[self.trade_name]   
+            trade = self.study.control.trade_studies[self.trade_name]
         elif self.trade_name == "Default State":
             trade=None
         else:
             raise ValueError(f'Trade study "{self.trade_name}" not found in study control.')
-        
+
         # get Design variable names if applicable
         get_desvar_names=getattr(trade,"get_desvar_names",None)
         des_vars=get_desvar_names() if callable(get_desvar_names) else []
@@ -122,7 +151,7 @@ class Tradestudy:
                     values.append(result.outputs[variable_name])
                 else:
                     values.append(np.nan)
-                    #log as missing. 
+                    #log as missing.
             return values
         #check if the variable is a design variable
         elif des_vars and variable_name in des_vars:
@@ -131,15 +160,15 @@ class Tradestudy:
                     values.append(result.outputs[variable_name])
                 else:
                     values.append(np.nan)
-                    #log as missing. 
+                    #log as missing.
             return values
         #check if the variable is a value in a parameter sweep
         elif variable_name in param_names:
             for result in self._results:
                 values.append(result.state[variable_name])
-                    #log as missing. 
+                    #log as missing.
             return values
-        # check if the variable was part of the UQ analysis: 
+        # check if the variable was part of the UQ analysis:
         elif variable_name in aleatory_vars_to_pdf:
             for result in self._results:
                 values.append(result.state[variable_name])
@@ -156,8 +185,8 @@ class Tradestudy:
                 values.append(value)
                 return values
             except:
-                raise ValueError(f'Variable name {variable_name} not found in tracked outputs, trade study sweep variables, or vehicle parameters.')   
-        
+                raise ValueError(f'Variable name {variable_name} not found in tracked outputs, trade study sweep variables, or vehicle parameters.')
+
 
     def _to_dict(self):
         if self.post is not None:
@@ -169,8 +198,8 @@ class Tradestudy:
             return {
             'points':[result._to_dict() for result in self._results],
             }
-       
-        
+
+
     @classmethod
     def _from_dict(cls, trade_name,results_dict):
         results = cls(trade_name=trade_name)
@@ -182,30 +211,30 @@ class Tradestudy:
         #    post=post_workflow_name_to_class_registry[results_dict['post']]
         #    results.set_post(post)
         return results
-    
-    
+
+
 class Result:
-    
+
     def __init__(self, state):
-        
+
         self.state = convert_numpy_to_python(copy.deepcopy(state))
-        self.state_hash = hash_state(self.state)        
+        self.state_hash = hash_state(self.state)
         self.template_hashes = {}
         self.outputs = {}
         self.convergence_status = None
-        
+
     def _add_convergence_status(self, convergence_status):
         self.convergence_status = convergence_status
-    
+
     def _add_result(self,result_name, result_value):
         self.outputs[result_name] = convert_numpy_to_python(result_value)
-        
+
     def _add_template_checksum(self, file_path, checksum):
         self.template_hashes[file_path] = checksum
-        
+
     def equal_states(self, result_object):
         return self.state_hash == result_object.state_hash
-    
+
     def _to_dict(self):
         d = {
             'input_state': self.state,
@@ -213,24 +242,24 @@ class Result:
         }
         if self.template_hashes:
             d['template_checksums'] = self.template_hashes
-        
+
         if self.convergence_status is  not None:
             d['converged'] = self.convergence_status
 
         return d
-    
+
     @classmethod
     def _from_dict(cls, results_dict):
         result = cls(results_dict['input_state'])
         result.outputs = copy.deepcopy(results_dict.get("outputs", {}))
         result.template_hashes = copy.deepcopy(results_dict.get("template_checksums", {}))
-        
+
         if 'converged' in  results_dict:
             result._add_convergence_status(results_dict['converged'])
-        
+
         return result
-        
 
 
-        
-        
+
+
+
