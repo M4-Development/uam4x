@@ -5,7 +5,7 @@ import json
 import os
 import copy
 from uam4x.log import get_log
-from uam4x.utils import convert_numpy_to_python, get_param_type,log, is_numpy_array, parse_index, handle_brackets, replace_none_with_empty_quotes
+from uam4x.utils import convert_numpy_to_python,log, is_numpy_array, parse_index, handle_brackets, replace_none_with_empty_quotes
 from operator import  attrgetter
 import  sys
 import platform
@@ -284,13 +284,17 @@ class Study:
         split_up_path=dotted_path.split('.')
 
         param=split_up_path[-1]
-        comp='.'.join(split_up_path[:-1])
-        if len(split_up_path) not in [4,5]:
-            #vehicles.vehicle.component.mode.parameter
-            #vehicles.vehicle.component.parameter
+        #vehicles.vehicle.component.parameter
+        if len(split_up_path)==4:
+            comp='.'.join(split_up_path[:-1])
+        #vehicles.vehicle.component.mode.parameter
+        elif len(split_up_path)==5:
+            comp='.'.join(split_up_path[:-2])
+        else:
             raise ValueError(f'Invalid vehicle parameter provided {dotted_path}')
 
         #Will need to add array based logic back in (indexed strings)
+
         param_type=attrgetter(comp)(self).get_parameter_type(param)
 
         return param_type
@@ -522,8 +526,8 @@ if __name__ == "__main__":
 
     from uam4x.execution_engine import Engine
     engine = Engine(study, "test_work")
-    print(get_param_type("vehicles.TestVehicle.left_wing.happy.span",study))
-    print(get_param_type("vehicles.TestVehicle.left_wing.span",study))
+    print(study.get_param_type("vehicles.TestVehicle.left_wing.happy.span"))
+    print(study.get_param_type("vehicles.TestVehicle.left_wing.span"))
 
 
 
