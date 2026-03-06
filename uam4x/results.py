@@ -3,6 +3,7 @@ from uam4x.utils import hash_state, convert_numpy_to_python
 import matplotlib.pyplot as plt
 from uam4x.UQ import post_workflow_name_to_class_registry
 import numpy as np
+from uam4x.utils import handle_brackets
 
 class Results:
     def __init__(self,study=None):
@@ -145,6 +146,8 @@ class Tradestudy:
             print(f'No results for tradestudy {self.trade_name}')
             return None
         # first check if variable name is in tracked outputs
+
+            
         if variable_name in self.study.solution.tracked_outputs:
             for result in self._results:
                 if variable_name in result.outputs:
@@ -153,36 +156,46 @@ class Tradestudy:
                     values.append(np.nan)
                     #log as missing.
             return values
+
+        inds=None
+        if '[' in  variable_name:
+            #Functionality exists that checks for brackets in: step name (plugins)
+            # vehicles names, component names, mode names, and parameter names. which [ is not allowed
+            # are all not allowed.
+            #This handles and has checks for the brackets.
+            variable_name, inds = handle_brackets(variable_name)
         #check if the variable is a design variable
-        elif des_vars and variable_name in des_vars:
+        if des_vars and variable_name in des_vars:
             for result in self._results:
                 if variable_name in result.outputs:
-                    values.append(result.outputs[variable_name])
+                    if inds is not None:
+                        values.append(result.outputs[variable_name][inds])
+                    else:
+                        values.append(result.outputs[variable_name])
                 else:
                     values.append(np.nan)
                     #log as missing.
             return values
         #check if the variable is a value in a parameter sweep
-        elif variable_name in param_names:
-            for result in self._results:
-                values.append(result.state[variable_name])
-                    #log as missing.
-            return values
-        # check if the variable was part of the UQ analysis:
-        elif variable_name in aleatory_vars_to_pdf:
-            for result in self._results:
-                values.append(result.state[variable_name])
-            return values
+        # check if the variable was part of the UQ analysis: 
         # check if the variable was part of the sensitivity analysis:
-        elif variable_name in sensitivity_vars_to_values:
+        elif variable_name in param_names or variable_name in aleatory_vars_to_pdf or variable_name in sensitivity_vars_to_values:
             for result in self._results:
-                values.append(result.state[variable_name])
+                if inds is not None:
+                    values.append(result.state[variable_name][inds])
+                else:
+                    values.append(result.state[variable_name])
+                    #log as missing. 
             return values
         #then check if the variable name is in the vehicle parameters
         else:
             try:
-                value= self.study.get_value(variable_name)
-                values.append(value)
+                if inds is not None:
+                    value= self.study.get_value(variable_name)[inds]
+                    values.append(value)
+                else:
+                    value= self.study.get_value(variable_name)
+                    values.append(value)
                 return values
             except:
                 raise ValueError(f'Variable name {variable_name} not found in tracked outputs, trade study sweep variables, or vehicle parameters.')

@@ -337,7 +337,7 @@ class Engine:
             if keyword=='Y':
                 message+=' at'
             
-        message+=' Pacific Standard Time'
+        message+=' Pacific Time'
         self.study._runtime_meta_data[trade_name]['time_info']['Completion_Time'] = message
 
     def capture_execution_data(self,trade_name):

@@ -76,7 +76,7 @@ class Study:
             if keyword=='Y':
                 message+=' at'
 
-        message+=' Pacific Standard Time'
+        message+=' Pacific Time'
 
         if trade_name in self._runtime_meta_data:
             self._runtime_meta_data[trade_name]['environment'] = {
