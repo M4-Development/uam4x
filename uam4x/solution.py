@@ -110,31 +110,50 @@ class Group:
         if step_name in self.steps:
             self.steps.pop(step_name)
 
-    #def edit_step(self, step_name, plugin_options:dict=None):
-    #    self.log.debug(f'edit step: {step_name}')
-    #    if step_name in self.steps:
-    #        step = self.steps[step_name]
-    #        if plugin_options is not None:
-    #            current_options = step["plugin_options"]
-    #            for option_name, info in plugin_options.items():
-    #                current_options[option_name] = info
-    #        else:
-    #            step['plugin_options'] = {}
-#
-    #def add_plugin_option(self, step_name:str, option_name:str, option_value):
-    #    self.log.debug(f'add plugin option {option_name} to step {step_name}')
-    #    if step_name in self.steps:
-    #        step = self.steps[step_name]
-    #        if option_name in  step['plugin_options']:
-    #            print(f'{option_name} already a plugin option. Overwriting value: {step["plugin_options"][option_name]}')
-    #        step["plugin_options"][option_name] = option_value
-#
-    #def remove_plugin_option(self, step_name:str, option_name:str):
-    #    self.log.debug(f'remove plugin option {option_name} to step {step_name}')
-    #    if step_name in self.steps:
-    #        step = self.steps[step_name]
-    #        step["plugin_options"].pop(option_name)
-#
+    def edit_step(self, step_name, plugin_options:dict=None):
+        '''
+        You can only edit plugin steps directly, to edit Groups, 
+        should be done at the group level. i.e. group.edit_plugin_step
+        '''
+        self.log.debug(f'edit step: {step_name}')
+        if step_name in self.steps:
+            step = self.steps[step_name]
+            if isinstance(step,Group):
+                raise ValueError(f'Only plugins are editable at the Group level, sub groups'
+                                'must be edited in their respective groups')
+            if plugin_options is not None:
+                current_options = step["plugin_options"]
+                for option_name, info in plugin_options.items():
+                    current_options[option_name] = info
+            else:
+                step['plugin_options'] = {}
+        else:
+            raise KeyError(f'The step {step_name} is not a step')
+    
+    def add_plugin_option(self, step_name:str, option_name:str, option_value):
+        self.log.debug(f'add plugin option {option_name} to step {step_name}')
+        if step_name in self.steps:
+           step = self.steps[step_name]
+           if isinstance(step,Group):
+                raise ValueError(f'Only plugins are editable at the Group level, sub groups'
+                                'must be edited in their respective groups')
+           if option_name in  step['plugin_options']:
+               print(f'{option_name} already a plugin option. Overwriting value: {step["plugin_options"][option_name]}')
+           step["plugin_options"][option_name] = option_value
+        else:
+            raise KeyError(f'The step {step_name} is not a step')
+    
+    def remove_plugin_option(self, step_name:str, option_name:str):
+        self.log.debug(f'remove plugin option {option_name} to step {step_name}')
+        if step_name in self.steps:
+            step = self.steps[step_name]
+            if isinstance(step,Group):
+                raise ValueError(f'Only plugins are editable at the Group level, sub groups'
+                                'must be edited in their respective groups')
+            step["plugin_options"].pop(option_name)
+        else:
+            raise KeyError(f'The step {step_name} is not a step')
+    
     def _to_dict(self) -> dict:
         # Serialize steps, converting plugin class to its name
         self.log.debug(f'write to dict')
@@ -337,11 +356,12 @@ class Group:
     #    pass
 
             
-    def get_all_groups(self,name_to_group):
-        for name,step in self._execution_steps.items():
+    def get_all_groups(self,name_to_group,parent_name):
+        for name,step in self.steps.items():
             if isinstance(step,Group):
-                name_to_group[name]=step
-                step.get_all_groups(name_to_group)
+                full_name=parent_name+'.'+name
+                name_to_group[full_name]=step
+                step.get_all_groups(name_to_group,full_name)
         return name_to_group
     
     def get_var_type(self,name,plugins):
@@ -471,20 +491,40 @@ class Solution(Group):
     
     def get_all_groups(self):
         name_to_group={'solution':self}
-        for name,step in self._execution_steps.items():
+        for name,step in self.steps.items():
             if isinstance(step,Group):
-                name_to_group[name]=step
-                step.get_all_groups(name_to_group)
+                full_name='solution'+'.'+name
+                name_to_group[full_name]=step
+                step.get_all_groups(name_to_group,full_name)
         return name_to_group
+    
+    def get_group(self,dotted_path):
+        split_path=dotted_path.split('.')
+        groups=self.get_all_groups()
+        if split_path[0]!='solution':
+            dotted_path='solution.'+dotted_path
+        return groups[dotted_path]
+    
+    def recurse_plugin_dict(self,split_name,plugins):
+        #last term in the initial string (is a group)
+        #then plugins must be of form last_group:{data}
+        if len(split_name)==1:
+            return plugins[split_name[0]]
+        else:
+            start=split_name[0]
+            local_plug=plugins[start]
+            return self.recurse_plugin_dict(split_name[1:],local_plug)
         
     def _check_link_types(self,plugins,study):
         groups=self.get_all_groups()
         bad_links=[]
         for group_name,group in groups.items():
-            if group_name=='solution':
+            split_name=group_name.split('.')
+            if split_name[0]=='solution' and len(split_name)==1:
                 local_plugins=plugins
             else:
-                local_plugins=plugins[group_name]
+                split_name=split_name[1:]
+                local_plugins=self.recurse_plugin_dict(split_name,plugins)
             for output_link,input_link in group.links:
                 indexes_specified = False
 
@@ -498,7 +538,7 @@ class Solution(Group):
                 
                 input_type=self.get_var_type(input_link,local_plugins)
                 if indexes_specified and output_type != np.ndarray:
-                    raise ValueError(f'Indexes may only be specified for arrays. The link: {link[1]} is not valid')
+                    raise ValueError(f'Indexes may only be specified for arrays. The link: {input_link} is not valid')
                 if indexes_specified and  output_type == np.ndarray and  check_continuous(input_type) and input_type != np.ndarray:
                     pass
                 elif output_type != input_type:

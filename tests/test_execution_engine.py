@@ -135,7 +135,7 @@ def test_check_link_types_index_on_scalar_raises(engine_setup):
     study, engine, plugins = engine_setup
     study.solution.add_link("stage1.y[0]", "stage2.y")
 
-    with pytest.raises(NameError, match="link"):
+    with pytest.raises(ValueError, match="Indexes may only be specified for arrays"):
         engine.check_link_types(plugins)
 
 

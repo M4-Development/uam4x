@@ -232,7 +232,7 @@ def test_solution_check_link_types_negative_index_on_scalar(study_with_solution)
     study, plugins = study_with_solution
     study.solution.add_link("producer.y[0]", "consumer.y_in")
 
-    with pytest.raises(NameError, match="link"):
+    with pytest.raises(ValueError, match="Indexes may only be specified for arrays"):
         study.solution._check_link_types(plugins, study)
 
 
