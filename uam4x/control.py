@@ -4,7 +4,7 @@ import copy
 from uam4x.log import get_log
 from uam4x.utils import log
 import numpy as np
-from uam4x.utils import check_continuous, is_numpy_array, value_to_type_name
+from uam4x.utils import check_continuous, is_numpy_array, value_to_type_name,replace_empty_quotes_with_none
 from uam4x.UQ import UQAnalysis
 from uam4x.local_sensitivity import LocalSensitivity
 
@@ -58,6 +58,8 @@ class Optimization:
         obj = cls()
         # if upper/lower for DV or constraints are lists, must be
         #desired to be arrays, so convert.
+        data['constraints']=replace_empty_quotes_with_none(data['constraints'])
+        data['des_vars']=replace_empty_quotes_with_none(data['des_vars'])
         for constraint, constraint_vals in data['constraints'].items():
             if isinstance(constraint_vals['lower'], list):
                 constraint_vals['lower'] = np.array(constraint_vals['lower'])
@@ -69,15 +71,6 @@ class Optimization:
             if isinstance(des_var_vals['upper'], list):
                 des_var_vals['upper'] = np.array(des_var_vals['upper'])
 
-        for name, constraint in data['constraints'].items():
-            if constraint['indices'] == "":
-                constraint['indices'] = None
-
-        for name, desvar in data['des_vars'].items():
-            if desvar['indices'] == "":
-                desvar['indices'] = None
-
-        obj.type = data['type']
         obj.des_vars = data['des_vars']
         obj.constraints = data['constraints']
         obj.objective_name = data['objective_name']

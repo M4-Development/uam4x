@@ -618,33 +618,45 @@ class Plugin():
             if data['wrt'] != ['*']:
                 for inp in  data['wrt']:
                     partial_ins.add(inp)
+                    if inp in self.plugin_input_names:
+                        input_type=self.plugin_input_names[inp]['type']
+                    else:
+                        raise KeyError(f'The input {inp} declared as a partial is not an input in the Plugin')
+                    if not check_continuous(input_type):
+                        raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
+                               f'{inp} is not continuous and has type {input_type}')
             if data['of'] != ['*']:
                 for out in  data['of']:
                     partial_outs.add(out)
+                    if out in self.plugin_output_names:
+                        output_type=self.plugin_output_names[out]['type']
+                    else:
+                        raise KeyError(f'The output {out} declared as a partial is not an output in the Plugin')
+                    if not check_continuous(output_type):
+                        raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
+                               f'{out} is not continuous and has type {output_type}')
 
         # Collect actual names
         local_output_names = set()
         local_input_names = set()
         start_ind=len(step_name.split('.'))
 
+        out_vio=[]
         for output_name in  output_names:
             local_output_name = '.'.join(output_name.split('.')[start_ind:])
             local_output_names.add(local_output_name)
             output_type=self.plugin_output_names[local_output_name]['type']
             
             if not check_continuous(output_type):
-                raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
-                               f'{output_name} is not continuous and has type {output_type}')
-
-
+                out_vio.append(output_name)
+        in_vio=[]
         for input_name in  input_names:
             local_input_name = '.'.join(input_name.split('.')[start_ind:])
             local_input_names.add(local_input_name)
             input_type=self.plugin_input_names[local_input_name]['type']
 
             if not check_continuous(input_type):
-                raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
-                               f'{input_name} is not continuous and has type {input_type}')
+                in_vio.append(input_name)
 
 
         #Note the empty set is a subset of all other sets
@@ -668,11 +680,17 @@ class Plugin():
         for data in  self.initial_partials:
             if data['of'] == ['*']:
                 ofs = local_output_names
+                if out_vio:
+                    raise TypeError(f'Variables with declared partials must be continuous the variables:\n'
+                               f'{out_vio} are not continuous but were declared partials')
             else:
                 ofs = data['of']
 
             if data['wrt'] == ['*']:
                 wrts = local_input_names
+                if in_vio:
+                    raise TypeError(f'Variables with declared partials must be continuous the variables:\n'
+                        f'{in_vio} are not continuous but were declared partials')
             else:
                 wrts = data['wrt']
 

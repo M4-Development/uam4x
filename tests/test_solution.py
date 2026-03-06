@@ -285,7 +285,7 @@ def test_plugin_build_partials_rejects_unknown_names():
     p.setup_plugin({})
     p.declare_partials_plugin(of="y", wrt="missing", method="fd")
 
-    with pytest.raises(ValueError, match="Inputs and partials do not match"):
+    with pytest.raises(KeyError, match="declared as a partial is not an input in the Plugin"):
         p.build_partials(["producer.x"], ["producer.y"], "producer")
 
 

@@ -124,9 +124,8 @@ def test_Optimization_from_dict_array_and_scalar_bounds():
 
     opt = Optimization._from_dict(data)
 
-    # Basic type + attributes
+    # Basic class + attributes
     assert isinstance(opt, Optimization)
-    assert opt.type == "optimization"
     assert opt.objective_name == "obj"
 
     # ---- Design variables ----

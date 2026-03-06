@@ -97,7 +97,7 @@ class Tradestudy:
     def get_result_by_state(self, state):
         pass
 
-    def get_changing_varaibles(self):
+    def get_changing_variables(self):
 
         if self.type == 'Optimization':
             changing_variables = self.tracked_outputs + self.control_data.get_desvar_names()

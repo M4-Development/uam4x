@@ -1,3 +1,4 @@
+from dataclasses import replace
 import os
 import json
 import multiprocessing as mp
@@ -458,8 +459,7 @@ def handle_brackets(dotted_path):
 
 def replace_none_with_empty_quotes(value):
     '''
-    Converts numpy type instances (np.ndarray,np.floating,np.int)
-    to python types for Json serialization
+    Converts None types quotes '' for Json serialization
     '''
     if value is None:
         return ""
@@ -469,5 +469,20 @@ def replace_none_with_empty_quotes(value):
         return [replace_none_with_empty_quotes(x) for x in value]
     if isinstance(value, dict):
         return {k: replace_none_with_empty_quotes(x) for  k, x in value.items()}
+
+    return value
+
+def replace_empty_quotes_with_none(value):
+    '''
+    Converts None types quotes '' for Json serialization
+    '''
+    if isinstance(value,str) and value =='':
+        return None
+    if isinstance(value, np.ndarray):
+        return [replace_empty_quotes_with_none(x) for x in value.tolist()]
+    if isinstance(value, list):
+        return [replace_empty_quotes_with_none(x) for x in value]
+    if isinstance(value, dict):
+        return {k: replace_empty_quotes_with_none(x) for  k, x in value.items()}
 
     return value
