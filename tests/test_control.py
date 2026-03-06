@@ -14,9 +14,9 @@ CONSTRAINT_NAME = "analysis.wing.drag_constraint"
 
 #-------Positive checks
 def test_add_dv_no_bounds():
-    
+
     opt = Optimization()
-    
+
     opt.add_design_var(DESIGN_VAR_NAME)
     assert DESIGN_VAR_NAME in opt.des_vars
 
@@ -28,20 +28,20 @@ def test_add_dv_upper():
 
 
 def test_add_dv_lower():
-    opt = Optimization()    
+    opt = Optimization()
     opt.add_design_var(DESIGN_VAR_NAME, lower=1.0)
     assert opt.des_vars[DESIGN_VAR_NAME]["lower"] == 1.0
 
 
 def test_add_dv_both_bounds():
-    opt = Optimization()    
+    opt = Optimization()
     opt.add_design_var(DESIGN_VAR_NAME, lower=1.0, upper=10.0)
     assert opt.des_vars[DESIGN_VAR_NAME]["lower"] == 1.0
     assert opt.des_vars[DESIGN_VAR_NAME]["upper"] == 10.0
 
 
 def test_add_dv_array_bounds():
-    opt = Optimization()    
+    opt = Optimization()
     lower = np.array([0.0, 1.0], dtype=float)
     upper = np.array([1.0, 3.0], dtype=float)
     opt.add_design_var(DESIGN_VAR_NAME, lower=lower, upper=upper)
@@ -50,21 +50,21 @@ def test_add_dv_array_bounds():
 
 
 def test_add_constraint_lower_only():
-    opt = Optimization()    
+    opt = Optimization()
     opt.add_constraint(CONSTRAINT_NAME, lower=0.0)
     assert opt.constraints[CONSTRAINT_NAME]["lower"] == 0.0
     assert opt.constraints[CONSTRAINT_NAME]["upper"] is None
 
 
 def test_add_constraint_upper_only():
-    opt = Optimization()        
+    opt = Optimization()
     opt.add_constraint(CONSTRAINT_NAME, upper=5.0)
     assert opt.constraints[CONSTRAINT_NAME]["upper"] == 5.0
     assert opt.constraints[CONSTRAINT_NAME]["lower"] is None
 
 
 def test_add_constraint_array_bounds():
-    opt = Optimization()    
+    opt = Optimization()
     lower = np.array([0.0, 1.0], dtype=float)
     upper = np.array([1.0, 3.0], dtype=float)
     opt.add_constraint(CONSTRAINT_NAME, lower=lower, upper=upper)
@@ -73,25 +73,25 @@ def test_add_constraint_array_bounds():
 
 
 def test_add_objective_name():
-    opt = Optimization()    
+    opt = Optimization()
     opt.add_objective('random_objective')
-    
+
     assert opt.objective_name == 'random_objective'
 
 def test_to_dict_good():
     opt = Optimization()
     opt.add_design_var(DESIGN_VAR_NAME, lower=1.0, upper=10.0)
     lower = np.array([0.0, 1.0], dtype=float)
-    upper = np.array([1.0, 3.0], dtype=float)    
+    upper = np.array([1.0, 3.0], dtype=float)
     opt.add_constraint(CONSTRAINT_NAME, lower=lower, upper=upper)
     opt.add_objective('random_objective')
 
     opt_dict = opt._to_dict()
-    
+
     assert opt_dict == {
         'type': 'Optimization',
-        'des_vars': {DESIGN_VAR_NAME: {'lower': 1.0,'upper': 10.0,'indices': None}}, 
-        'constraints':{CONSTRAINT_NAME: {'lower': lower,'upper': upper,'indices': None}}, 
+        'des_vars': {DESIGN_VAR_NAME: {'lower': 1.0,'upper': 10.0,'indices': None}},
+        'constraints':{CONSTRAINT_NAME: {'lower': lower,'upper': upper,'indices': None}},
         'objective_name': 'random_objective',
         'driver_options': {
             'optimizer': 'SLSQP',
@@ -99,22 +99,22 @@ def test_to_dict_good():
         'optimizer_options': {},
         'optimizer': 'ScipyOptimizeDriver',
     }
-    
+
 def test_Optimization_from_dict_array_and_scalar_bounds():
     # Hand-crafted dict that mimics what would come from JSON
     data = {
         "type": "optimization",
         "des_vars": {
             # scalar bounds
-            "x": {"lower": 0.0, "upper": 10.0},
+            "x": {"lower": 0.0, "upper": 10.0, 'indices': None},
             # vector bounds (as lists)
-            "y": {"lower": [0.0, 1.0], "upper": [2.0, 3.0]},
+            "y": {"lower": [0.0, 1.0], "upper": [2.0, 3.0], 'indices': None},
         },
         "constraints": {
             # vector bounds (as lists)
-            "c1": {"lower": [0.0, -1.0], "upper": [5.0, 1.0]},
+            "c1": {"lower": [0.0, -1.0], "upper": [5.0, 1.0], 'indices': None},
             # scalar bounds
-            "c2": {"lower": -1.0, "upper": 2.0},
+            "c2": {"lower": -1.0, "upper": 2.0, 'indices': None},
         },
         "objective_name": "obj",
         "driver_options": {"optimizer": "SLSQP", "maxiter": 200, "tol": 1e-6},
@@ -163,7 +163,7 @@ def test_Optimization_from_dict_array_and_scalar_bounds():
     assert not isinstance(c2["lower"], np.ndarray)
     assert not isinstance(c2["upper"], np.ndarray)
     assert c2["lower"] == -1.0
-    assert c2["upper"] == 2.0    
+    assert c2["upper"] == 2.0
 
 
 def test_optimization_from_dict_applies_optimizer_options():
@@ -247,7 +247,7 @@ def test_optimization_from_dict_applies_optimizer_options():
     ],
 )
 def test_shared_bound_validation_failures(adder, kwargs, exc_type, match):
-    opt = Optimization()    
+    opt = Optimization()
     name = DESIGN_VAR_NAME if "design" in adder else CONSTRAINT_NAME
     method = getattr(opt, adder)
     with pytest.raises(exc_type, match=match):
@@ -258,7 +258,7 @@ def test_shared_bound_validation_failures(adder, kwargs, exc_type, match):
 
 
 def test_add_constraint_requires_bound():
-    opt = Optimization()    
+    opt = Optimization()
     with pytest.raises(ValueError, match="At least one constraint must be declared"):
         opt.add_constraint(CONSTRAINT_NAME)
 
@@ -267,9 +267,9 @@ def test_add_constraint_requires_bound():
 
 
 def test_add_design_var_indices_passthrough():
-    
-    opt = Optimization()    
-    indices = [0, 2]    
+
+    opt = Optimization()
+    indices = [0, 2]
     opt.add_design_var(DESIGN_VAR_NAME, lower=0.0, upper=1.0, indices=indices)
     assert opt.des_vars[DESIGN_VAR_NAME]["indices"] is indices
 
@@ -288,48 +288,48 @@ def test_optimization_setters_and_get_desvar_names():
 
 
 def test_add_constraint_indices_passthrough():
-    opt = Optimization()    
+    opt = Optimization()
     indices = np.array([1, 3])
     opt.add_constraint(CONSTRAINT_NAME, lower=0.0, upper=1.0, indices=indices)
     assert opt.constraints[CONSTRAINT_NAME]["indices"] is indices
-    
-    
+
+
 #-----------------------------------Parameter Class
 
 #--------Positive checks
 def test_childless_parametersweep_class():
     sample_param_dict = {'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],
                     'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}
-    
+
     PS = ParameterSweep(sample_param_dict)
-    
+
     assert PS.child is None
     assert PS.param_name_to_value_list == sample_param_dict
-    
+
 def test_optimization_child_parameter_sweep():
     opt = Optimization()
-    
+
     sample_param_dict = {'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],
-                    'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}    
+                    'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}
     PS = ParameterSweep(param_name_to_value_list=sample_param_dict, child=opt)
-    
+
     assert PS.child is  opt
-    
+
 def test_set_child_good():
     opt = Optimization()
-    
+
     sample_param_dict = {'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],
-                    'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}    
+                    'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}
     PS = ParameterSweep(param_name_to_value_list=sample_param_dict, child=opt)
-    
+
     assert PS.child is  opt
-    
+
     new_opt = Optimization()
     PS.set_child(new_opt)
-    
+
     assert PS.child is  not opt
     assert PS.child is new_opt
-    
+
 def test_get_states():
     pass
 
@@ -409,25 +409,25 @@ def test_parameter_sweep_from_dict_branches():
                     'sample_param2': [6.0, 7.0, 67.0, 676767.]}, ValueError)
 ])
 def test_parameter_sweep_bad_inputs(input_dict, err_type):
-    
+
     with pytest.raises(err_type):
         ParameterSweep(param_name_to_value_list=input_dict)
-        
+
 @pytest.mark.parametrize('opt',[
     (1.),
     (2),
     ('string'),
     ([1, 2., 'five']),
     ({'hello': 'goodbye'})
-])    
+])
 def test_set_child_bad_type(opt):
     sample_param_dict = {'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],
                     'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}
     PS = ParameterSweep(sample_param_dict)
     with pytest.raises(TypeError):
         PS.set_child(opt)
-        
-        
+
+
 #------------------------------Control class
 
 def test_Control_instance():
@@ -435,7 +435,7 @@ def test_Control_instance():
     assert C.title == 'Default Title'
     assert C.author == 'Default Author'
     assert C.description == 'Default Description'
-    
+
     assert C.trade_studies == {}
 
 
@@ -448,32 +448,32 @@ def test_control_add_metadata_and_reserved_trade_name():
 
     with pytest.raises(ValueError, match="reserved"):
         c.add_tradestudy("Default State", Optimization())
-    
+
 
 def test_Control_add_trade():
     opt = Optimization()
-    
-    
-    
+
+
+
     sample_param_dict1 = {'sample_param1': [1.0, 10.0, 100.0, 1000.0, 10000.0],
                     'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}
-    
+
     param_sweep1 = ParameterSweep(sample_param_dict1, opt)
-    
+
     C = Control()
     C.add_tradestudy('sample_trade1', param_sweep1)
-    
-    
-    
+
+
+
     sample_param_dict2 = {'sample_param3': [8.0, 10.0, 100.0, 1000.0, 10000.0],
                     'sample_param4': [6.0, 7.0, 67.0, 6767., 676767.]}
-    
+
     param_sweep2 = ParameterSweep(sample_param_dict2, opt)
     C.add_tradestudy('sample_trade2', param_sweep2)
-    
+
     assert C.trade_studies['sample_trade2'] is param_sweep2
     assert C.trade_studies['sample_trade1'] is param_sweep1
-    
+
 def test_Control_to_dict():
     opt = Optimization()
 
@@ -540,7 +540,7 @@ def test_Control_to_dict():
     # And values match exactly
     assert ts1["param_name_to_value_list"] == expected_ts1["param_name_to_value_list"]
     assert ts2["param_name_to_value_list"] == expected_ts2["param_name_to_value_list"]
-    
+
 
 def test_Control_from_dict_mixed_trades():
     # ----- Manually construct the dict that Control._from_dict expects -----
@@ -553,10 +553,10 @@ def test_Control_from_dict_mixed_trades():
     opt_dict_for_sweep = {
         "type": "Optimization",
         "des_vars": {
-            "x": {"lower": 0.0, "upper": 10.0},
+            "x": {"lower": 0.0, "upper": 10.0, "indices": None},
         },
         "constraints": {
-            "c1": {"lower": -1.0, "upper": 1.0},
+            "c1": {"lower": -1.0, "upper": 1.0, "indices": None},
         },
         "objective_name": "obj_sweep",
         "driver_options": {"optimizer": "SLSQP", "maxiter": 200, "tol": 1e-6},
@@ -568,7 +568,7 @@ def test_Control_from_dict_mixed_trades():
     opt_dict_alone = {
         "type": "Optimization",
         "des_vars": {
-            "y": {"lower": [0.0, 1.0], "upper": [2.0, 3.0]},
+            "y": {"lower": [0.0, 1.0], "upper": [2.0, 3.0], "indices": None},
         },
         "constraints": {},
         "objective_name": "obj_opt_only",
