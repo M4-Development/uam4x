@@ -752,11 +752,11 @@ def test_get_param_type():
     actual = study.get_param_type("vehicles.mtr.rotor.nblade")
     assert actual == int, f"expected int, got {actual}"
 
-    with pytest.raises(AttributeError):
-        study.get_param_type("vehicles.mtr.rotor.vflight.tilt")
+    actual = study.get_param_type("vehicles.mtr.rotor.vflight.tilt")
+    assert actual == float, f"expected float, got {actual}"
 
-    with pytest.raises(AttributeError):
-        study.get_param_type("vehicles.mtr.rotor.cruise.tilt")
+    actual = study.get_param_type("vehicles.mtr.rotor.cruise.tilt")
+    assert actual == float, f"expected float, got {actual}"
 
     # -------- Plugin I/O checks --------
     actual = study.solution.get_var_type("test_plug.testin_cont", plugins)

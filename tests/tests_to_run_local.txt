@@ -1,6 +1,6 @@
 test_vehicle.py
 test_utils.py
-test_components.py
+test_subsystems.py
 test_solution.py
 test_control.py
 test_study.py

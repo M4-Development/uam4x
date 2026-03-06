@@ -46,8 +46,7 @@ def test_study_get_param_type_for_component_and_mode(typed_study):
     s = typed_study
 
     assert s.get_param_type("vehicles.veh.wing.span") is float
-    with pytest.raises(AttributeError):
-        s.get_param_type("vehicles.veh.wing.cruise.span")
+    assert s.get_param_type("vehicles.veh.wing.cruise.span") is float
 
 
 def test_study_get_param_type_invalid_path_raises(typed_study):
