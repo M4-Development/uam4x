@@ -20,7 +20,7 @@ class Results:
         self.tradestudies[name]=Trade
         if name in self.study.control.trade_studies:
             Trade.control_data = self.study.control.trade_studies[name]
-            Trade.type = self.study.control.trade_studies[name].type
+            Trade.type = self.study.control.trade_studies[name].__class__.__name__
             Trade.tracked_outputs = self.study.solution.tracked_outputs
 
     def get_all_trade_studies(self):

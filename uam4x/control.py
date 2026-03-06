@@ -13,7 +13,6 @@ DEFAULT_TRADE_NAME = "Default State"
 
 class Optimization:
     def __init__(self) -> None:
-        self.type = 'Optimization'
         self.des_vars = {}
         self.constraints = {}
         self.objective_name = ''
@@ -26,7 +25,7 @@ class Optimization:
 
     def _to_dict(self):
         save_dict = {
-            'type': self.type,
+            'type': self.__class__.__name__,
             'des_vars': self.des_vars,
             'constraints': self.constraints,
             'objective_name': self.objective_name,
@@ -158,7 +157,6 @@ class ParameterSweep:
         self.length: int = None
         self.param_name_to_value_list = param_name_to_value_list
         self.log = ParameterSweep.log
-        self.type = 'ParameterSweep'
         self.log.debug('initialize')
         for name, value_list in self.param_name_to_value_list.items():
             if not isinstance(value_list, list):
