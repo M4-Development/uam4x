@@ -156,7 +156,8 @@ class FileLogger(SimpleLogger):
     def close_file(self):
         if self.open_file:
             self.open_file.close()
-            self.open_file = None
+        self.open_file = None
+        self.write_to_file = False
 
 
     def log_function_handler(self, typ, filename, lineno, msg):
@@ -179,7 +180,9 @@ class FileLogger(SimpleLogger):
             self.capture_log.append((typ, msg))
         if self.write_to_stdout and self.msg_level_dict[typ] >= self.msg_level_dict[self.min_console_level]:
             self.stdout_logging(typ, filename, lineno, msg)
-        if self.write_to_file and self.msg_level_dict[typ] >= self.msg_level_dict[self.min_filelog_level]:
+        if (self.write_to_file and self.open_file is not None and
+                not self.open_file.closed and
+                self.msg_level_dict[typ] >= self.msg_level_dict[self.min_filelog_level]):
             self.file_logging(typ, filename, lineno, msg)
         self.next_actor_name = None
 

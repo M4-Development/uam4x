@@ -25,6 +25,7 @@ class Study:
         if log_dir:
             if log.open_file:
                 log.close_file()
+            os.makedirs(log_dir, exist_ok=True)
             filename_log = os.path.join(log_dir,'log.txt')
             log.set_filename_log(filename_log=filename_log)
         self.log = Study.log
@@ -528,6 +529,5 @@ if __name__ == "__main__":
     engine = Engine(study, "test_work")
     print(study.get_param_type("vehicles.TestVehicle.left_wing.happy.span"))
     print(study.get_param_type("vehicles.TestVehicle.left_wing.span"))
-
 
 

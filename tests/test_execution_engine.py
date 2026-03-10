@@ -12,7 +12,7 @@ from uam4x.execution_engine import Engine
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Subsystem, register_subsystem
-from uam4x.solution import Plugin, register_plugin
+from uam4x.solution import Plugin, register_plugin, Group
 from uam4x.control import ParameterSweep
 
 
@@ -62,6 +62,29 @@ class Stage2Plugin(Plugin):
 
     def run_plugin(self, links, work_dir):
         return {"objective": float(links["y"]) + float(links["arr_scalar"])}
+
+
+@register_plugin
+class NestedMatrixPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("seed", float)
+        self.declare_output("matrix", np.ndarray, shape=(2, 2))
+
+    def run_plugin(self, links, work_dir):
+        seed = float(links["seed"])
+        return {
+            "matrix": np.array([[seed, seed + 1.0], [seed + 2.0, seed + 3.0]])
+        }
+
+
+@register_plugin
+class NestedVectorSinkPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("in_vec", np.ndarray, shape=(2,))
+        self.declare_output("scalar", float)
+
+    def run_plugin(self, links, work_dir):
+        return {"scalar": float(np.sum(links["in_vec"]))}
 
 
 @pytest.fixture
@@ -139,6 +162,46 @@ def test_check_link_types_index_on_scalar_raises(engine_setup):
         engine.check_link_types(plugins)
 
 
+def test_check_link_types_nested_group_allows_nested_array_index(engine_setup):
+    study, engine, _ = engine_setup
+
+    nested = Group()
+    nested.add_step(NestedMatrixPlugin, "matrix")
+
+    study.solution.add_step(nested, "nested")
+    study.solution.add_step(NestedVectorSinkPlugin, "vector_sink")
+    study.solution.add_link("nested.matrix.matrix[0,:]", "vector_sink.in_vec")
+    study.solution.sort_steps()
+
+    plugins = study.solution.generate_plugins()
+    engine.check_link_types(plugins)
+
+
+def test_check_link_indices_nested_group_shape_mismatch_raises(engine_setup):
+    study, engine, _ = engine_setup
+
+    class BadVectorSinkPlugin(Plugin):
+        def setup_plugin(self, plugin_options=None):
+            self.declare_input("in_vec", np.ndarray, shape=(1,))
+            self.declare_output("scalar", float)
+
+        def run_plugin(self, links, work_dir):
+            return {"scalar": float(np.sum(links["in_vec"]))}
+
+    nested = Group()
+    nested.add_step(NestedMatrixPlugin, "matrix")
+
+    study.solution.add_step(nested, "nested")
+    study.solution.add_step(BadVectorSinkPlugin, "vector_sink_bad")
+    study.solution.add_link("nested.matrix.matrix[0,:]", "vector_sink_bad.in_vec")
+    study.solution.sort_steps()
+
+    plugins = study.solution.generate_plugins()
+
+    with pytest.raises(ValueError, match="source indices must match the target shape"):
+        engine.check_link_indices(plugins)
+
+
 def test_check_link_indices_bad_vehicle_index_raises(engine_setup):
     study, engine, plugins = engine_setup
     study.solution.add_link("vehicles.exec_vehicle.core.arr[5,:]", "stage1.arr_row")
@@ -201,6 +264,7 @@ def test_check_objective_non_continuous_raises(engine_setup):
 
 def test_check_upper_lower_array_bounds_positive_and_negative(engine_setup):
     study, engine, plugins = engine_setup
+    var_data = engine._get_analysis_var_data("stage1.arr_out", plugins)
 
     engine.check_upper_lower(
         np.ndarray,
@@ -208,8 +272,7 @@ def test_check_upper_lower_array_bounds_positive_and_negative(engine_setup):
         1.0,
         "Constraint",
         "stage1.arr_out",
-        plugins,
-        study,
+        var_data,
     )
 
     with pytest.raises(ValueError, match="shapes must match"):
@@ -219,8 +282,7 @@ def test_check_upper_lower_array_bounds_positive_and_negative(engine_setup):
             np.zeros((3, 2)),
             "Constraint",
             "stage1.arr_out",
-            plugins,
-            study,
+            var_data,
         )
 
 

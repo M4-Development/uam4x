@@ -10,7 +10,7 @@ class Results:
         self.tradestudies={}
         self.study=study
 
-    def get_tradestudy(self,name):
+    def get_tradestudy(self, name):
         if name in self.tradestudies:
             return self.tradestudies[name]
         else:
@@ -271,8 +271,5 @@ class Result:
             result._add_convergence_status(results_dict['converged'])
 
         return result
-
-
-
 
 

@@ -371,7 +371,7 @@ class UniversalOpenMDAOGroup(om.Group):
         approx_totals_dict=group._approx_totals
         if approx_totals_dict['compute']:
             method=approx_totals_dict['method']
-            form=approx_totals_dict['form']
+            form=approx_totals_dict['form'] 
             step=approx_totals_dict['step']            
             self.approx_totals(method=method,form=form,step=step)
 

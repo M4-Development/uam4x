@@ -59,6 +59,29 @@ class IntSinkPlugin(Plugin):
         return {"n_out": int(links["n_in"]) + 1}
 
 
+@register_plugin
+class MatrixProducerPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("seed", float)
+        self.declare_output("grid", np.ndarray, shape=(2, 2))
+
+    def run_plugin(self, links, work_dir):
+        seed = float(links["seed"])
+        return {
+            "grid": np.array([[seed, seed + 1.0], [seed + 2.0, seed + 3.0]])
+        }
+
+
+@register_plugin
+class MatrixSinkPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("arr_in", np.ndarray, shape=(1,))
+        self.declare_output("total", float)
+
+    def run_plugin(self, links, work_dir):
+        return {"total": float(np.sum(np.asarray(links["arr_in"])))}
+
+
 @pytest.fixture
 def study_with_solution():
     study = Study()
@@ -234,6 +257,35 @@ def test_solution_check_link_types_negative_index_on_scalar(study_with_solution)
 
     with pytest.raises(ValueError, match="Indexes may only be specified for arrays"):
         study.solution._check_link_types(plugins, study)
+
+
+def test_solution_check_link_types_nested_group_allows_nested_array_index(study_with_solution):
+    study, _ = study_with_solution
+    nested = Group()
+    nested.add_step(MatrixProducerPlugin, "matrix")
+
+    outer_consumer = ConsumerPlugin
+    study.solution.add_step(nested, "nested")
+    study.solution.add_step(outer_consumer, "outer")
+    study.solution.add_link("nested.matrix.grid[0,1]", "outer.arr_scalar")
+
+    plugins = study.solution.generate_plugins()
+    study.solution._check_link_types(plugins, study)
+
+
+def test_solution_check_link_indices_nested_group_shape_mismatch_raises(study_with_solution):
+    study, _ = study_with_solution
+    nested = Group()
+    nested.add_step(MatrixProducerPlugin, "matrix")
+
+    study.solution.add_step(nested, "nested")
+    study.solution.add_step(MatrixSinkPlugin, "sink")
+    study.solution.add_link("nested.matrix.grid[0,:]", "sink.arr_in")
+
+    plugins = study.solution.generate_plugins()
+
+    with pytest.raises(ValueError, match="source indices must match the target shape"):
+        study.solution._check_link_indices(plugins, study)
 
 
 def test_solution_get_all_used_vehicle_params(study_with_solution):

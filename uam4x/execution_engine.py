@@ -1,5 +1,5 @@
-from uam4x.study import Study
 import os
+from uam4x.study import Study
 from uam4x.openmdao_optimization import Optimization
 from uam4x.control import Optimization as UAM4XOptimization
 import copy
@@ -7,16 +7,13 @@ from uam4x.log import get_log
 from uam4x.custom_errors import PluginException
 import inspect
 import hashlib
-import numpy as  np
-from uam4x.utils import check_continuous, check_if_scalar,log, parse_index, handle_brackets
-from collections import  defaultdict
-from uam4x.results import Results, Result, Tradestudy  
-from uam4x.log import FileLogger
+import numpy as np
+from uam4x.utils import check_continuous, check_if_scalar, log, handle_brackets
+from uam4x.results import Result, Tradestudy
 import concurrent.futures
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from uam4x.solution import Group
 class Engine:
     """
     Execution engine for running UAM4X studies and trade studies.
@@ -57,6 +54,7 @@ class Engine:
         self.work_dir = work_dir
         os.makedirs(self.work_dir, exist_ok=True)
         self.log = get_log(log, object_name='engine')
+        self.create_step_work_dirs=True
 
 
     def check_partials(self, trade_name, form='forward', step=1.e-6):
@@ -85,7 +83,7 @@ class Engine:
         self.log.debug('check partials')
 
         #Standard setup:
-        self.sort_steps()
+        self.study.solution.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
 
         # Sample state, doesn't really matter here, special check
@@ -93,7 +91,7 @@ class Engine:
         if isinstance(tradestudy,UAM4XOptimization):
             sample_state = tradestudy._to_dict()
             sample_state['optimization'] = True
-        elif hasattr(tradestudy, 'get_optim_child'):
+        elif hasattr(tradestudy, 'get_optim_child') and tradestudy.get_optim_child() is not None:
             # this will have optimization=True already
             sample_state = copy.deepcopy(tradestudy.get_states()[0])
         else:
@@ -128,24 +126,21 @@ class Engine:
     #        plugins[step_name] = plugin
     #    return plugins
 
-    def _run_state(self, state, iteration=None, check=True):
+    def _run_state(self, state, iteration=None,resort_steps=False):
         """
         Run a solution for a given state.
 
         Executes either an optimization or single-point analysis based on the
-        state configuration. Initializes plugins if not provided and performs
-        model validation if requested.
+        state configuration.
 
         Parameters
         ----------
         state : dict
             State dictionary containing all parameters and configuration.
-        plugins : dict or None
-            Dictionary of plugin instances. If None, plugins will be initialized.
         iteration : int, optional
             Iteration number for output directory naming, by default None.
-        check : bool, optional
-            Whether to perform model validation checks, by default True.
+        resort_steps : bool, optional
+            If True, regenerate the solution execution order before running.
 
         Notes
         -----
@@ -156,7 +151,7 @@ class Engine:
         # Parallel workers rebuild Study from a serialized form, which does not
         # preserve the derived execution order stored in `_execution_steps`.
         # Recompute it here so serial and parallel runs build the same model.
-        if not iteration is None:
+        if not iteration is None and self.create_step_work_dirs:
             out_dir = os.path.join(self.work_dir, f"out_{iteration}")
         else:
             out_dir = os.path.join(self.work_dir)
@@ -164,7 +159,10 @@ class Engine:
         os.makedirs(out_dir, exist_ok=True)
 
         plugins=self.study.solution.generate_plugins()
-        self.study.solution.sort_steps()
+        
+        #since parallelism rebuilds the study, need to re sort
+        if resort_steps:
+            self.study.solution.sort_steps()
         
         if state.get('optimization',False):
             result=self._run_optimization(state, plugins, out_dir)
@@ -174,7 +172,7 @@ class Engine:
         return result
     
     @staticmethod
-    def _run_state_parallel(study_dict, state, iteration=None, work_dir=None):
+    def _run_state_parallel(study_dict, state, iteration=None, work_dir=None,create_step_work_dirs=True):
         """
         Static method to run a solution in parallel.
 
@@ -198,17 +196,18 @@ class Engine:
         Result
             The result object containing outputs from the solution.
         """
-        if not iteration is None:
-            out_dir = os.path.join(work_dir, f"out_{iteration}")
-        else:
-            out_dir = os.path.join(work_dir)
+        #if not iteration is None and create_step_work_dirs:
+        #    out_dir = os.path.join(work_dir, f"out_{iteration}")
+        #else:
+        #    out_dir = os.path.join(work_dir)
+#
+        #os.makedirs(out_dir, exist_ok=True)
 
-        os.makedirs(out_dir, exist_ok=True)
 
-
-        study = Study._from_dict(study_dict, out_dir)
-        engine = Engine(study, out_dir)    
-        result = engine._run_state(state, iteration=iteration)
+        study = Study._from_dict(study_dict, work_dir)
+        engine = Engine(study, work_dir)    
+        engine.create_step_work_dirs=create_step_work_dirs
+        result = engine._run_state(state, iteration=iteration,resort_steps=True)
         return result
 
 
@@ -229,9 +228,9 @@ class Engine:
             Output directory for optimization results.
         """
         self.log.debug('run optimization')
+        temp_state=copy.deepcopy(state)
         cwd = os.getcwd()
         os.chdir(out_dir)
-        temp_state=copy.deepcopy(state)
         opt = Optimization(self.study, temp_state,plugins, out_dir)
         opt_result=opt.run_problem()
 
@@ -258,43 +257,53 @@ class Engine:
         """
         self.log.debug('run single point')
         temp_state=copy.deepcopy(state)
-        for step_name, step_info in self.study.solution._execution_steps.items():
+        ordered_plugins=self.study.solution.get_global_execution_order_plugins(plugins)
+        full_links=self.study.solution._build_global_links()
+        for step_name,plugin in ordered_plugins.items():
+            step_name_ind=len(step_name.split('.'))
             self.log.debug(f'run single point: {step_name}')
-            plugin = plugins[step_name]
-            work_dir = os.path.join(out_dir, step_name)
-            os.makedirs(work_dir, exist_ok=True)
-            
+            if self.create_step_work_dirs:
+                work_dir = os.path.join(out_dir, step_name)
+                os.makedirs(work_dir, exist_ok=True)
+            else:
+                work_dir=out_dir
             plugin_inputs={}
-            for (independent,dependent) in self.study.solution.links:  
-                dependent_split = dependent.split(".")
-                if dependent_split[0]==step_name:
-                    var_name = ".".join(dependent_split[1:])
-                    if independent in temp_state:
-                        plugin_inputs[var_name] = temp_state[independent]
-                    else:
-                        plugin_inputs[var_name]=self.study.get_value(independent)
+            for independent,dependent in full_links:
+                dependent_split=dependent.split('.')
+                if len(dependent_split)<=step_name_ind:
+                    continue
+                else:
+                    if '.'.join(dependent_split[:step_name_ind])==step_name:
+                        var_name='.'.join(dependent_split[step_name_ind:])
+                        if independent in temp_state:
+                            plugin_inputs[var_name]=temp_state[independent]
+                        else:
+                            plugin_inputs[var_name]= self.study.get_value(independent)
+            results=plugin.run_plugin(plugin_inputs,work_dir)
 
-            results = plugin.run_plugin(plugin_inputs, work_dir)
-            
-            for var_name, result in results.items():
-                var_name=step_name + "." + var_name
+            for var_name,result in results.items():
+                var_name=step_name+'.'+var_name
                 if var_name in temp_state:
                     self.log.warning(f'Plugin {step_name} returned output {var_name} which overwrites an existing state variable.')
                 temp_state[var_name] = result
+            
 
 
         result=Result(state=state)
 
         for tracked_output in self.study.solution.tracked_outputs:
+            temp_output_name='solution.'+tracked_output
             if '[' in  tracked_output:
                 no_ind_tracked_output, inds = handle_brackets(tracked_output)
                 var_value = temp_state[no_ind_tracked_output][inds]
             else:
-                var_value = temp_state[tracked_output]
+                var_value = temp_state[temp_output_name]
             result._add_result(tracked_output, var_value)        
 
         return result   
                 
+
+
     def run_solution(self):
         start_time = time.perf_counter()
         trade_name='Default State'
@@ -308,7 +317,6 @@ class Engine:
         study_result=self.study.results
         if trade_name in study_result.tradestudies:
             self.log.warning(f'Overwriting existing results for trade study {trade_name}')
-
         ts=Tradestudy(trade_name)
         ts._results.append(result)
         ts._hash_to_result[result.state_hash] = result
@@ -373,9 +381,9 @@ class Engine:
         
         self.study._add_runtime_plugin_checksums(trade_name,plugin_name_to_hash)
 
-    def run_tradestudy(self, trade_name,num_processors=None, commit=False,check=True):
+    def run_tradestudy(self, trade_name,num_processors=None,check=True,create_step_work_dirs=True):
         """
-        Run a trade study analysis.
+        Run an analysis.
         Executes a trade study, which can be either a parameter sweep
         or an optimization. Sorts solution steps, captures execution data,
         and manages parallel execution if specified.
@@ -386,11 +394,10 @@ class Engine:
             Name of the trade study to run.
         num_processors : int, optional
             Number of processors for parallel execution, by default None.
-        commit : bool, optional 
-            Whether to commit results to the study, by default False.
         check : bool, optional  
             Whether to perform model validation checks, by default True.
         """
+        self.create_step_work_dirs=create_step_work_dirs
         start_time = time.perf_counter()
         self.log.debug(f'run tradestudy: {trade_name}')
         self.study.solution.sort_steps()
@@ -416,7 +423,6 @@ class Engine:
             state=tradestudy._to_dict()
             state['optimization']=True
             plugins=self.study.solution.generate_plugins()
-            
             if check:
                 self.check_model(plugins, state)
             result=self._run_optimization(state, plugins, self.work_dir)
@@ -433,6 +439,9 @@ class Engine:
         else:
             # Note a parameter sweep can contain optimizations
             trade_states=tradestudy.get_states()
+            if check:
+                plugins=self.study.solution.generate_plugins()
+                self.check_model(plugins,trade_states[0])
             self._run_parameter_sweep(trade_name,trade_states,num_processors=num_processors)
 
         #add time to results metadata
@@ -457,7 +466,8 @@ class Engine:
             outputs=[]
             study_dict=self.study._to_dict()
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                futures={i:executor.submit(Engine._run_state_parallel, study_dict, state, iteration=i,work_dir=self.work_dir)  for i, state in enumerate(states)}
+                futures={i:executor.submit(Engine._run_state_parallel, study_dict, state, iteration=i,work_dir=self.work_dir,
+                                           create_step_work_dirs=self.create_step_work_dirs)  for i, state in enumerate(states)}
                 for j in sorted(futures.keys()):
                     try:
                         outputs.append(futures[j].result())
@@ -516,7 +526,6 @@ class Engine:
         study_result=self.study.results
         if trade_name in study_result.tradestudies:
             self.log.warning(f'Overwriting existing results for trade study {trade_name}')
-
         ts=Tradestudy(trade_name)
         spec = self.study.control.trade_studies[trade_name]
         post_cls = getattr(spec, "post_spec", None)
@@ -530,7 +539,8 @@ class Engine:
         # self.log.info(f'succesful states: {successful_states}')
         # self.log.info(f'failed states: {failed_states}')
 
-    def check_model(self, plugins, state):
+
+    def check_model(self, plugins, state=None):
         """
         Perform comprehensive model validation checks.
 
@@ -555,12 +565,12 @@ class Engine:
         self.log.debug('check model')
         self.check_links_to_plugins(plugins)
         self.check_link_types(plugins)
-        #self.check_link_indices(plugins)
+        self.check_link_indices(plugins)
         if state.get('optimization',False):
             self.check_desvars(plugins, state)
             self.check_constraints(plugins, state)
             self.check_objective(plugins, state)
-            #self.check_optimization_discrete(plugins, state)
+            self.check_optimization_discrete(plugins)
 
     def check_links_to_plugins(self, plugins):
         """
@@ -581,30 +591,7 @@ class Engine:
         """
         self.log.debug(f'check links to plugins')
         self.study.solution._check_links_to_plugins(plugins)
-        #for step_name in self.study.solution.steps:
-        #    # Check that links matched declared plugin I/O
-        #    input_names, output_names = self.study.get_plugin_input_and_output_names(step_name)
-        #    
-        #    #check coherance of declared I/O from plugin and from branching script
-        #    for input_name in  input_names:
-        #        name = '.'.join(input_name.split('.')[1:])
-        #        if name not  in plugins[step_name].plugin_input_names:
-        #            self.log.error(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-        #                             f"Check your plugin's setup() step for I/O declaration")
-        #            raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-        #                             f"Check your plugin's setup() step for I/O declaration")
-        #    for output_name in  output_names:
-        #        name = '.'.join(output_name.split('.')[1:])
-        #        if '[' in  name:
-        #            #any time where indexes are specified in the link, this is required to be
-        #            # an index specification, nothing to do with the variable name. 
-        #            name, _ = handle_brackets(name)                
-        #        if name not  in plugins[step_name].plugin_output_names:
-        #            self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-        #                             f"Check your plugin's setup() step for I/O declaration")
-        #            raise ValueError(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
-        #                             f"Check your plugin's setup() step for I/O declaration")
-#
+
     def check_link_types(self, plugins):
         """
         Validate that linked parameters have compatible types.
@@ -622,99 +609,25 @@ class Engine:
         TypeError
             If linked parameters have incompatible types.
         """
+        self.log.debug('check link types')
         self.study.solution._check_link_types(plugins,self.study)
-        #self.log.debug('check link types')
-        #bad_links = []
-        #for link in  self.study.solution.links:
-        #    output_link = link[0]
-        #    input_link = link[1]
-        #    indexes_specified = False
-        #    if '[' in  output_link:
-        #        output_link, _ = handle_brackets(output_link)
-        #        indexes_specified = True
-        #    if output_link.split('.')[0]=='vehicles':
-        #        self.study.get_type(output_link)
-        #    output_type = get_param_type(output_link, self.study, plugins)
-        #    input_type = get_param_type(input_link,self.study, plugins)
-        #    #Since only float arrays are allowed, always assumed that the elements of the arrays are floats
-        #    if indexes_specified and output_type != np.ndarray:
-        #        raise ValueError(f'Indexes may only be specified for arrays. The link: {link[1]} is not valid')
-        #    if indexes_specified and  output_type == np.ndarray and  check_continuous(input_type) and input_type != np.ndarray:
-        #        pass
-        #    elif output_type != input_type:
-        #        bad_links.append((output_link,output_type, input_link, input_type))
-#
-        #if bad_links:
-        #    msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
-        #    self.log.error(msg)
-        #    raise TypeError(msg)
-        
                 
     def check_link_indices(self, plugins):
         '''
         check source/destination for:
         valid indexing for source and destination
         '''
-        for link in  self.study.solution.links:
-            if link[0].split('.')[0] == 'vehicles':
-                category = 'parameter'
-            else:
-                category = 'plugin_out'
-            
-            #checks exist to limit [] for links only as index specification
-            if '[' in link[0]:
-                _, inds = handle_brackets(link[0])
-                # Handle the source side
-                if category == 'parameter':
-                    try:
-                        a = self.study.get_value(link[0])
-                        src_shape = a.shape
-                    except:
-                        raise ValueError(f'The indices in {link[0]} provided are not a valid means to index\n')
-                else:
-                    out_plugin_name, out_var_name = link[0].split('.')[0], handle_brackets('.'.join(link[0].split('.')[1:]))[0]
-                    src_var_dict = copy.deepcopy(plugins[out_plugin_name].plugin_output_names[out_var_name])
-                    a = src_var_dict['value']
-                    a_shape = src_var_dict['shape']
-                    if a is not None:
-                        try:
-                            a[inds]
-                            src_shape = a[inds].shape
-                        except:
-                            raise ValueError('')
-                    elif a_shape is  not None:
-                        try:
-                            np.ones(shape=a_shape)[inds]
-                            src_shape = np.ones(shape=a_shape)[inds].shape
-                        except:
-                            raise ValueError('')
-                    else:
-                        #Note, this should already be caught for arrays in plugin declaration
-                        raise ValueError('Developer: Check error catching capaibilities in plugin declaration')
-                    
-                # Handle the destination side (always a plugin), guard against memory access of actual dictionary
-                in_plugin_name, in_var_name = link[1].split('.')[0], '.'.join(link[1].split('.')[1:])
-                dest_var_dict = copy.deepcopy(plugins[in_plugin_name].plugin_input_names[in_var_name])
-                b = dest_var_dict['value']
-                b_shape = dest_var_dict['shape']
-                b_type = dest_var_dict['type']
-                
-                src_size = 1 if src_shape == () else int(np.prod(src_shape))
-                #float case
-                if src_size ==1  and  b_type == float:
-                        pass
-                elif b is not None:
-                    if src_shape != b.shape:
-                        raise ValueError(f'The source indices must match the target shape. The input {link[0]} with indices {link[0].split(".")[-1]}.\n'
-                                         f'The size of the source indices is {src_shape} and the destination has shape {b.shape}')                    
+        self.study.solution._check_link_indices(plugins,self.study)
 
-                elif b_shape is  not None:
-                    if src_shape != b_shape:
-                        raise ValueError(f'The source indices must match the target shape. The input {link[0]} with indices {link[0].split(".")[-1]}.\n'
-                                         f'The size of the source indices is {src_shape} and the destination has shape {b_shape}')
+    def _get_analysis_var_data(self, var_name, plugins):
+        if var_name.startswith('vehicles.'):
+            return {
+                'type': self.study.get_param_type(var_name),
+                'value': self.study.get_value(var_name),
+                'shape': None,
+            }
+        return self.study.solution.get_var_data(var_name, plugins)
                     
-            
-
     def check_desvars(self, plugins, state):
         """
         Validate design variables for optimization.
@@ -736,25 +649,26 @@ class Engine:
         """
         # add desvars
         for name,data in  state['des_vars'].items():
-            des_var_type = self.study.get_param_type(name)
+            var_data = self._get_analysis_var_data(name, plugins)
+            des_var_type = var_data['type']
             if not check_continuous(des_var_type):
                 self.log.error(f'The design variable: {name} is of type {des_var_type}. Only floats allowed as design variables')
                 raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
                                 f'Only floats allowed as design variables')
-            self.check_upper_lower(des_var_type, data['lower'], data['upper'], 'Design Variable', name, plugins, self.study) 
+            self.check_upper_lower(des_var_type, data['lower'], data['upper'], 'Design Variable', name, var_data)
             
             
     def check_constraints(self, plugins, state):
         for name,data in  state['constraints'].items():
-            constraint_type = self.study.solution.get_var_type(name,plugins)
+            var_data = self._get_analysis_var_data(name, plugins)
+            constraint_type = var_data['type']
             if not check_continuous(constraint_type):
                 raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
                                 f'Only floats allowed as constraints')
-            self.check_upper_lower(constraint_type, data['lower'], data['upper'], 'Constraint', name, plugins, self.study) 
+            self.check_upper_lower(constraint_type, data['lower'], data['upper'], 'Constraint', name, var_data)
  
- 
-    @staticmethod
-    def check_upper_lower(var_type,  data_lower, data_upper, dv_or_const, var_name, plugins, study):
+
+    def check_upper_lower(self, var_type, data_lower, data_upper, dv_or_const, var_name, var_data):
         '''
         Check if desvars/constraints upper and lower bounds have been
         declared according to paradigm
@@ -764,21 +678,8 @@ class Engine:
         3.) Np.ndarrays if inputted as arrays must have same shape
         4.) No mixing (scalars and numpy arrays)
         '''
-        
-        # get the vehicle value or plugin shape/value
-        base_name = var_name.split('.')[0]
-        rest_name = '.'.join(var_name.split('.')[1:])
-        if base_name == 'vehicles':
-            var_value = study.get_value(var_name)
-            var_shape = None
-        else:
-            step_plugin = plugins[base_name]
-            if rest_name in  step_plugin.plugin_output_names:
-                var_shape = step_plugin.plugin_output_names[rest_name]['shape']
-                var_value = step_plugin.plugin_output_names[rest_name]['value']
-            #elif rest_name in  step_plugin.plugin_input_names:
-                #var_shape = step_plugin.plugin_input_names[rest_name]['shape']
-                #var_shape = step_plugin.plugin_input_names[rest_name]['value']
+        var_value = var_data['value']
+        var_shape = var_data['shape']
         # Checks on allowables for arrays        
         if var_type is  np.ndarray:
             # If the type has been declared as an ndarray, then
@@ -800,7 +701,7 @@ class Engine:
             
             # For plugin inputs/outputs, shape vs. declared value (when applicable) already checked
             # First check here is if value is declared
-            if data_lower is  not None and  not check_if_scalar(data_lower):
+            if data_lower is not None and  not check_if_scalar(data_lower):
                 #scalars allowed for broadcasting
                 if not check_if_scalar(var_value) and var_value is not None:
                     
@@ -811,7 +712,7 @@ class Engine:
                                          f'plugin input output is accepted.\n'
                                          f'The {dv_or_const} {var_name} lower has shape {data_lower.shape} but must have shape {var_value.shape}')
                 # if var_value is not declared but shape is
-                elif var_shape:
+                elif var_shape is not None:
                     if var_shape != data_lower.shape:
                         raise ValueError(f'If arrays are declared as bounds for {dv_or_const}\n'
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
@@ -821,7 +722,7 @@ class Engine:
                     
             # For plugin inputs/outputs, shape vs. declared value (when applicable) already checked
             # First check here is if value is declared
-            if data_upper is  not None and  not check_if_scalar(data_upper):
+            if data_upper is not None and  not check_if_scalar(data_upper):
                 #scalars allowed for broadcasting
                 if not check_if_scalar(var_value) and  var_value is  not None:
                     if data_upper.shape != var_value.shape:
@@ -830,7 +731,7 @@ class Engine:
                                          f'the value/declared shape in the vehicle component parameter or \n'
                                          f'plugin input output is accepted.\n'
                                          f'The {dv_or_const} {var_name} upper has shape {data_upper.shape} but must have shape {var_value.shape}')                # if var_value is not declared but shape is
-                elif var_shape is  not None:
+                elif var_shape is not None:
                     if var_shape != data_upper.shape:
                         raise ValueError(f'If arrays are declared as bounds for {dv_or_const}\n'
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
@@ -845,8 +746,8 @@ class Engine:
             if data_lower is not None and data_upper is  not None:
                 if not (check_if_scalar(data_lower) or  check_if_scalar(data_upper)):
                     raise ValueError(f'{dv_or_const} was declared as {var_type} which is a scalar\n'
-                                 f'but {dv_or_const} upper is {data_lower}\n'
-                                 f'and {dv_or_const} lower is {data_upper}\n')
+                                 f'but {dv_or_const} upper is {data_upper}\n'
+                                 f'and {dv_or_const} lower is {data_lower}\n')
             
             
     def check_objective(self, plugins, state):
@@ -869,14 +770,15 @@ class Engine:
             If the objective is not of continuous type.
         """
         self.log.debug('check objective')
-        objective_type = self.study.solution.get_var_type(state["objective_name"],plugins)
+        objective_data = self._get_analysis_var_data(state["objective_name"], plugins)
+        objective_type = objective_data['type']
         is_continuous = check_continuous(objective_type)
         if not is_continuous:
             self.log.error(f'The objective: {state["objective_name"]} is of type {objective_type}. Only floats allowed as objectives')
             raise TypeError(f'The objective: {state["objective_name"]} is of type {objective_type}\n'
                             f'Only continuous variables allowed as objectives')
 
-    def check_optimization_discrete(self, plugins, state):
+    def check_optimization_discrete(self, plugins):
         """
         Validate that optimization links are continuous.
 
@@ -898,19 +800,5 @@ class Engine:
         """
         self.log.debug('Check for discrete I/O passing')
         # Check for discrete I/O passing
-        for link in  self.study.solution.links:
-            input_name = link[0]
-            output_name = link[1]
-            link_input_plugin = input_name.split('.')[0]
-            link_output_plugin = output_name.split('.')[0]
-            if link_input_plugin in  self.study.solution.steps and  link_output_plugin in  self.study.solution.steps:
-                #not checking output since it should be the same as input
-                link_input_var_name =  '.'.join(input_name.split('.')[1:])
-                if '[' in  link_input_var_name:
-                    link_input_var_name, _ = handle_brackets(link_input_var_name)
-                input_type = plugins[link_input_plugin].plugin_output_names[link_input_var_name]['type']
-                if not check_continuous(input_type):
-                    self.log.error(f"Links between optimization components must be continuous (of type float). Check I/O declarations in plugin: {link_input_plugin}. Variable in violation: {input_name}")
-                    raise TypeError(f"Links between optimization components must be continuous (of type float)\n"
-                                    f"Check I/O declarations in plugin: {link_input_plugin}\n"
-                                        f"Variable in violation: {input_name}")
+        self.study.solution._check_optimization_discrete(plugins)
+#

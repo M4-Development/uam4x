@@ -244,7 +244,8 @@ class Group:
         for name,data in self.steps.items():
             if isinstance(data,Group):
                 data.sort_steps()
-        
+        #may want to handle the case where there is a single plugin/group 
+        #within a  group (either a raise or do nothing?)
         reduced_links=[]
         counter=0
         step_to_location={}
@@ -365,6 +366,15 @@ class Group:
         return name_to_group
     
     def get_var_type(self,name,plugins):
+        return self.get_var_data(name,plugins)['type']
+        
+    def get_var_value(self,name,plugins):
+        return self.get_var_data(name,plugins)['value']
+    
+    def get_var_shape(self,name,plugins):
+        return self.get_var_data(name,plugins)['shape']
+        
+    def get_var_data(self,name,plugins):
         split_name=name.split('.')
         step_name=split_name[0]
         rest_name='.'.join(split_name[1:])
@@ -372,14 +382,46 @@ class Group:
         if isinstance(step,Plugin):
             if rest_name in step.plugin_input_names:
                 var_type=step.plugin_input_names[rest_name]['type']
+                var_value=step.plugin_input_names[rest_name]['value']
+                var_shape=step.plugin_input_names[rest_name]['shape']
+
             elif rest_name in step.plugin_output_names:
                 var_type=step.plugin_output_names[rest_name]['type']
+                var_value=step.plugin_output_names[rest_name]['value']
+                var_shape=step.plugin_output_names[rest_name]['shape']
             else:
                 raise KeyError(f'Provided path is not an input/output to the plugin {step_name}')
-            return var_type
+            var_data={
+                'value':var_value,
+                'type':var_type,
+                'shape':var_shape}
+            return var_data
         elif isinstance(step,dict):
             local_plugins=plugins[step_name]
-            return self.get_var_type(rest_name,local_plugins)
+            return self.get_var_data(rest_name,local_plugins)
+        
+    def _get_global_execution_order_plugins(self,sol_name,plugins,global_name_to_plugin):
+        for name,step in self._execution_steps.items():
+            if isinstance(step,Group):
+                full_name=sol_name+'.'+name
+                local_plugs=plugins[name]
+                step._get_global_execution_order_plugins(full_name,local_plugs,global_name_to_plugin)
+            else:
+                global_name_to_plugin[sol_name+'.'+name]=plugins[name]
+
+    def _build_links(self,base_name):
+        global_links=[]
+        for output,input in self.links:
+            if output.split('.')[0]!='vehicles':
+                output=base_name+'.'+output
+            input=base_name+'.'+input
+            global_links.append([output,input])
+        for name,step in self._execution_steps.items():
+            if isinstance(step,Group):
+                new_base_name=base_name+'.'+name
+                global_links+=step._build_links(new_base_name)
+        return global_links
+            
 
 class Solution(Group):
     log = get_log(log, object_name='solution')
@@ -561,7 +603,124 @@ class Solution(Group):
 
 
                 
+    def _check_optimization_discrete(self,plugins):
+        groups=self.get_all_groups()
+        bad_types={}
+        for group_name,group in groups.items():
+            split_name=group_name.split('.')
+            if split_name[0]=='solution' and len(split_name)==1:
+                local_plugins=plugins
+            else:
+                split_name=split_name[1:]
+                local_plugins=self.recurse_plugin_dict(split_name,plugins)
+            for output_link,input_link in group.links:
+                if output_link.split('.')[0]=='vehicles':
+                    continue
+
                 
+
+                if '[' in  output_link:
+                    output_link, _ = handle_brackets(output_link)
+                
+                output_type=self.get_var_type(output_link,local_plugins)
+
+                if not check_continuous(output_type):
+                    bad_types[output_link]=output_type
+        if bad_types:
+            bad_links = [f"{output_link}: {output_type}" for output_link, output_type in bad_types.items()]
+            detail = "\n".join(f"  - {line}" for line in bad_links)
+            msg = (
+                "Links between optimization components must be continuous (of type float)\n"
+                "Discrete variables linked between plugins:\n"
+                f"{detail}"
+                )
+            self.log.error(msg)
+            raise TypeError(msg)
+        
+
+    def get_global_execution_order_plugins(self,plugins):
+        sol_name='solution'
+        global_plugin_name_to_plugin={}
+        for name,step in self._execution_steps.items():
+            if isinstance(step,Group):
+                full_name=sol_name+'.'+name
+                local_plugs=plugins[name]
+                step._get_global_execution_order_plugins(full_name,local_plugs,global_plugin_name_to_plugin)
+            else:
+                global_plugin_name_to_plugin[sol_name+'.'+name]=plugins[name]
+
+        return global_plugin_name_to_plugin
+    
+    def _build_global_links(self):
+        global_links=[]
+        base_name='solution'
+        for output,input in self.links:
+            if output.split('.')[0]!='vehicles':
+                output=base_name+'.'+output
+            input=base_name+'.'+input
+            global_links.append([output,input])
+        for name,step in self._execution_steps.items():
+            if isinstance(step,Group):
+                child_name=base_name+'.'+name
+                global_links+=step._build_links(child_name)
+        return global_links
+    
+    def _check_link_indices(self,plugins,study):
+        groups=self.get_all_groups()
+        for group_name,group in groups.items():
+            split_name=group_name.split('.')
+            if split_name[0]=='solution' and len(split_name)==1:
+                local_plugins=plugins
+            else:
+                split_name=split_name[1:]
+                local_plugins=self.recurse_plugin_dict(split_name,plugins)
+            for output_link,input_link in group.links:
+                indexes_specified = False
+
+                if '[' in  output_link:
+                    cleaned_output_name, inds = handle_brackets(output_link)
+                    if output_link.split('.')[0]=='vehicles':
+                        try:
+                            a=study.get_value(output_link)
+                            src_shape=a.shape
+                        except:
+                            raise ValueError(f'The indices in {output_link} provided are not a valid means to index\n')
+                    else:
+                        a=self.get_var_value(cleaned_output_name,local_plugins)
+                        a_shape=self.get_var_shape(cleaned_output_name,local_plugins)
+                        if a is not None:
+                            try:
+                                a[inds]
+                                src_shape = a[inds].shape
+                            except:
+                                raise ValueError('')
+                        elif a_shape is  not None:
+                            try:
+                                np.ones(shape=a_shape)[inds]
+                                src_shape = np.ones(shape=a_shape)[inds].shape
+                            except:
+                                raise ValueError('')
+                        else:
+                            #Note, this should already be caught for arrays in plugin declaration
+                            raise ValueError('Developer: Check error catching capaibilities in plugin declaration')
+
+                    b = self.get_var_value(input_link,local_plugins)
+                    b_shape = self.get_var_shape(input_link,local_plugins)
+                    b_type = self.get_var_type(input_link,local_plugins)
+
+                    src_size = 1 if src_shape == () else int(np.prod(src_shape))
+                    #float case
+                    if src_size ==1  and  b_type == float:
+                            pass
+                    elif b is not None:
+                        if src_shape != b.shape:
+                            raise ValueError(f'The source indices must match the target shape. The input {output_link} with indices.\n'
+                                             f'The size of the source indices is {src_shape} and the destination has shape {b.shape}')                    
+
+                    elif b_shape is  not None:
+                        if src_shape != b_shape:
+                            raise ValueError(f'The source indices must match the target shape. The input {output_link} with indices.\n'
+                                             f'The size of the source indices is {src_shape} and the destination has shape {b_shape}')
 
 
 
