@@ -681,10 +681,10 @@ class Surrogate:
         # in the case of the lognormal distribution. Basic Uniform and Normal
         #probability space is equal to the physical since no transformaton occurs. 
         for i,(name,distribution) in enumerate(self.aleatory_var_to_dist.items()):
-            if isinstance(distribution):
+            if isinstance(distribution,LogNormalDistribution):
                 #points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
                 #where gamma is the shift
-                self.new_sample_points[:,i]=np.exp(self.new_sample_points[:,i])+dist.gamma
+                self.new_sample_points[:,i]=np.exp(self.new_sample_points[:,i])+distribution.gamma
                 
         self.new_sample_values=np.array(Y) 
         return np.array(self.new_sample_points),np.array(self.new_sample_values)

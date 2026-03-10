@@ -33,7 +33,7 @@ class Group:
     def set_cycle_solver(self,solver_name):
         self.cycle_solver=solver_name
 
-    def approx_totals(self,method='fd',step=None,form=None):
+    def approx_totals(self,method='fd',step=10**-6,form='forward'):
         self._approx_totals={'compute':True,'method':method,'step':step,'form':form}
 
     def add_link(self, independent:str, dependent:str):
