@@ -115,17 +115,6 @@ class Engine:
         problem.check_partials(step=step, form=form, compact_print=True)
         os.chdir(cwd)
 
-
-    #def _generate_plugins(self):
-    #    plugins = {}
-    #    for step_name, step_info in self.study.solution.steps.items():
-    #        
-    #        self.log.debug(f'setup {step_name} plugin')
-    #        plugin = step_info["plugin"]()
-    #        plugin.setup_plugin(step_info["plugin_options"])
-    #        plugins[step_name] = plugin
-    #    return plugins
-
     def _run_state(self, state, iteration=None,resort_steps=False):
         """
         Run a solution for a given state.
@@ -354,10 +343,14 @@ class Engine:
         # hash plugins at runtime
         plugin_name_to_hash = {}
         external_executable_to_versioning_data = {}
-        all_plugin_name_to_class=self.study.solution.get_all_plugin_names_to_classes()
-        all_plugin_name_to_hash=self.study.solution.get_all_plugin_names_to_hashes()
-        for plugin_name, plugin_class in all_plugin_name_to_class.items():
+        #all_plugin_name_to_class=self.study.solution.get_all_plugin_names_to_classes()
+        #all_plugin_name_to_hash=self.study.solution.get_all_plugin_names_to_hashes()
+        for plugin_name, data in self.study.solution.get_all_plugin_names_to_data().items():
             #get the hash
+            plugin_class=data['plugin']
+            reference_plugin_hash=data['plugin_hash']
+            plugin_options=data['plugin_options']
+            plugin=plugin_class()
             src = inspect.getsource(plugin_class)
             h = hashlib.sha256()
             h.update(src.encode("utf-8"))
@@ -365,16 +358,16 @@ class Engine:
             plugin_name_to_hash[plugin_name] = plug_hash
 
             #NEED TO UPDATE TO REFLECT NEW STRUCTURE FOR COMPARISON
-            if all_plugin_name_to_hash[plugin_name] != plug_hash:
+            if reference_plugin_hash != plug_hash:
                 log.warning(f"Plugin '{plugin_class.__name__}' contains a different checksum from the one generated at branching script. Check plugin code for changes")
 #
             #NEED TO UPDATE THIS TO ALIGN WITH GROUPS, MAYBE NEED A MORE CENTRALIZED
             #SET UP TO MINIMIZE REPETITION 
-            #plugin = step_info["plugin"]()
-            #plugin.setup_plugin(step_info["plugin_options"])
-            #if plugin._executable_to_data and not 'step_external_executable_data' in self.study._runtime_meta_data:
-            #    #copying here because i don't want to carry and accidentally modify state
-            #    external_executable_to_versioning_data[step_name] = copy.deepcopy(plugin._executable_to_data)
+            plugin = plugin_class()
+            plugin.setup_plugin(plugin_options)
+            if plugin._executable_to_data and not 'step_external_executable_data' in self.study._runtime_meta_data:
+                #copying here because i don't want to carry and accidentally modify state
+                external_executable_to_versioning_data[plugin_name] = copy.deepcopy(plugin._executable_to_data)
 
         if external_executable_to_versioning_data:
             self.study._add_runtime_external_executable_data(trade_name,external_executable_to_versioning_data)        

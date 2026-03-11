@@ -216,23 +216,16 @@ class Group:
 
         return plugins
             
-    def _get_all_plugin_names_to_classes(self,head_dict,group_name):
-        
-        for name,data in self.steps.items():
-            if isinstance(data,dict):
-                head_dict[f'{group_name}.{name}']=data["plugin"]
-            elif isinstance(data,Group):
-                data._get_all_plugin_names_to_classes(head_dict,f'{group_name}.{name}')     
 
-        
-            
-    def _get_all_plugin_names_to_hashes(self,head_dict,group_name):
-        
+    def _get_all_plugin_names_to_data(self,head_dict,group_name):
         for name,data in self.steps.items():
             if isinstance(data,dict):
-                head_dict[f'{group_name}.{name}']=data["plugin_hash"]
+                head_dict[f'{group_name}.{name}']={'plugin':data['plugin'],
+                                                   'plugin_hash':data['plugin_hash'],
+                                                   'plugin_options':data['plugin_options']}
             elif isinstance(data,Group):
-                data._get_all_plugin_names_to_hashes(head_dict,f'{group_name}.{name}')  
+                data._get_all_plugin_names_to_data(head_dict,f'{group_name}.{name}')
+
 
     def sort_steps(self):
         self._execution_steps={}
@@ -498,26 +491,39 @@ class Solution(Group):
         sol.tracked_outputs = data["tracked_outputs"]
         sol.links = data["links"]
         return sol
-
-    def get_all_plugin_names_to_classes(self):
-        plugin_names_to_class={}
-        for name,data in self.steps.items():
-            if isinstance(data,dict):
-                plugin_names_to_class[name]=data["plugin"]
-            elif isinstance(data,Group):
-                data._get_all_plugin_names_to_classes(plugin_names_to_class,name)
-
-        return plugin_names_to_class
     
     def get_all_plugin_names_to_hashes(self):
-        plugin_names_to_hash={}
+        plugins_names_to_hashes={}
+        plugins_name_to_data=self.get_all_plugin_names_to_data()
+        for name, data in plugins_name_to_data.items():
+            plugins_names_to_hashes[name]=data['plugin_hash']
+        return plugins_names_to_hashes
+
+    def get_all_plugin_names_to_classes(self):
+        plugins_names_to_classes={}
+        plugins_name_to_data=self.get_all_plugin_names_to_data()
+        for name, data in plugins_name_to_data.items():
+            plugins_names_to_classes[name]=data['plugin']
+        return plugins_names_to_classes
+
+    def get_all_plugin_names_to_options(self):
+        plugins_names_to_options={}
+        plugins_name_to_data=self.get_all_plugin_names_to_data()
+        for name, data in plugins_name_to_data.items():
+            plugins_names_to_options[name]=data['plugin_options']
+        return plugins_names_to_options
+
+    def get_all_plugin_names_to_data(self):
+        plugins_name_to_data={}
         for name,data in self.steps.items():
             if isinstance(data,dict):
-                plugin_names_to_hash[name]=data["plugin_hash"]
+                plugins_name_to_data[name]={'plugin':data['plugin'],
+                                            'plugin_hash':data['plugin_hash'],
+                                            'plugin_options':data['plugin_options']}
             elif isinstance(data,Group):
-                data._get_all_plugin_names_to_hashes(plugin_names_to_hash,name)
+                data._get_all_plugin_names_to_data(plugins_name_to_data,name)
 
-        return plugin_names_to_hash
+        return plugins_name_to_data
     
 
     def get_plugin_input_and_output_names(self,step_name):
