@@ -160,6 +160,7 @@ def test_group_sort_steps_cycle_with_solver_allowed():
     g.add_link("a.y", "b.y_in")
     g.add_link("b.z", "a.x")
     g.set_cycle_solver("NonlinearBlockGS")
+    g.declare_cycle_step_order(["a", "b"])
 
     g.sort_steps()
 

@@ -28,6 +28,7 @@ class Group:
         self._approx_totals={'compute':False}
         self._is_cycle=False
         self.group_name=''
+        self.cycle_declared_step_order=[]
 
 
     def set_cycle_solver(self,solver_name):
@@ -56,40 +57,33 @@ class Group:
         self.log.debug(f'get step names')
         return [step_name for step_name in self.steps]
 
-    def _make_step_info(self,subsystem, subsystem_options, plugin_hash=None):
-        if isinstance(subsystem,type) and issubclass(subsystem,Plugin):
+    def _make_step_info(self,step, plugin_options, plugin_hash=None):
+        if isinstance(step,type) and issubclass(step,Plugin):
 
             if plugin_hash is None:
-                src = inspect.getsource(subsystem)
+                src = inspect.getsource(step)
                 h = hashlib.sha256()
                 h.update(src.encode("utf-8"))
                 plugin_hash = h.hexdigest()
 
             return {
-                "plugin": subsystem,
-                "plugin_options": subsystem_options,
+                "plugin": step,
+                "plugin_options": plugin_options,
                 "plugin_hash": plugin_hash,
             }
         
-        elif isinstance(subsystem,Group):
-            #group_dict={}
-            #for name,info in plugin_class.steps.items():
-            #    group_dict[name]=info
-            #return group_dict
-
-            # two approaches here: one is that the groups are fixed and added
-            #as they are added (logic above) or the group itself is added only
-            #which still allows for access to the groups plugin based data
-            #then the group will be resolve at the _to_dict stage
-            return subsystem
+        elif isinstance(step,Group):
+            return step
         
         else: 
             raise TypeError(f'Only plugin classes and group objects are allowed')
         
 
-    def add_step(self, subsystem, step_name=None, plugin_options:dict={}):
+    def add_step(self, step, step_name=None, plugin_options:dict=None):
+        if plugin_options is None:
+            plugin_options={}
         self.log.debug(f'add step: {step_name}')
-        if isinstance(subsystem,type) and not issubclass(subsystem, Plugin):
+        if isinstance(step,type) and not issubclass(step, Plugin):
             self.log.error("add_step: plugin_class should be a callable (class).")
             raise TypeError("plugin_class should be a callable (class).")
         if step_name is  not None and  ('[' in  step_name or  ']' in  step_name):
@@ -98,10 +92,10 @@ class Group:
         # plugin_name should be a string, not a class
         if step_name is None:
             step_name = "step" + str(len(self.steps)+1)
-        if isinstance(subsystem,Group):
-            subsystem.group_name=step_name
+        if isinstance(step,Group):
+            step.group_name=step_name
 
-        step_info = self._make_step_info(subsystem, plugin_options)
+        step_info = self._make_step_info(step, plugin_options)
         self.steps[step_name] = step_info
 
 
@@ -179,6 +173,7 @@ class Group:
             "cycle_solver":self.cycle_solver,
             "approx_totals":self._approx_totals,
             "group_name":self.group_name,
+            'cycle_declared_step_order':self.cycle_declared_step_order
         }
 
     @classmethod
@@ -189,22 +184,23 @@ class Group:
         for step_name, step_data in data["steps"].items():
             if step_data['specification']=='plugin':
                 plugin_name = step_data["plugin"]
-                subsystem = get_plugin_class(plugin_name)
-                subsystem_options = step_data["plugin_options"]
+                step = get_plugin_class(plugin_name)
+                plugin_options = step_data["plugin_options"]
                 plugin_hash = step_data["plugin_hash"]
             elif step_data['specification']=='group':
-                subsystem=Group._from_dict(step_data)
-                subsystem_options={}
+                step=Group._from_dict(step_data)
+                plugin_options={}
                 plugin_hash=None
 
 
-            step_info = group._make_step_info(subsystem, subsystem_options, plugin_hash)
+            step_info = group._make_step_info(step, plugin_options, plugin_hash)
             group.steps[step_name] = step_info
 
         group.links = data["links"]
         group.cycle_solver=data["cycle_solver"]
         group._approx_totals=data["approx_totals"]
         group.group_name=data["group_name"]
+        group.cycle_declared_step_order=data['cycle_declared_step_order']
         return group
     
     def generate_plugins(self):
@@ -294,6 +290,12 @@ class Group:
             self._is_cycle=True
             if not self.cycle_solver:
                 raise ValueError(f'Cycle solver must be selected if cycle is used')
+            if not self.cycle_declared_step_order:
+                raise ValueError(f'Groups with cycles must have user provided order')
+            if not len(self.cycle_declared_step_order)==len(self.steps.keys()):
+                raise ValueError(f'The step order must have the same length as the steps')
+            for name in self.cycle_declared_step_order:
+                self._execution_steps[name]=self.steps[name]
         else:
             for name,data in self.steps.items():
                 if name not in list(step_to_location.keys()):
@@ -421,6 +423,9 @@ class Group:
                 new_base_name=base_name+'.'+name
                 global_links+=step._build_links(new_base_name)
         return global_links
+    
+    def declare_cycle_step_order(self,names):
+        self.cycle_declared_step_order=names
             
 
 class Solution(Group):
@@ -478,16 +483,16 @@ class Solution(Group):
         for step_name, step_data in data["steps"].items():
             if step_data['specification']=='plugin':
                 plugin_name = step_data["plugin"]
-                subsystem = get_plugin_class(plugin_name)
-                subsystem_options = step_data["plugin_options"]
+                step = get_plugin_class(plugin_name)
+                plugin_options = step_data["plugin_options"]
                 plugin_hash = step_data["plugin_hash"]
             elif step_data['specification']=='group':
 
-                subsystem=Group._from_dict(step_data)
-                subsystem_options={}
+                step=Group._from_dict(step_data)
+                plugin_options={}
                 plugin_hash=None
 
-            step_info = sol._make_step_info(subsystem, subsystem_options, plugin_hash)
+            step_info = sol._make_step_info(step, plugin_options, plugin_hash)
             sol.steps[step_name] = step_info
 
         sol.tracked_outputs = data["tracked_outputs"]
