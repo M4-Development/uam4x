@@ -19,17 +19,16 @@ class Results:
     def add_tradestudy(self,name,Trade):
         Trade._results_owner=self
         self.tradestudies[name]=Trade
-        if name in self.study.control.trade_studies:
-            Trade.control_data = self.study.control.trade_studies[name]
-            Trade.type = self.study.control.trade_studies[name].__class__.__name__
-            Trade.tracked_outputs = self.study.solution.tracked_outputs
 
-    def get_all_trade_studies(self):
+    def has_results(self):
+        if self.tradestudies:
+            return True
+        else:
+            return False
+
+    def get_all_tradestudies(self):
         tradestudies = list(self.tradestudies.keys())
         return tradestudies
-
-    def get_swept_parameters(self, trade_name):
-        return list(self.study.control.trade_studies[trade_name].param_name_to_value_list.keys())
 
     def _to_dict(self):
         tradename_to_tradestudy={}
@@ -58,9 +57,6 @@ class Tradestudy:
         self.trade_name=trade_name
         self._results_owner=None
         self._results_owner = None
-        self.control_data = None
-        self.tracked_outputs = None
-        self.type = None
 
         self.post=None
 
@@ -99,14 +95,24 @@ class Tradestudy:
 
     def get_changing_variables(self):
 
-        if self.type == 'Optimization':
-            changing_variables = self.tracked_outputs + self.control_data.get_desvar_names()
-        elif self.type == 'ParameterSweep':
-            changing_variables = self.tracked_outputs + list(self.control_data.get_all_param_names())
-            if hasattr(self.control_data, "child") and self.control_data.child.type== 'Optimization' :
-                changing_variables = changing_variables + self.control_data.get_desvar_names()
+        if self.trade_name in self.study.control.trade_studies:
+            trade = self.study.control.trade_studies[self.trade_name]
+        elif self.trade_name == "Default State":
+            trade=None
+        else:
+            raise ValueError(f'Trade study "{self.trade_name}" not found in study control.')
 
-        return changing_variables
+        # get Design variable names if applicable
+        get_desvar_names=getattr(trade,"get_desvar_names",None)
+        des_vars=get_desvar_names() if callable(get_desvar_names) else []
+
+        # get parameter variables if applicable
+        get_param_names=getattr(trade,"get_all_param_names",None)
+        param_names= get_param_names() if callable(get_param_names) else []
+
+        tracked= [] if self.study.solution.tracked_outputs is None else self.study.solution.tracked_outputs
+
+        return des_vars + tracked + list(param_names)
 
     def set_study_reference(self,study):
         self.study=study
@@ -147,7 +153,7 @@ class Tradestudy:
             return None
         # first check if variable name is in tracked outputs
 
-            
+
         if variable_name in self.study.solution.tracked_outputs:
             for result in self._results:
                 if variable_name in result.outputs:
@@ -177,7 +183,7 @@ class Tradestudy:
                     #log as missing.
             return values
         #check if the variable is a value in a parameter sweep
-        # check if the variable was part of the UQ analysis: 
+        # check if the variable was part of the UQ analysis:
         # check if the variable was part of the sensitivity analysis:
         elif variable_name in param_names or variable_name in aleatory_vars_to_pdf or variable_name in sensitivity_vars_to_values:
             for result in self._results:
@@ -185,7 +191,7 @@ class Tradestudy:
                     values.append(result.state[variable_name][inds])
                 else:
                     values.append(result.state[variable_name])
-                    #log as missing. 
+                    #log as missing.
             return values
         #then check if the variable name is in the vehicle parameters
         else:
