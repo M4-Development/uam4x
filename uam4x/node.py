@@ -1,7 +1,7 @@
 """
 Node Management System for UAM4X
 
-Handles node registration and management similar to components and plugins.
+Handles node registration and management similar to subsystems and plugins.
 """
 
 from typing import Dict, List, Any, Optional, Callable
@@ -196,16 +196,16 @@ def register_node(name: str = None, description: str = ""):
 
             # Create a completely fresh config dictionary
             clean_config = {
-                'COMPONENTS': {},
+                'SUBSYSTEMS': {},
                 'PLUGINS': {},
                 'NODES': {}
             }
 
             # Copy only string values from existing config
-            if 'COMPONENTS' in existing_config and isinstance(existing_config['COMPONENTS'], dict):
-                for key, value in existing_config['COMPONENTS'].items():
+            if 'SUBSYSTEMS' in existing_config and isinstance(existing_config['SUBSYSTEMS'], dict):
+                for key, value in existing_config['SUBSYSTEMS'].items():
                     if isinstance(key, str) and isinstance(value, str):
-                        clean_config['COMPONENTS'][key] = value
+                        clean_config['SUBSYSTEMS'][key] = value
 
             if 'PLUGINS' in existing_config and isinstance(existing_config['PLUGINS'], dict):
                 for key, value in existing_config['PLUGINS'].items():

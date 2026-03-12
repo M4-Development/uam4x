@@ -365,7 +365,7 @@ class Subsystem:
 
     def add_parameter(self, name: str, default_value, dtype, unit_type=None, unit=None, description=""):
         """
-        Add a parameter to the component (only allowed in setup()).
+        Add a parameter to the subsystem (only allowed in setup()).
 
         Parameters
         ----------
@@ -594,7 +594,7 @@ def register_subsystem(cls):
     subsystem = cls.__name__
     log.debug(f'register subsystem: {subsystem}')
     # Only register in the registry, don't modify conf.json for built-in subsystems
-    # when running components.py directly
+    # when running subsystems.py directly
     if cls.__module__ == "__main__":
         _subsystem_registry[subsystem] = cls
         _update_consts(subsystem , cls)
