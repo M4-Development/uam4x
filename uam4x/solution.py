@@ -373,6 +373,23 @@ class Group:
         return plugins
     
     def _recurse_generated_plugins(self,plugins,plugin_dict):
+        """Flatten nested generated plugin mappings into a single dictionary.
+
+        Parameters
+        ----------
+        plugins : dict
+            Nested dictionary produced by :meth:`generate_plugins`, where values are
+            either instantiated :class:`Plugin` objects or deeper group dictionaries.
+        plugin_dict : dict
+            Output dictionary populated in place with ``{step_name: plugin_object}``
+            pairs discovered while traversing ``plugins``.
+
+        Notes
+        -----
+        This helper recurses through subgroup dictionaries and only records leaf
+        plugin objects.
+
+        """
 
         for step_name,data in plugins.items():
             if isinstance(data,Plugin):
@@ -978,9 +995,25 @@ class Solution(Group):
         return groups[dotted_path]
     
     def recurse_generated_plugins(self,plugins):
-        '''
-        
-        '''
+        """Return a flat mapping of generated plugin instances by step name.
+
+        Parameters
+        ----------
+        plugins : dict
+            Nested plugin structure returned by :meth:`generate_plugins`.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping each discovered step name to its instantiated
+            :class:`Plugin` object.
+
+        Notes
+        -----
+        The traversal delegates recursive subgroup handling to
+        :meth:`Group._recurse_generated_plugins`.
+
+        """
         plugin_name_to_plugin_object={}
         for step_name,data in plugins.items():
             if isinstance(data,Plugin):
@@ -991,8 +1024,7 @@ class Solution(Group):
         return plugin_name_to_plugin_object
     
     def recurse_plugin_dict(self,split_name,plugins):
-        #last term in the initial string (is a group)
-        #then plugins must be of form last_group:{data}
+
         """Resolve nested plugin mappings from a split path.
 
         Parameters
@@ -1008,6 +1040,8 @@ class Solution(Group):
             Return value produced by this operation.
 
         """
+        #last term in the initial string (is a group)
+        #then plugins must be of form last_group:{data}
         if len(split_name)==1:
             return plugins[split_name[0]]
         else:
@@ -1562,8 +1596,6 @@ class Plugin():
 
 
         if '~' in  name or  '[' in  name or  ']' in  name:
-            #self.log.error(r'Tildes (~), square brackets "[","]" are not allowed in variable names\n'
-                             #rf'The following name is not allowed: {name}')
             raise ValueError(f'Tildes (~), square brackets "[","]" are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
 

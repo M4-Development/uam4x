@@ -149,7 +149,6 @@ class UQAnalysis:
 
         """
         ot.RandomGenerator.SetSeed(self.seed)
-        #self.UQ_workflow.
         return self.UQ_workflow._get_states(self.aleatory_var_to_dist)
     
     def _to_dict(self):
@@ -205,8 +204,6 @@ class UQAnalysis:
 #Analysis workflow pre classes
 @register_workflow
 class BasicStats:
-
-    #post_class=BasicStatsPost
 
     """Represent the basicstats component in the UAM4X workflow.
 
@@ -1469,7 +1466,7 @@ class SobolSensitivityPost(BasicStatsPost):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    METHOD_TO_CLASS={
+    _METHOD_TO_CLASS={
         'Saltelli':ot.SaltelliSensitivityAlgorithm,
         'Jansen':ot.JansenSensitivityAlgorithm,
         'MauntzKucherenko':ot.MauntzKucherenkoSensitivityAlgorithm,
@@ -1531,7 +1528,7 @@ class SobolSensitivityPost(BasicStatsPost):
             input_matrix[:,col]=self.tradestudy.get_variable(aleatory_var_name)
         input_matrix=ot.Sample(input_matrix)
         outs=ot.Sample(outs)
-        ot_algo=self.METHOD_TO_CLASS[algo]
+        ot_algo=self._METHOD_TO_CLASS[algo]
         otSobol=ot_algo(input_matrix,outs,num_samples)
 
         results={

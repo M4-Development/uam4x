@@ -133,16 +133,9 @@ class Parameter:
         unit_type = self.unit_type
         if hasattr(unit_type, '__name__'):
             unit_type = unit_type.__name__
-        #elif not isinstance(unit_type, str):
-            #unit_type = str(unit_type) if unit_type is not None else None
+
 
         unit = self.unit
-        #if hasattr(unit, 'value'):
-            #unit = unit.value
-        #if hasattr(unit, '__name__'):
-            #unit = unit.__name__
-        #elif not isinstance(unit, str):
-            #unit = str(unit) if unit is not None else None
 
         return {
             "name": self.name,
@@ -552,7 +545,6 @@ class Subsystem:
             {'main': ..., mode_name: ...} for all parameters and all modes.
         """
         self.log.debug('check all parameter types')
-        #result = {'main': {name: param.check_type() for name, param in self._parameters.items()}}
         result = {}
         for mode_name, mode in self._modes.items():
             mode_result = {}

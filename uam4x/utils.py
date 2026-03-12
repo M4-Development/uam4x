@@ -117,10 +117,6 @@ def is_continuous_type_or_value(val_or_type):
 
     return False
 
-def check_continuous(val_or_type):
-    """Backward-compatible alias for `is_continuous_type_or_value`."""
-    return is_continuous_type_or_value(val_or_type)
-
 def is_scalar_type_or_value(val_or_type):
     """Validate if scalar type or value.
 
@@ -141,10 +137,6 @@ def is_scalar_type_or_value(val_or_type):
         return True
 
     return False
-
-def check_if_scalar(val_or_type):
-    """Backward-compatible alias for `is_scalar_type_or_value`."""
-    return is_scalar_type_or_value(val_or_type)
 
 def type_string_to_type(type_name:str):
     """Execute type string to type.
@@ -720,10 +712,6 @@ def split_dotted_path_and_indices(dotted_path):
     dotted_path = dotted_path[:bracket_ind]
 
     return dotted_path, inds
-
-def handle_brackets(dotted_path):
-    """Backward-compatible alias for `split_dotted_path_and_indices`."""
-    return split_dotted_path_and_indices(dotted_path)
 
 def replace_none_with_empty_quotes(value):
     """Execute replace none with empty quotes.

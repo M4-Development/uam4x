@@ -48,7 +48,7 @@ templates_path = ['_templates']
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', '_autosummary', 'Thumbs.db', '.DS_Store']
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -104,14 +104,13 @@ autodoc_warningiserror = False
 
 # This value controls whether to scan all found documents for autosummary
 # generation, and to generate stub files for each.
-autosummary_generate = True
+autosummary_generate = False
 
 # Default autodoc behavior: include full API surfaces.
 autodoc_default_options = {
     'members': True,
     'undoc-members': True,
     'show-inheritance': True,
-    'inherited-members': True,
 }
 
 # -- Options for intersphinx extension ---------------------------------------

@@ -427,12 +427,6 @@ class Engine:
 
         import uam4x
         os.environ['UAM4X_DISABLE_REGISTRY_WRITES'] = '1'
-        # if num_processesors:
-        #     if not self.are_plugins_threadsafe():
-        #         print("WARNING: NON-THREADSAFE PLUGIN DETECTED, CREATING UNIQUE INSTANCE FOR EACH THREAD")
-        #         plugins = None
-        #     else:
-        #         pass
         
         self.capture_execution_data(trade_name)
         if isinstance(tradestudy,UAM4XOptimization) and num_processors is not None:
@@ -567,9 +561,6 @@ class Engine:
             ts._hash_to_result[result.state_hash] = result
 
         study_result.add_tradestudy(trade_name,ts)
-        # self.log.info(f'succesful states: {successful_states}')
-        # self.log.info(f'failed states: {failed_states}')
-
 
     def check_model(self, plugins, state=None):
         """

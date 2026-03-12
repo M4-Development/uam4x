@@ -5,7 +5,7 @@ from uam4x.study import Study
 import os
 import shutil
 import numpy as np
-from uam4x.utils import is_continuous_type_or_value, is_scalar_type_or_value, split_dotted_path_and_indices
+from uam4x.utils import is_continuous_type_or_value, is_scalar_type_or_value, split_dotted_path_and_indices, is_numpy_array
 from uam4x.log import get_log
 from uam4x.utils import log
 from uam4x.results import Results, Result
@@ -200,7 +200,7 @@ class Optimization:
                 #assumes outputs to openmdao are essentially always arrays for scalars
                 #strings might be treated differently
                 if not var_type is np.ndarray:
-                    if isinstance(value, np.ndarray) and is_scalar_type_or_value(var_type):
+                    if is_numpy_array(value) and is_scalar_type_or_value(var_type):
                         value=value[0]
                     else:
                         value=var_type(value)
@@ -365,7 +365,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             var_name='.'.join(var_name.split('.')[start_ind:])
             var_type=self.plugin.plugin_input_names[var_name]['type']
             if not self.plugin.plugin_input_names[var_name]['type'] is np.ndarray:
-                if isinstance(value,np.ndarray) and is_scalar_type_or_value(var_type):
+                if is_numpy_array(value) and is_scalar_type_or_value(var_type):
                     value=value[0]
                 else:
                     value = self.plugin.plugin_input_names[var_name]['type'](value)

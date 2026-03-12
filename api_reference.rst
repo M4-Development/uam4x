@@ -59,14 +59,6 @@ Module: ``uam4x.log``
    :undoc-members:
    :show-inheritance:
 
-Module: ``uam4x.node``
-----------------------
-
-.. automodule:: uam4x.node
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Module: ``uam4x.openmdao_optimization``
 ---------------------------------------
 

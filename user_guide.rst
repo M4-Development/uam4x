@@ -60,7 +60,7 @@ Working with Subsystems
 
 
 Working with Variants, an example problem:
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 multi_objective
 ^^^^^^^^^^^^^^^

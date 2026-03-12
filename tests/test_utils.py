@@ -75,7 +75,7 @@ def test_check_and_get_config_good():
 ])
 def test_check_continuous(inp, expected_result):
 
-    assert check_continuous(inp) ==  expected_result
+    assert is_continuous_type_or_value(inp) ==  expected_result
 
 
 
@@ -98,7 +98,7 @@ def test_check_continuous(inp, expected_result):
     (True, False)
 ])
 def test_check_scalar(inp, expected_result):
-    assert check_if_scalar(inp) == expected_result
+    assert is_scalar_type_or_value(inp) == expected_result
 
 @pytest.mark.parametrize("name,expected_type", [
     ('int', int),
@@ -548,7 +548,7 @@ def test_parse_index_positive(value, expected):
      (slice(None, None, None), slice(None, None, None))),
 ])
 def test_handle_brackets_positive(dotted_path, expected_path, expected_inds):
-    path, inds = handle_brackets(dotted_path)
+    path, inds = split_dotted_path_and_indices(dotted_path)
     assert path == expected_path
     assert inds == expected_inds
 
