@@ -37,33 +37,102 @@ def get_log(log=None, filename_log=None, object_name=None):
     return log_with_layer
 
 class LoggerObjectNameLayer():
-    """
-    This class is used instead of the FileLogger to include an object_name in the message
+    """Represent the loggerobjectnamelayer component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
     """
     def __init__(self, logger, object_name):
+        """Initialize object state and default configuration.
+
+        Parameters
+        ----------
+        logger : Any
+            Input value for `logger`.
+        object_name : Any
+            Identifier used by this operation.
+
+        """
         self.root_logger = logger
         if object_name:
             assert isinstance(object_name, str)
         self.object_name = object_name
     def debug(self, msg):
+        """Execute debug.
+
+        Parameters
+        ----------
+        msg : Any
+            Input value for `msg`.
+
+        """
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ('DEBUG', msg)
     def info(self, msg):
+        """Execute info.
+
+        Parameters
+        ----------
+        msg : Any
+            Input value for `msg`.
+
+        """
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ('INFO', msg)
     def warning(self, msg):
+        """Execute warning.
+
+        Parameters
+        ----------
+        msg : Any
+            Input value for `msg`.
+
+        """
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ('WARNING', msg)
     def error(self, msg):
+        """Execute error.
+
+        Parameters
+        ----------
+        msg : Any
+            Input value for `msg`.
+
+        """
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ('ERROR', msg)
     def exception(self, msg):
+        """Execute exception.
+
+        Parameters
+        ----------
+        msg : Any
+            Input value for `msg`.
+
+        """
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ('EXCEPTION', msg)
     def critical(self, msg):
+        """Execute critical.
+
+        Parameters
+        ----------
+        msg : Any
+            Input value for `msg`.
+
+        """
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ('CRITICAL', msg)
 class FileLogger(SimpleLogger):
+    """Represent the filelogger component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     msg_level_dict = {
         "DEBUG":0,
         "INFO":1,
@@ -73,6 +142,20 @@ class FileLogger(SimpleLogger):
         "CRITICAL":5
     }
     def __init__(self, filename_log=None, write_to_stdout=True, level='debug', encoding='utf-8'):
+        """Initialize object state and default configuration.
+
+        Parameters
+        ----------
+        filename_log : Any, optional
+            Input value for `filename_log`.
+        write_to_stdout : Any, optional
+            Input value for `write_to_stdout`.
+        level : Any, optional
+            Input value for `level`.
+        encoding : Any, optional
+            Input value for `encoding`.
+
+        """
         self.filename_log = filename_log
         self.open_file = open_file(self.filename_log)
         self.write_to_file = self.open_file is not None and not self.open_file.closed
@@ -141,11 +224,12 @@ class FileLogger(SimpleLogger):
         self.min_filelog_level = new_level
 
     def set_filename_log(self, filename_log):
-        """
+        """Set filename log.
+
         Parameters
-        -----------
-        file_logging : str
-            Path to the file to write the log to.
+        ----------
+        filename_log : Any
+            Input value for `filename_log`.
 
         """
         assert self.open_file is None
@@ -154,6 +238,13 @@ class FileLogger(SimpleLogger):
         self.write_to_file = self.open_file is not None and not self.open_file.closed
 
     def close_file(self):
+        """Execute close file.
+
+        Notes
+        -----
+        This method performs internal setup or validation logic.
+
+        """
         if self.open_file:
             self.open_file.close()
         self.open_file = None
@@ -292,15 +383,43 @@ class FileLogger(SimpleLogger):
         return self.capture_log
 
     def __del__(self):
+        """Execute del.
+
+        Notes
+        -----
+        This method performs internal setup or validation logic.
+
+        """
         if self.open_file is not None and not self.open_file.closed:
             self.open_file.close()
 
     def __repr__(self):
+        """Return a developer-oriented string representation.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         return 'FileLogger(filename_log=%r, write_to_stdout=%r, level=%r, encoding=%r)' % (
             self.filename_log, self.write_to_file, self.level, self.encoding
         )
 
 def open_file(filename_log):
+    """Execute open file.
+
+    Parameters
+    ----------
+    filename_log : Any
+        Input value for `filename_log`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     open_file = None
     if filename_log is not None:
         open_file = open(filename_log, 'w')

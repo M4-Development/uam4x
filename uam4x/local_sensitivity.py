@@ -7,17 +7,57 @@ post_workflow_name_to_class_registry={}
 
 
 def register_post_workflow(PostWorkflow):
+    """Register post workflow.
+
+    Parameters
+    ----------
+    PostWorkflow : Any
+        Input value for `PostWorkflow`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     post_workflow_name_to_class_registry[PostWorkflow.__name__]=PostWorkflow
     return PostWorkflow
 
 
 class LocalSensitivity:
+    """Represent the localsensitivity component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,step_size=1e-6):
+        """Initialize object state and default configuration.
+
+        Parameters
+        ----------
+        step_size : Any, optional
+            Input value for `step_size`.
+
+        """
         self.step_size=step_size
         self.variable_to_sensitivity_data={}
         self.post_spec=post_workflow_name_to_class_registry['LocalSensitivityPost']
             
     def add_perturbation_var(self,name,evaluation_point,step_size=None):
+        """Add perturbation var.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        evaluation_point : Any
+            Input value for `evaluation_point`.
+        step_size : Any, optional
+            Input value for `step_size`.
+
+        """
         data={
             'evaluation_point':evaluation_point,
             'step_size': step_size if step_size is not None else self.step_size,
@@ -27,6 +67,14 @@ class LocalSensitivity:
     def get_states(self):
 
 
+        """Return states.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         baseline_state={name:data['evaluation_point'] for name,data in self.variable_to_sensitivity_data.items()}
         baseline_state['optimization']=False
         states=[baseline_state]
@@ -47,6 +95,14 @@ class LocalSensitivity:
         return states
 
     def _to_dict(self):
+        """Execute to dict.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
                 'type':self.__class__.__name__,
                 'global_step_size':self.step_size,
@@ -56,6 +112,19 @@ class LocalSensitivity:
 
     @classmethod
     def _from_dict(cls,sensitivity_dict):
+        """Execute from dict.
+
+        Parameters
+        ----------
+        sensitivity_dict : Any
+            Input value for `sensitivity_dict`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         step_size=sensitivity_dict['global_step_size']
         variable_to_sensitivity_data=sensitivity_dict['sensitivity_parameters']
         sensitivity_obj=cls(step_size)
@@ -74,10 +143,40 @@ class LocalSensitivity:
 @register_post_workflow
 class LocalSensitivityPost:
 
+    """Represent the localsensitivitypost component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,tradestudy:Tradestudy):
+        """Initialize object state and default configuration.
+
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Input value for `tradestudy`.
+
+        """
         self.tradestudy=tradestudy
 
     def compute_sensitivity(self,output_name,method='forward'):
+        """Compute sensitivity.
+
+        Parameters
+        ----------
+        output_name : Any
+            Identifier used by this operation.
+        method : Any, optional
+            Input value for `method`.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         trade_name=self.tradestudy.trade_name
         ts=self.tradestudy.study.control.trade_studies[trade_name]
         perturbation_vars=list(ts.variable_to_sensitivity_data.keys())

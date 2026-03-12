@@ -39,6 +39,24 @@ class Parameter:
     """
     log = get_log(log, object_name=f'parameter')
     def __init__(self, name: str, default_value, dtype, unit_type: UnitType = None, unit: Enum = None, description: str = ""):
+        """Initialize one subsystem parameter definition.
+
+        Parameters
+        ----------
+        name : str
+            Identifier used by this method.
+        default_value : Any
+            Input value for `default_value`.
+        dtype : Any
+            Input value for `dtype`.
+        unit_type : UnitType, optional
+            Input value for `unit_type`.
+        unit : Enum, optional
+            Unit label/value associated with the parameter value.
+        description : str, optional
+            Input value for `description`.
+
+        """
         from uam4x.units import UnitType
         self.name = name
         self.dtype = dtype
@@ -100,17 +118,6 @@ class Parameter:
             self.log.error(f"Value for parameter '{self.name}' must be of type {self.dtype.__name__}, got {type(v).__name__}")
             raise TypeError(f"Value for parameter '{self.name}' must be of type {self.dtype.__name__}, got {type(v).__name__}")
         self._value = v
-
-    #def check_type(self):
-        #"""
-        #Check if the value matches the dtype.
-
-        #Returns
-        #-------
-        #bool
-        #"""
-        #self.log.debug(f'check type')
-        #return isinstance(self.value, self.dtype)
 
     def _to_dict(self) -> dict:
         """
@@ -187,6 +194,16 @@ class _Mode:
     """
     log = get_log(log, object_name=f'mode')
     def __init__(self, name: str, component: "Subsystem"):
+        """Initialize a mode used to override subsystem baseline parameters.
+
+        Parameters
+        ----------
+        name : str
+            Identifier used by this method.
+        component : 'Subsystem'
+            Input value for `component`.
+
+        """
         self.name = name
         self._overrides = {}
         self.component = component  # Reference to parent component for inheritance
@@ -344,6 +361,14 @@ class Subsystem:
     """
     log = get_log(log, object_name=f'component')
     def __init__(self, name: str):
+        """Initialize a subsystem instance and declare its baseline parameters.
+
+        Parameters
+        ----------
+        name : str
+            Identifier used by this method.
+
+        """
         self.name = name
         if '[' in  name:
             self.log.error(f'components cannot have the character "[" in them')
@@ -358,8 +383,12 @@ class Subsystem:
         self._parent = None
 
     def setup(self):
-        """
-        Override in subclasses to add parameters using add_parameter().
+        """Override in subclasses to add parameters using add_parameter().
+
+        Notes
+        -----
+        This method performs internal setup/validation logic.
+
         """
         self.log.debug(f'Override in subclasses to add parameters using add_parameter()')
 
@@ -393,8 +422,24 @@ class Subsystem:
         self._parameters[name] = Parameter(name, default_value, dtype, unit_type=unit_type, unit=unit, description=description)
         # Dynamically add property to the instance for this parameter
         def getter(self):
+            """Return the current value of this dynamically declared parameter.
+
+            Returns
+            -------
+            Any
+                Current parameter value.
+
+            """
             return self._parameters[name].value
         def setter(self, v):
+            """Set the value of this dynamically declared parameter.
+
+            Parameters
+            ----------
+            v : Any
+                Value to assign to the parameter.
+
+            """
             self.set_parameter(name, v)
         prop = property(getter, setter)
         setattr(self.__class__, name, prop)
@@ -419,7 +464,7 @@ class Subsystem:
             param.value = value
 
             unit_type = param.unit_type
-            if unit_type and unit_type in UNIT_TYPE_TO_UNIT_CLASS:
+            if unit is not None and unit_type in UNIT_TYPE_TO_UNIT_CLASS:
                 unit_class = UNIT_TYPE_TO_UNIT_CLASS[unit_type]
                 # Accept both class attribute and value
                 if unit not in unit_class.__dict__.values():
@@ -591,6 +636,14 @@ class Subsystem:
         return {name: param.value for name, param in self._parameters.items()}
 
 def register_subsystem(cls):
+    """Register a subsystem class for deserialization and lookup.
+
+    Returns
+    -------
+    Any
+        Registered subsystem class (usable as a class decorator).
+
+    """
     subsystem = cls.__name__
     log.debug(f'register subsystem: {subsystem}')
     # Only register in the registry, don't modify conf.json for built-in subsystems
@@ -618,6 +671,16 @@ def register_subsystem(cls):
     return cls
 
 def _update_consts(subsystem , subsystem_class):
+    """Update cached subsystem metadata tables used by helper queries.
+
+    Parameters
+    ----------
+    subsystem : Any
+        Input value for `subsystem`.
+    subsystem_class : Any
+        Input value for `subsystem_class`.
+
+    """
     if not subsystem  in _subsystem_names:
         _subsystem_names.append(subsystem)
     dummy = subsystem_class('dummy')
@@ -627,6 +690,19 @@ def _update_consts(subsystem , subsystem_class):
         _subsystem_to_param_name_type_list[subsystem ].append((param, dummy._parameters[param].dtype.__name__))
 
 def get_subsystem_class(subsystem_class_name):
+    """Return subsystem class.
+
+    Parameters
+    ----------
+    subsystem_class_name : Any
+        Identifier used by this method.
+
+    Returns
+    -------
+    Any
+        Requested value.
+
+    """
     if not subsystem_class_name in _subsystem_registry:
         msg = f"Subsystem '{subsystem_class_name}' was not registered. Please check the following:\n"
         msg += f"\t1. Did you register the subsystem using the @register_subsystem?\n"
@@ -636,15 +712,50 @@ def get_subsystem_class(subsystem_class_name):
     return _subsystem_registry[subsystem_class_name]
 
 def get_subsystem_names():
+    """Return subsystem names.
+
+    Returns
+    -------
+    Any
+        Requested value.
+
+    """
     return  _subsystem_names
 
 def get_param_name_and_type_list(subsystem):
+    """Return parameter name/type metadata for a subsystem class.
+
+    Parameters
+    ----------
+    subsystem : Any
+        Input value for `subsystem`.
+
+    Returns
+    -------
+    Any
+        Requested value.
+
+    """
     return _subsystem_to_param_name_type_list[subsystem]
 
 # Wing subsystem with only span, chord, and sweep
 @register_subsystem
 class Wing(Subsystem):
+    """Represent the wing component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def setup(self):
+        """Declare baseline geometric parameters used by the wing subsystem.
+
+        Notes
+        -----
+        This method performs internal setup/validation logic.
+
+        """
         self.add_parameter("area", 0., float, unit_type=UnitType.AREA, description="Wing area" )
         self.add_parameter("span", 0., float, unit_type=UnitType.LENGTH, description="Wing span")
         self.add_parameter("chord", 0., float, unit_type=UnitType.LENGTH, description="Wing chord")
@@ -653,7 +764,21 @@ class Wing(Subsystem):
 
 @register_subsystem
 class Rotor(Subsystem):
+    """Represent the rotor component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def setup(self):
+        """Declare baseline geometric and operating parameters for the rotor subsystem.
+
+        Notes
+        -----
+        This method performs internal setup/validation logic.
+
+        """
         self.add_parameter("vtip", 550., float, unit_type=UnitType.SPEED, description="Rotor tip speed")
         self.add_parameter("tilt", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor tilt")
         self.add_parameter("radius", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor radius")
@@ -664,7 +789,21 @@ class Rotor(Subsystem):
 
 @register_subsystem
 class RotorBladeRegion(Subsystem):
+    """Represent the rotorbladeregion component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def setup(self):
+        """Declare sectional blade parameters for one rotor blade spanwise region.
+
+        Notes
+        -----
+        This method performs internal setup/validation logic.
+
+        """
         self.add_parameter("spanwise_start", 0.0, float, unit_type=UnitType.LENGTH, description="start of section as a fraction of the total span")
         self.add_parameter("spanwise_stop", 0.0, float, unit_type=UnitType.LENGTH, description="end of section as a fration of the total span")
         self.add_parameter("chord_start", 0.0, float, unit_type=UnitType.LENGTH, description="chord at the start of the section")
@@ -684,7 +823,21 @@ class RotorBladeRegion(Subsystem):
 
 @register_subsystem
 class Aircraft(Subsystem):
+    """Represent the aircraft component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def setup(self):
+        """Declare top-level aircraft payload parameters.
+
+        Notes
+        -----
+        This method performs internal setup/validation logic.
+
+        """
         self.add_parameter("npass", 4, int, description="Number of passengers")
         self.add_parameter("wpass", 200.0, float, unit_type=UnitType.MASS, description="Mass per passenger")
 

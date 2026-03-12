@@ -3,7 +3,7 @@ from typing import Callable
 import os
 import json
 import importlib.util
-from uam4x.utils import check_and_get_config, check_numpy_shape, check_if_scalar, is_numpy_array, normalize_shape,is_main_process,registry_writes_enabled,check_continuous,handle_brackets
+from uam4x.utils import check_and_get_config, check_numpy_shape, is_scalar_type_or_value, is_numpy_array, normalize_shape,is_main_process,registry_writes_enabled,is_continuous_type_or_value,split_dotted_path_and_indices
 from collections.abc import Sequence
 from numbers import  Real
 from itertools import  product
@@ -16,9 +16,23 @@ import copy
 _plugin_registry = {}
 
 class Group:
+    """Represent the group component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='group')
 
     def __init__(self):
+        """Initialize object state and default configuration.
+
+        Notes
+        -----
+        This method performs internal setup or validation logic.
+
+        """
         self.log = Group.log
         self.log.debug(f'initialize')
         self.links=[]
@@ -32,12 +46,42 @@ class Group:
 
 
     def set_cycle_solver(self,solver_name):
+        """Set cycle solver.
+
+        Parameters
+        ----------
+        solver_name : Any
+            Identifier used by this operation.
+
+        """
         self.cycle_solver=solver_name
 
     def approx_totals(self,method='fd',step=10**-6,form='forward'):
+        """Configure approximate-total derivative preferences.
+
+        Parameters
+        ----------
+        method : Any, optional
+            Input value for `method`.
+        step : Any, optional
+            Input value for `step`.
+        form : Any, optional
+            Input value for `form`.
+
+        """
         self._approx_totals={'compute':True,'method':method,'step':step,'form':form}
 
     def add_link(self, independent:str, dependent:str):
+        """Add link.
+
+        Parameters
+        ----------
+        independent : str
+            Input value for `independent`.
+        dependent : str
+            Input value for `dependent`.
+
+        """
         self.log.debug(f'add link. independent link: {independent}, dependent link: {dependent}')
         # need slicing here dependent cannot
         if  '[' in dependent:
@@ -48,16 +92,51 @@ class Group:
             self.links.append(link)
 
     def remove_link(self, independent:str, dependent:str):
+        """Remove link.
+
+        Parameters
+        ----------
+        independent : str
+            Input value for `independent`.
+        dependent : str
+            Input value for `dependent`.
+
+        """
         self.log.debug(f'remove link. independent link: {independent}, dependent link: {dependent}')
         link = [independent, dependent]
         if link in self.links:
             self.links.remove(link)
 
     def get_step_names(self):
+        """Return step names.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         self.log.debug(f'get step names')
         return [step_name for step_name in self.steps]
 
     def _make_step_info(self,step, plugin_options, plugin_hash=None):
+        """Build normalized step metadata for plugins or subgroups.
+
+        Parameters
+        ----------
+        step : Any
+            Input value for `step`.
+        plugin_options : Any
+            Input value for `plugin_options`.
+        plugin_hash : Any, optional
+            Input value for `plugin_hash`.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         if isinstance(step,type) and issubclass(step,Plugin):
 
             if plugin_hash is None:
@@ -80,6 +159,18 @@ class Group:
         
 
     def add_step(self, step, step_name=None, plugin_options:dict=None):
+        """Add step.
+
+        Parameters
+        ----------
+        step : Any
+            Input value for `step`.
+        step_name : Any, optional
+            Identifier used by this operation.
+        plugin_options : dict, optional
+            Input value for `plugin_options`.
+
+        """
         if plugin_options is None:
             plugin_options={}
         self.log.debug(f'add step: {step_name}')
@@ -100,15 +191,29 @@ class Group:
 
 
     def remove_step(self, step_name):
+        """Remove step.
+
+        Parameters
+        ----------
+        step_name : Any
+            Identifier used by this operation.
+
+        """
         self.log.debug(f'remove step: {step_name}')
         if step_name in self.steps:
             self.steps.pop(step_name)
 
     def edit_step(self, step_name, plugin_options:dict=None):
-        '''
-        You can only edit plugin steps directly, to edit Groups, 
-        should be done at the group level. i.e. group.edit_plugin_step
-        '''
+        """Update plugin options for an existing step.
+
+        Parameters
+        ----------
+        step_name : Any
+            Identifier used by this operation.
+        plugin_options : dict, optional
+            Input value for `plugin_options`.
+
+        """
         self.log.debug(f'edit step: {step_name}')
         if step_name in self.steps:
             step = self.steps[step_name]
@@ -125,6 +230,18 @@ class Group:
             raise KeyError(f'The step {step_name} is not a step')
     
     def add_plugin_option(self, step_name:str, option_name:str, option_value):
+        """Add plugin option.
+
+        Parameters
+        ----------
+        step_name : str
+            Identifier used by this operation.
+        option_name : str
+            Identifier used by this operation.
+        option_value : Any
+            Input value for `option_value`.
+
+        """
         self.log.debug(f'add plugin option {option_name} to step {step_name}')
         if step_name in self.steps:
            step = self.steps[step_name]
@@ -138,6 +255,16 @@ class Group:
             raise KeyError(f'The step {step_name} is not a step')
     
     def remove_plugin_option(self, step_name:str, option_name:str):
+        """Remove plugin option.
+
+        Parameters
+        ----------
+        step_name : str
+            Identifier used by this operation.
+        option_name : str
+            Identifier used by this operation.
+
+        """
         self.log.debug(f'remove plugin option {option_name} to step {step_name}')
         if step_name in self.steps:
             step = self.steps[step_name]
@@ -150,6 +277,14 @@ class Group:
     
     def _to_dict(self) -> dict:
         # Serialize steps, converting plugin class to its name
+        """Serialize group configuration to a dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         self.log.debug(f'write to dict')
         steps_serialized = {}
         for step_name, step_info in self.steps.items():
@@ -178,6 +313,19 @@ class Group:
 
     @classmethod
     def _from_dict(cls, data: dict) -> 'Solution':
+        """Reconstruct a group from serialized dictionary data.
+
+        Parameters
+        ----------
+        data : dict
+            Input value for `data`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         group = cls()
         cls.log.debug('solution from dict')
         # Reconstruct steps, mapping plugin name to class if possible
@@ -204,6 +352,14 @@ class Group:
         return group
     
     def generate_plugins(self):
+        """Generate plugins.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         plugins={}
         for step_name,data in self.steps.items():
             if isinstance(data,dict):
@@ -215,9 +371,28 @@ class Group:
                 plugins[step_name]=group_plugs
 
         return plugins
-            
+    
+    def _recurse_generated_plugins(self,plugins,plugin_dict):
+
+        for step_name,data in plugins.items():
+            if isinstance(data,Plugin):
+                plugin_dict[step_name]=data
+            elif isinstance(data,dict):
+                self._recurse_generated_plugins(data,plugin_dict)
+        
+             
 
     def _get_all_plugin_names_to_data(self,head_dict,group_name):
+        """Return all plugin names to data.
+
+        Parameters
+        ----------
+        head_dict : Any
+            Dictionary payload used by this operation.
+        group_name : Any
+            Identifier used by this operation.
+
+        """
         for name,data in self.steps.items():
             if isinstance(data,dict):
                 head_dict[f'{group_name}.{name}']={'plugin':data['plugin'],
@@ -228,6 +403,13 @@ class Group:
 
 
     def sort_steps(self):
+        """Sort steps into execution order based on declared links.
+
+        Notes
+        -----
+        This method performs internal setup or validation logic.
+
+        """
         self._execution_steps={}
         #generate a list of dependent links
         for name,data in self.steps.items():
@@ -301,6 +483,14 @@ class Group:
         
     def _check_links_to_plugins(self,plugins):
         
+        """Validate links to plugins.
+
+        Parameters
+        ----------
+        plugins : Any
+            Input value for `plugins`.
+
+        """
         for step_name in self._execution_steps:
             #handle plugin case
             if isinstance(self._execution_steps[step_name],dict):
@@ -318,7 +508,7 @@ class Group:
                     if '[' in  name:
                         #any time where indexes are specified in the link, this is required to be
                         # an index specification, nothing to do with the variable name. 
-                        name, _ = handle_brackets(name)                
+                        name, _ = split_dotted_path_and_indices(name)                
                     if name not  in plugins[step_name].plugin_output_names:
                         self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                          f"Check your plugin's setup() step for I/O declaration")
@@ -330,29 +520,48 @@ class Group:
         
 
     def get_plugin_input_and_output_names(self,step_name):
+        """Return plugin input and output names.
+
+        Parameters
+        ----------
+        step_name : Any
+            Identifier used by this operation.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         input_names=[]
         output_names=[]
         for (independent, dependent) in self.links:
             # remove indices from index based links
             if '[' in  independent:
-                independent, _ = handle_brackets(independent)
+                independent, _ = split_dotted_path_and_indices(independent)
             if dependent.split('.')[0] == step_name:
                 input_names.append(dependent)
             if independent.split('.')[0] == step_name:
                 output_names.append(independent)
         return set(input_names), set(output_names)
     
-    #def _check_link_types(self,plugins,study):
-    #    for name, group_or_plugin_dict in self._execution_steps.items():
-    #        if isinstance(group_or_plugin_dict,dict):
-    #            
-    #        elif isinstance(group_or_plugin_dict,Group):
-    #            step._check_link_types(plugins[name],study)
-    #        
-    #    pass
-
             
     def get_all_groups(self,name_to_group,parent_name):
+        """Return all groups.
+
+        Parameters
+        ----------
+        name_to_group : Any
+            Input value for `name_to_group`.
+        parent_name : Any
+            Identifier used by this operation.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         for name,step in self.steps.items():
             if isinstance(step,Group):
                 full_name=parent_name+'.'+name
@@ -361,15 +570,75 @@ class Group:
         return name_to_group
     
     def get_var_type(self,name,plugins):
+        """Return var type.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        plugins : Any
+            Input value for `plugins`.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         return self.get_var_data(name,plugins)['type']
         
     def get_var_value(self,name,plugins):
+        """Return var value.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        plugins : Any
+            Input value for `plugins`.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         return self.get_var_data(name,plugins)['value']
     
     def get_var_shape(self,name,plugins):
+        """Return var shape.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        plugins : Any
+            Input value for `plugins`.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         return self.get_var_data(name,plugins)['shape']
         
     def get_var_data(self,name,plugins):
+        """Return var data.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        plugins : Any
+            Input value for `plugins`.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         split_name=name.split('.')
         step_name=split_name[0]
         rest_name='.'.join(split_name[1:])
@@ -396,6 +665,18 @@ class Group:
             return self.get_var_data(rest_name,local_plugins)
         
     def _get_global_execution_order_plugins(self,sol_name,plugins,global_name_to_plugin):
+        """Return global execution order plugins.
+
+        Parameters
+        ----------
+        sol_name : Any
+            Identifier used by this operation.
+        plugins : Any
+            Input value for `plugins`.
+        global_name_to_plugin : Any
+            Input value for `global_name_to_plugin`.
+
+        """
         for name,step in self._execution_steps.items():
             if isinstance(step,Group):
                 full_name=sol_name+'.'+name
@@ -405,6 +686,19 @@ class Group:
                 global_name_to_plugin[sol_name+'.'+name]=plugins[name]
 
     def _build_links(self,base_name):
+        """Build links.
+
+        Parameters
+        ----------
+        base_name : Any
+            Identifier used by this operation.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         global_links=[]
         for output,input in self.links:
             if output.split('.')[0]!='vehicles':
@@ -418,12 +712,34 @@ class Group:
         return global_links
     
     def declare_cycle_step_order(self,names):
+        """Declare explicit step order for cyclic group execution.
+
+        Parameters
+        ----------
+        names : Any
+            Input value for `names`.
+
+        """
         self.cycle_declared_step_order=names
             
 
 class Solution(Group):
+    """Represent the solution component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='solution')
     def __init__(self) -> None:
+        """Initialize object state and default configuration.
+
+        Notes
+        -----
+        This method performs internal setup or validation logic.
+
+        """
         super().__init__()
         self.tracked_outputs = []
         self.log = Solution.log
@@ -431,6 +747,14 @@ class Solution(Group):
         self.step_name='solution'
 
     def add_tracked_output(self, output:str):
+        """Add tracked output.
+
+        Parameters
+        ----------
+        output : str
+            Input value for `output`.
+
+        """
         self.log.debug(f'add tracked output: {output}')
         if output in self.tracked_outputs:
             self.log.error(f"output already being tracked: {output}")
@@ -438,6 +762,14 @@ class Solution(Group):
         self.tracked_outputs.append(output)
 
     def remove_tracked_output(self, output:str):
+        """Remove tracked output.
+
+        Parameters
+        ----------
+        output : str
+            Input value for `output`.
+
+        """
         self.log.debug(f'remove tracked output: {output}')
         if output in  self.tracked_outputs:
             self.tracked_outputs.remove(output)
@@ -445,6 +777,14 @@ class Solution(Group):
 
     def _to_dict(self) -> dict:
         # Serialize steps, converting plugin class to its name
+        """Serialize solution configuration to a dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         self.log.debug(f'write to dict')
         steps_serialized = {}
         for step_name, step_info in self.steps.items():
@@ -470,6 +810,19 @@ class Solution(Group):
 
     @classmethod
     def _from_dict(cls, data: dict) -> 'Solution':
+        """Reconstruct a solution from serialized dictionary data.
+
+        Parameters
+        ----------
+        data : dict
+            Input value for `data`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         sol = cls()
         cls.log.debug('solution from dict')
         # Reconstruct steps, mapping plugin name to class if possible
@@ -493,6 +846,14 @@ class Solution(Group):
         return sol
     
     def get_all_plugin_names_to_hashes(self):
+        """Return all plugin names to hashes.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         plugins_names_to_hashes={}
         plugins_name_to_data=self.get_all_plugin_names_to_data()
         for name, data in plugins_name_to_data.items():
@@ -500,6 +861,14 @@ class Solution(Group):
         return plugins_names_to_hashes
 
     def get_all_plugin_names_to_classes(self):
+        """Return all plugin names to classes.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         plugins_names_to_classes={}
         plugins_name_to_data=self.get_all_plugin_names_to_data()
         for name, data in plugins_name_to_data.items():
@@ -507,6 +876,14 @@ class Solution(Group):
         return plugins_names_to_classes
 
     def get_all_plugin_names_to_options(self):
+        """Return all plugin names to options.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         plugins_names_to_options={}
         plugins_name_to_data=self.get_all_plugin_names_to_data()
         for name, data in plugins_name_to_data.items():
@@ -514,6 +891,14 @@ class Solution(Group):
         return plugins_names_to_options
 
     def get_all_plugin_names_to_data(self):
+        """Return all plugin names to data.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         plugins_name_to_data={}
         for name,data in self.steps.items():
             if isinstance(data,dict):
@@ -527,12 +912,25 @@ class Solution(Group):
     
 
     def get_plugin_input_and_output_names(self,step_name):
+        """Return plugin input and output names.
+
+        Parameters
+        ----------
+        step_name : Any
+            Identifier used by this operation.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         input_names=[]
         output_names=[]
         for (independent, dependent) in self.links:
             # remove indices from index based links
             if '[' in  independent:
-                independent, _ = handle_brackets(independent)
+                independent, _ = split_dotted_path_and_indices(independent)
             if dependent.split('.')[0] == step_name:
                 input_names.append(dependent)
             if independent.split('.')[0] == step_name:
@@ -543,6 +941,14 @@ class Solution(Group):
         return set(input_names), set(output_names)
     
     def get_all_groups(self):
+        """Return all groups.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         name_to_group={'solution':self}
         for name,step in self.steps.items():
             if isinstance(step,Group):
@@ -552,15 +958,56 @@ class Solution(Group):
         return name_to_group
     
     def get_group(self,dotted_path):
+        """Return group.
+
+        Parameters
+        ----------
+        dotted_path : Any
+            Path used by this operation.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         split_path=dotted_path.split('.')
         groups=self.get_all_groups()
         if split_path[0]!='solution':
             dotted_path='solution.'+dotted_path
         return groups[dotted_path]
     
+    def recurse_generated_plugins(self,plugins):
+        '''
+        
+        '''
+        plugin_name_to_plugin_object={}
+        for step_name,data in plugins.items():
+            if isinstance(data,Plugin):
+                plugin_name_to_plugin_object[step_name]=data
+            elif isinstance(data,dict):
+                self._recurse_generated_plugins(data,plugin_name_to_plugin_object) 
+
+        return plugin_name_to_plugin_object
+    
     def recurse_plugin_dict(self,split_name,plugins):
         #last term in the initial string (is a group)
         #then plugins must be of form last_group:{data}
+        """Resolve nested plugin mappings from a split path.
+
+        Parameters
+        ----------
+        split_name : Any
+            Identifier used by this operation.
+        plugins : Any
+            Input value for `plugins`.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         if len(split_name)==1:
             return plugins[split_name[0]]
         else:
@@ -569,6 +1016,16 @@ class Solution(Group):
             return self.recurse_plugin_dict(split_name[1:],local_plug)
         
     def _check_link_types(self,plugins,study):
+        """Validate link types.
+
+        Parameters
+        ----------
+        plugins : Any
+            Input value for `plugins`.
+        study : Any
+            Input value for `study`.
+
+        """
         groups=self.get_all_groups()
         bad_links=[]
         for group_name,group in groups.items():
@@ -582,7 +1039,7 @@ class Solution(Group):
                 indexes_specified = False
 
                 if '[' in  output_link:
-                    output_link, _ = handle_brackets(output_link)
+                    output_link, _ = split_dotted_path_and_indices(output_link)
                     indexes_specified = True
                 if output_link.split('.')[0]=='vehicles':
                     output_type=study.get_param_type(output_link)
@@ -592,7 +1049,7 @@ class Solution(Group):
                 input_type=self.get_var_type(input_link,local_plugins)
                 if indexes_specified and output_type != np.ndarray:
                     raise ValueError(f'Indexes may only be specified for arrays. The link: {input_link} is not valid')
-                if indexes_specified and  output_type == np.ndarray and  check_continuous(input_type) and input_type != np.ndarray:
+                if indexes_specified and  output_type == np.ndarray and  is_continuous_type_or_value(input_type) and input_type != np.ndarray:
                     pass
                 elif output_type != input_type:
                     bad_links.append((output_link,output_type, input_link, input_type))
@@ -603,6 +1060,14 @@ class Solution(Group):
             raise TypeError(msg)
         
     def get_all_used_vehicle_params(self):
+        """Return all used vehicle params.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         groups=self.get_all_groups()
         all_used_vehicle_params=[]
         for _,group in groups.items():
@@ -615,6 +1080,14 @@ class Solution(Group):
 
                 
     def _check_optimization_discrete(self,plugins):
+        """Validate optimization discrete.
+
+        Parameters
+        ----------
+        plugins : Any
+            Input value for `plugins`.
+
+        """
         groups=self.get_all_groups()
         bad_types={}
         for group_name,group in groups.items():
@@ -631,11 +1104,11 @@ class Solution(Group):
                 
 
                 if '[' in  output_link:
-                    output_link, _ = handle_brackets(output_link)
+                    output_link, _ = split_dotted_path_and_indices(output_link)
                 
                 output_type=self.get_var_type(output_link,local_plugins)
 
-                if not check_continuous(output_type):
+                if not is_continuous_type_or_value(output_type):
                     bad_types[output_link]=output_type
         if bad_types:
             bad_links = [f"{output_link}: {output_type}" for output_link, output_type in bad_types.items()]
@@ -650,6 +1123,19 @@ class Solution(Group):
         
 
     def get_global_execution_order_plugins(self,plugins):
+        """Return global execution order plugins.
+
+        Parameters
+        ----------
+        plugins : Any
+            Input value for `plugins`.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         sol_name='solution'
         global_plugin_name_to_plugin={}
         for name,step in self._execution_steps.items():
@@ -663,6 +1149,14 @@ class Solution(Group):
         return global_plugin_name_to_plugin
     
     def _build_global_links(self):
+        """Build global links.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         global_links=[]
         base_name='solution'
         for output,input in self.links:
@@ -677,6 +1171,16 @@ class Solution(Group):
         return global_links
     
     def _check_link_indices(self,plugins,study):
+        """Validate link indices.
+
+        Parameters
+        ----------
+        plugins : Any
+            Input value for `plugins`.
+        study : Any
+            Input value for `study`.
+
+        """
         groups=self.get_all_groups()
         for group_name,group in groups.items():
             split_name=group_name.split('.')
@@ -689,7 +1193,7 @@ class Solution(Group):
                 indexes_specified = False
 
                 if '[' in  output_link:
-                    cleaned_output_name, inds = handle_brackets(output_link)
+                    cleaned_output_name, inds = split_dotted_path_and_indices(output_link)
                     if output_link.split('.')[0]=='vehicles':
                         try:
                             a=study.get_value(output_link)
@@ -704,13 +1208,12 @@ class Solution(Group):
                                 a[inds]
                                 src_shape = a[inds].shape
                             except:
-                                raise ValueError('')
+                                raise ValueError(f'Invalid indices or array. Array: {a} and inds: {inds}')
                         elif a_shape is  not None:
                             try:
-                                np.ones(shape=a_shape)[inds]
                                 src_shape = np.ones(shape=a_shape)[inds].shape
                             except:
-                                raise ValueError('')
+                                raise ValueError(f'Invalid inds or shape: shape: {a_shape}, inds:{inds}')
                         else:
                             #Note, this should already be caught for arrays in plugin declaration
                             raise ValueError('Developer: Check error catching capaibilities in plugin declaration')
@@ -736,8 +1239,22 @@ class Solution(Group):
 
 
 class Plugin():
+    """Represent the plugin component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='Plugin base class')
     def __init__(self) -> None:
+        """Initialize object state and default configuration.
+
+        Notes
+        -----
+        This method performs internal setup or validation logic.
+
+        """
         self._declare_partials = False
         self._check_partials_options = False
         self.partials_counter = 0
@@ -752,22 +1269,63 @@ class Plugin():
         self._executable_to_data = {}
 
     def __str__(self):
+        """Return a human-readable string representation.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         return f'{self.__class__.__name__}'
 
     def setup_plugin(self, plugin_options:dict):
+        """Initialize plugin-level configuration before run-time execution.
+
+        Parameters
+        ----------
+        plugin_options : dict
+            Input value for `plugin_options`.
+
+        """
         self.log.debug('setup plugin')
 
     def run_plugin(self, links:dict, work_dir:str):
+        """Run plugin.
+
+        Parameters
+        ----------
+        links : dict
+            Input value for `links`.
+        work_dir : str
+            Input value for `work_dir`.
+
+        """
         self.log.debug('run plugin')
 
 
     def declare_partials_plugin(self, of: str|Sequence[str], wrt: str|Sequence[str], method='fd', step=None, form=None,
                                 rows: list|np.ndarray|None=None, cols: list|np.ndarray| None=None):
-        '''
-        User can declare partials as many times as they want here, and this is
-        stored in a dictionary which will eventually be consolidated into a single
-        partials dictionary.
-        '''
+        """Register partial-derivative declarations for plugin outputs/inputs.
+
+        Parameters
+        ----------
+        of : str | Sequence[str]
+            Input value for `of`.
+        wrt : str | Sequence[str]
+            Input value for `wrt`.
+        method : Any, optional
+            Input value for `method`.
+        step : Any, optional
+            Input value for `step`.
+        form : Any, optional
+            Input value for `form`.
+        rows : list | np.ndarray | None, optional
+            Input value for `rows`.
+        cols : list | np.ndarray | None, optional
+            Input value for `cols`.
+
+        """
         self.log.debug('declare partials plugin')
         # Check type of input, if string, wrap with list
         if type(of) == str:
@@ -814,10 +1372,23 @@ class Plugin():
 
 
     def build_partials(self, input_names, output_names,step_name):
-        '''
-        Builds a comprehensive dictionary of partials
-        seperated by method (note only fd and exact allowed so far)
-        '''
+        """Build partials.
+
+        Parameters
+        ----------
+        input_names : Any
+            Input value for `input_names`.
+        output_names : Any
+            Input value for `output_names`.
+        step_name : Any
+            Identifier used by this operation.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         self.log.debug('build partials')
 
         # Validate names
@@ -832,7 +1403,7 @@ class Plugin():
                         input_type=self.plugin_input_names[inp]['type']
                     else:
                         raise KeyError(f'The input {inp} declared as a partial is not an input in the Plugin')
-                    if not check_continuous(input_type):
+                    if not is_continuous_type_or_value(input_type):
                         raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
                                f'{inp} is not continuous and has type {input_type}')
             if data['of'] != ['*']:
@@ -842,7 +1413,7 @@ class Plugin():
                         output_type=self.plugin_output_names[out]['type']
                     else:
                         raise KeyError(f'The output {out} declared as a partial is not an output in the Plugin')
-                    if not check_continuous(output_type):
+                    if not is_continuous_type_or_value(output_type):
                         raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
                                f'{out} is not continuous and has type {output_type}')
 
@@ -857,7 +1428,7 @@ class Plugin():
             local_output_names.add(local_output_name)
             output_type=self.plugin_output_names[local_output_name]['type']
             
-            if not check_continuous(output_type):
+            if not is_continuous_type_or_value(output_type):
                 out_vio.append(output_name)
         in_vio=[]
         for input_name in  input_names:
@@ -865,7 +1436,7 @@ class Plugin():
             local_input_names.add(local_input_name)
             input_type=self.plugin_input_names[local_input_name]['type']
 
-            if not check_continuous(input_type):
+            if not is_continuous_type_or_value(input_type):
                 in_vio.append(input_name)
 
 
@@ -914,6 +1485,14 @@ class Plugin():
         return self.comprehensive_partials_dict
 
     def categorize_partials(self):
+        """Group partial declarations by differentiation method.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         self.log.debug('catagorize partials')
         method_to_partial = {'fd': [],'exact': []}
         for pair, data in  self.comprehensive_partials_dict.items():
@@ -931,9 +1510,27 @@ class Plugin():
 
 
     def compute_partials_plugin(self, links: dict):
+        """Compute partials plugin.
+
+        Parameters
+        ----------
+        links : dict
+            Input value for `links`.
+
+        """
         self.log.debug('compute partials plugin')
 
     def set_check_partials_options(self, form='forward', step=None):
+        """Set check partials options.
+
+        Parameters
+        ----------
+        form : Any, optional
+            Input value for `form`.
+        step : Any, optional
+            Input value for `step`.
+
+        """
         self.log.debug('set check partials options')
         self._check_partials_options = True
         self.check_form = form
@@ -941,6 +1538,25 @@ class Plugin():
 
     @staticmethod
     def check_declared_IO(name, var_type, value, shape):
+        """Validate declared IO.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        var_type : Any
+            Input value for `var_type`.
+        value : Any
+            Input value for `value`.
+        shape : Any
+            Input value for `shape`.
+
+        Returns
+        -------
+        Any
+            Boolean status for the requested check.
+
+        """
         if not isinstance(var_type, type):
             raise TypeError(f'Declared type must be a type. {name} has declared type {var_type} which is not a type.')
 
@@ -963,7 +1579,7 @@ class Plugin():
 
                 shape = normalize_shape(shape)
                 if value is  not None:
-                    if check_if_scalar(value):
+                    if is_scalar_type_or_value(value):
                         pass
                     elif value.shape != shape:
                         raise ValueError(f'If the value of an array is not declared as a scalar, then the shape must match\n'
@@ -973,7 +1589,7 @@ class Plugin():
             if value is  None and  var_type is np.ndarray:
                 raise ValueError(f'Arrays must have either the shape or value defined (or both). The variable\n'
                                  f'{name} has no shape or value.')
-            if value is not None and check_if_scalar(value) and var_type is  np.ndarray:
+            if value is not None and is_scalar_type_or_value(value) and var_type is  np.ndarray:
                 raise ValueError(f'If array value is declared with scalar, shape must be declared for broadcasting.\n'
                                  f'The variable {name} has value: {value} and type: {var_type} but no shape declared.')
             elif value is not None and isinstance(value,np.ndarray) and var_type is np.ndarray:
@@ -984,21 +1600,53 @@ class Plugin():
 
 
     def declare_input(self, name, var_type, value=None, shape: int|tuple|None=None):
+        """Declare plugin input metadata for linking and validation.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        var_type : Any
+            Input value for `var_type`.
+        value : Any, optional
+            Input value for `value`.
+        shape : int | tuple | None, optional
+            Input value for `shape`.
+
+        """
         shape = self.check_declared_IO(name, var_type, value, shape)
         self.plugin_input_names[name] = {'type': var_type,
                                          'value': value,
                                          'shape': shape}
 
     def declare_output(self, name, var_type, value=None, shape: int|tuple|None=None):
+        """Declare plugin output metadata for linking and validation.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        var_type : Any
+            Input value for `var_type`.
+        value : Any, optional
+            Input value for `value`.
+        shape : int | tuple | None, optional
+            Input value for `shape`.
+
+        """
         shape = self.check_declared_IO(name, var_type, value, shape)
         self.plugin_output_names[name] = {'type': var_type,
                                           'value': value,
                                           'shape': shape}
     def declare_template(self,path):
-        '''
-        Should be run during execution engine
-        stores the template files e.g .bdf in a dictionary
-        '''
+        """Register a template file path for provenance/checksum tracking.
+
+        Parameters
+        ----------
+        path : Any
+            Input value for `path`.
+
+        """
         if path in  self._template_to_checksum:
             raise KeyError(f'The path: {path} is already in the template dictionary')
         self._plugin_templates.append(path)
@@ -1011,18 +1659,29 @@ class Plugin():
         self._template_to_checksum[str(path)] = h
 
     def add_executable_data(self, path, description):
-        '''
-        Allows user to version/provide data about the executable used
-        should be used in the setup portion of the plugin.
-        Allows for custom scripting within the plugin setup.
-        User should pair the path with either a string or dictionary
-        of data but ultimately up to the user, should be JSONable though.
-        '''
+        """Add executable data.
+
+        Parameters
+        ----------
+        path : Any
+            Path used by this operation.
+        description : Any
+            Input value for `description`.
+
+        """
         self._executable_to_data[path] = description
 
 
 
 def register_plugin(cls):
+    """Register plugin.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     plugin_name = cls.__name__
     log.debug(f'register plugin {plugin_name}')
 
@@ -1054,6 +1713,19 @@ def register_plugin(cls):
     return cls
 
 def get_plugin_class(plugin_name):
+    """Return plugin class.
+
+    Parameters
+    ----------
+    plugin_name : Any
+        Identifier used by this operation.
+
+    Returns
+    -------
+    Any
+        Requested value.
+
+    """
     if not plugin_name in _plugin_registry:
         msg = f"Plugin '{plugin_name}' was not registered. Please check the following:\n"
         msg += f"\t1. Did you register the plugin using the @register_plugin?\n"
@@ -1063,7 +1735,13 @@ def get_plugin_class(plugin_name):
     return _plugin_registry[plugin_name]
 
 def get_plugin_names():
-    """Get a list of all registered plugin names."""
+    """Return plugin names.
+
+    Returns
+    -------
+    Any
+        Requested value.
+
+    """
     log.debug('get plugin names')
     return list(_plugin_registry.keys())
-

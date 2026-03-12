@@ -8,7 +8,7 @@ from uam4x.custom_errors import PluginException
 import inspect
 import hashlib
 import numpy as np
-from uam4x.utils import check_continuous, check_if_scalar, log, handle_brackets
+from uam4x.utils import is_continuous_type_or_value, is_scalar_type_or_value, log, split_dotted_path_and_indices
 from uam4x.results import Result, Tradestudy
 import concurrent.futures
 import time
@@ -47,6 +47,16 @@ class Engine:
         Working directory for execution outputs.
     """
     def __init__(self, study:Study, work_dir) -> None:
+        """Initialize object state and default configuration.
+
+        Parameters
+        ----------
+        study : Study
+            Input value for `study`.
+        work_dir : Any
+            Input value for `work_dir`.
+
+        """
         self.study = study
         self.study_results = {} # change once there is a better way to store outputs
         self.sweep_combos = {}
@@ -185,13 +195,6 @@ class Engine:
         Result
             The result object containing outputs from the solution.
         """
-        #if not iteration is None and create_step_work_dirs:
-        #    out_dir = os.path.join(work_dir, f"out_{iteration}")
-        #else:
-        #    out_dir = os.path.join(work_dir)
-#
-        #os.makedirs(out_dir, exist_ok=True)
-
 
         study = Study._from_dict(study_dict, work_dir)
         engine = Engine(study, work_dir)    
@@ -283,7 +286,7 @@ class Engine:
         for tracked_output in self.study.solution.tracked_outputs:
             temp_output_name='solution.'+tracked_output
             if '[' in  tracked_output:
-                no_ind_tracked_output, inds = handle_brackets(tracked_output)
+                no_ind_tracked_output, inds = split_dotted_path_and_indices(tracked_output)
                 var_value = temp_state[no_ind_tracked_output][inds]
             else:
                 var_value = temp_state[temp_output_name]
@@ -294,6 +297,13 @@ class Engine:
 
 
     def run_solution(self):
+        """Run solution.
+
+        Notes
+        -----
+        This method performs internal setup or validation logic.
+
+        """
         start_time = time.perf_counter()
         trade_name='Default State'
         self.log.debug('run solution')
@@ -318,6 +328,16 @@ class Engine:
 
         
     def add_end_time_meta_data(self,trade_name,elapsed_time):
+        """Add end time meta data.
+
+        Parameters
+        ----------
+        trade_name : Any
+            Identifier used by this operation.
+        elapsed_time : Any
+            Input value for `elapsed_time`.
+
+        """
         self.study._runtime_meta_data[trade_name]['time_info']['Elapsed_Time'] = f'Analysis took {elapsed_time} seconds'
         
         dt=datetime.now(tz=ZoneInfo("America/Los_Angeles"))
@@ -339,12 +359,18 @@ class Engine:
 
     def capture_execution_data(self,trade_name):
         # populate environment at execution time
+        """Execute capture execution data.
+
+        Parameters
+        ----------
+        trade_name : Any
+            Identifier used by this operation.
+
+        """
         self.study._capture_environment(trade_name)
         # hash plugins at runtime
         plugin_name_to_hash = {}
         external_executable_to_versioning_data = {}
-        #all_plugin_name_to_class=self.study.solution.get_all_plugin_names_to_classes()
-        #all_plugin_name_to_hash=self.study.solution.get_all_plugin_names_to_hashes()
         for plugin_name, data in self.study.solution.get_all_plugin_names_to_data().items():
             #get the hash
             plugin_class=data['plugin']
@@ -444,6 +470,18 @@ class Engine:
 
     
     def _run_parameter_sweep(self,trade_name,trade_states,num_processors=None):
+        """Run parameter sweep.
+
+        Parameters
+        ----------
+        trade_name : Any
+            Identifier used by this operation.
+        trade_states : Any
+            Input value for `trade_states`.
+        num_processors : Any, optional
+            Input value for `num_processors`.
+
+        """
         failed_states = []
         successful_states = []
         states= trade_states
@@ -606,13 +644,32 @@ class Engine:
         self.study.solution._check_link_types(plugins,self.study)
                 
     def check_link_indices(self, plugins):
-        '''
-        check source/destination for:
-        valid indexing for source and destination
-        '''
+        """Validate link indices.
+
+        Parameters
+        ----------
+        plugins : Any
+            Input value for `plugins`.
+
+        """
         self.study.solution._check_link_indices(plugins,self.study)
 
     def _get_analysis_var_data(self, var_name, plugins):
+        """Return analysis var data.
+
+        Parameters
+        ----------
+        var_name : Any
+            Identifier used by this operation.
+        plugins : Any
+            Input value for `plugins`.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         if var_name.startswith('vehicles.'):
             return {
                 'type': self.study.get_param_type(var_name),
@@ -644,7 +701,7 @@ class Engine:
         for name,data in  state['des_vars'].items():
             var_data = self._get_analysis_var_data(name, plugins)
             des_var_type = var_data['type']
-            if not check_continuous(des_var_type):
+            if not is_continuous_type_or_value(des_var_type):
                 self.log.error(f'The design variable: {name} is of type {des_var_type}. Only floats allowed as design variables')
                 raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
                                 f'Only floats allowed as design variables')
@@ -652,25 +709,44 @@ class Engine:
             
             
     def check_constraints(self, plugins, state):
+        """Validate constraints.
+
+        Parameters
+        ----------
+        plugins : Any
+            Input value for `plugins`.
+        state : Any
+            Input value for `state`.
+
+        """
         for name,data in  state['constraints'].items():
             var_data = self._get_analysis_var_data(name, plugins)
             constraint_type = var_data['type']
-            if not check_continuous(constraint_type):
+            if not is_continuous_type_or_value(constraint_type):
                 raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
                                 f'Only floats allowed as constraints')
             self.check_upper_lower(constraint_type, data['lower'], data['upper'], 'Constraint', name, var_data)
  
 
     def check_upper_lower(self, var_type, data_lower, data_upper, dv_or_const, var_name, var_data):
-        '''
-        Check if desvars/constraints upper and lower bounds have been
-        declared according to paradigm
-        Allow:
-        1.) Blank declarations for des vars(e.g only an upper limit, or no limits)
-        2.) Np.ndarrays but declared as scalars (broadcasting)
-        3.) Np.ndarrays if inputted as arrays must have same shape
-        4.) No mixing (scalars and numpy arrays)
-        '''
+        """Validate upper lower.
+
+        Parameters
+        ----------
+        var_type : Any
+            Input value for `var_type`.
+        data_lower : Any
+            Input value for `data_lower`.
+        data_upper : Any
+            Input value for `data_upper`.
+        dv_or_const : Any
+            Input value for `dv_or_const`.
+        var_name : Any
+            Identifier used by this operation.
+        var_data : Any
+            Input value for `var_data`.
+
+        """
         var_value = var_data['value']
         var_shape = var_data['shape']
         # Checks on allowables for arrays        
@@ -682,7 +758,7 @@ class Engine:
             if data_lower is not None and data_upper is  not None:
                 #if the upper and lower are declared as scalars, this is fine
                 
-                if check_if_scalar(data_lower) and check_if_scalar(data_upper):
+                if is_scalar_type_or_value(data_lower) and is_scalar_type_or_value(data_upper):
                     return
                 # Mixed types already checked upon constraint/DV declaration
                 if data_lower.shape != data_upper.shape:
@@ -694,9 +770,9 @@ class Engine:
             
             # For plugin inputs/outputs, shape vs. declared value (when applicable) already checked
             # First check here is if value is declared
-            if data_lower is not None and  not check_if_scalar(data_lower):
+            if data_lower is not None and  not is_scalar_type_or_value(data_lower):
                 #scalars allowed for broadcasting
-                if not check_if_scalar(var_value) and var_value is not None:
+                if not is_scalar_type_or_value(var_value) and var_value is not None:
                     
                     if data_lower.shape != var_value.shape:
                         raise ValueError(f'If arrays are declared as bounds for {dv_or_const}\n'
@@ -715,9 +791,9 @@ class Engine:
                     
             # For plugin inputs/outputs, shape vs. declared value (when applicable) already checked
             # First check here is if value is declared
-            if data_upper is not None and  not check_if_scalar(data_upper):
+            if data_upper is not None and  not is_scalar_type_or_value(data_upper):
                 #scalars allowed for broadcasting
-                if not check_if_scalar(var_value) and  var_value is  not None:
+                if not is_scalar_type_or_value(var_value) and  var_value is  not None:
                     if data_upper.shape != var_value.shape:
                         raise ValueError(f'If arrays are declared as bounds for {dv_or_const}\n'
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
@@ -732,12 +808,12 @@ class Engine:
                                          f'plugin input output is accepted.\n'
                                          f'The {dv_or_const} {var_name} upper has shape {data_upper.shape} but must have shape {var_shape}')                                    
         else:
-            # now since check_continuous has been run, we know
+            # now since is_continuous_type_or_value has been run, we know
             # values are already acceptable types in theory but
             # need to check for scalars being declared as arrays or some
             # other unwanted type
             if data_lower is not None and data_upper is  not None:
-                if not (check_if_scalar(data_lower) or  check_if_scalar(data_upper)):
+                if not (is_scalar_type_or_value(data_lower) or  is_scalar_type_or_value(data_upper)):
                     raise ValueError(f'{dv_or_const} was declared as {var_type} which is a scalar\n'
                                  f'but {dv_or_const} upper is {data_upper}\n'
                                  f'and {dv_or_const} lower is {data_lower}\n')
@@ -765,7 +841,7 @@ class Engine:
         self.log.debug('check objective')
         objective_data = self._get_analysis_var_data(state["objective_name"], plugins)
         objective_type = objective_data['type']
-        is_continuous = check_continuous(objective_type)
+        is_continuous = is_continuous_type_or_value(objective_type)
         if not is_continuous:
             self.log.error(f'The objective: {state["objective_name"]} is of type {objective_type}. Only floats allowed as objectives')
             raise TypeError(f'The objective: {state["objective_name"]} is of type {objective_type}\n'

@@ -5,7 +5,7 @@ import json
 import os
 import copy
 from uam4x.log import get_log
-from uam4x.utils import convert_numpy_to_python,log, is_numpy_array, parse_index, handle_brackets, replace_none_with_empty_quotes
+from uam4x.utils import convert_numpy_to_python, log, split_dotted_path_and_indices, replace_none_with_empty_quotes
 from operator import  attrgetter
 import  sys
 import platform
@@ -19,9 +19,24 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 class Study:
+    """Represent the study component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='study')
     def __init__(self, log_dir = None) -> None:
 
+        """Initialize a study with vehicles, solution, control, and results containers.
+
+        Parameters
+        ----------
+        log_dir : Any, optional
+            Input value for `log_dir`.
+
+        """
         if log_dir:
             if log.open_file:
                 log.close_file()
@@ -37,15 +52,40 @@ class Study:
 
 
     def _add_runtime_plugin_checksums(self, trade_name,plugin_to_checksum):
+        """Store runtime plugin checksums for a trade execution.
+
+        Parameters
+        ----------
+        trade_name : Any
+            Trade-study name under `Study.control.trade_studies`.
+        plugin_to_checksum : Any
+            Input value for `plugin_to_checksum`.
+
+        """
         self._runtime_meta_data[trade_name]['step_plugin_hashes'] = plugin_to_checksum
 
     def _add_runtime_external_executable_data(self, trade_name,external_executable_to_data):
+        """Store runtime external executable metadata for a trade execution.
+
+        Parameters
+        ----------
+        trade_name : Any
+            Trade-study name under `Study.control.trade_studies`.
+        external_executable_to_data : Any
+            Input value for `external_executable_to_data`.
+
+        """
         self._runtime_meta_data[trade_name]['step_external_executable_data'] = external_executable_to_data
 
     def _capture_environment(self,trade_name):
-        '''
-        Fully defines environment
-        '''
+        """Execute capture environment.
+
+        Parameters
+        ----------
+        trade_name : Any
+            Identifier used by this operation.
+
+        """
 
         machine_dict = {
             'os_system': platform.system(),
@@ -101,19 +141,62 @@ class Study:
                 }
 
     def add_trade(self, trade_name:str, trade) -> None:
+        """Register a trade workflow under study control.
+
+        Parameters
+        ----------
+        trade_name : str
+            Trade-study name under `Study.control.trade_studies`.
+        trade : Any
+            Input value for `trade`.
+
+        """
         self.log.debug(f'add trade: {trade_name}')
         self.control.add_tradestudy(trade_name, trade)
 
     def add_vehicle(self, vehicle) -> None:
+        """Add a vehicle definition to the study.
+
+        Parameters
+        ----------
+        vehicle : Any
+            Input value for `vehicle`.
+
+        Returns
+        -------
+        Any
+            Return value from `VehicleManager.add_vehicle`.
+
+        """
         self.log.debug(f'add vehicle: {vehicle.name}')
         return self.vehicles.add_vehicle(vehicle)
 
     def get_vehicle(self, vehicle_name: str):
+        """Return vehicle.
+
+        Parameters
+        ----------
+        vehicle_name : str
+            Identifier used by this operation.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         self.log.debug(f'get vehicle: {vehicle_name}')
         return self.vehicles.get_vehicle(vehicle_name)
 
     def _to_dict(self) -> dict:
-        """Convert the study to a dictionary representation."""
+        """Convert the study to a dictionary representation.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         self.log.debug('write to dict')
 
         study_dict = {
@@ -129,6 +212,21 @@ class Study:
 
     @classmethod
     def _from_dict(cls, data: dict, work_dir = None) -> 'Study':
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        data : dict
+            Input value for `data`.
+        work_dir : Any, optional
+            Input value for `work_dir`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         cls.log.debug('study from dict')
         study = cls(log_dir=work_dir)
         for vname, vdata in data["vehicles"].items():
@@ -141,7 +239,18 @@ class Study:
         return study
 
     def _save_to_json(self, json_path: str, commit=False,commit_message=''):
-        """Save the study to a JSON file."""
+        """Save the study to a JSON file.
+
+        Parameters
+        ----------
+        json_path : str
+            Path to the JSON file to read or write.
+        commit : Any, optional
+            Input value for `commit`.
+        commit_message : Any, optional
+            Input value for `commit_message`.
+
+        """
         self.log.debug('save to json')
         data = replace_none_with_empty_quotes(self._to_dict())
 
@@ -152,16 +261,46 @@ class Study:
 
     def save_model_to_json(self, json_path: str, commit=False):
 
+        """Write model configuration data to JSON.
+
+        Parameters
+        ----------
+        json_path : str
+            Path to the JSON file to read or write.
+        commit : Any, optional
+            If `True`, create a git commit for the generated JSON artifact.
+
+        """
         msg = f'AutoCommit: Created data for variant {self.control.variant_name}'
         self._save_to_json(json_path, commit=commit, commit_message=msg if commit else None)
 
     def save_results_to_json(self, json_path: str, commit=False):
+        """Write current results data to JSON.
+
+        Parameters
+        ----------
+        json_path : str
+            Path to the JSON file to read or write.
+        commit : Any, optional
+            If `True`, create a git commit for the generated JSON artifact.
+
+        """
         msg = f'AutoCommit: Writing results for variant {self.control.variant_name}'
         self._save_to_json(json_path, commit=commit, commit_message=msg if commit else None)
 
 
     def _commit_json_to_branch(self, json_path, commit_message):
 
+        """Commit a JSON artifact into the configured git repository.
+
+        Parameters
+        ----------
+        json_path : Any
+            Path to the JSON file to read or write.
+        commit_message : Any
+            Git commit message used when committing JSON output.
+
+        """
         if not os.path.isdir(self.control.repo_root):
             raise NotADirectoryError(f'The provided repository root path {self.control.repo_root} is not a directory.\n'
                              f'The repo root must be a directory.')
@@ -212,7 +351,14 @@ class Study:
         repo.create_commit("HEAD",author, committer, commit_message, tree, parents)
 
     def load_from_json(self, json_path: str):
-        """Load the study from a JSON file."""
+        """Load the study from a JSON file.
+
+        Parameters
+        ----------
+        json_path : str
+            Path to the JSON file to read or write.
+
+        """
         self.log.debug('load from json')
         with open(json_path, 'r') as f:
             data = json.load(f)
@@ -224,35 +370,40 @@ class Study:
 
     @classmethod
     def from_json(cls, json_path: str) -> 'Study':
-        """Create a Study instance from a JSON file."""
+        """Create a Study instance from a JSON file.
+
+        Parameters
+        ----------
+        json_path : str
+            Path to the JSON file to read or write.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         cls.log.debug('create study from json')
         work_dir = os.path.dirname(json_path)
         with open(json_path, 'r') as f:
             data = json.load(f)
         return cls._from_dict(data, work_dir)
 
-    #def get_plugin_input_and_output_names(self, step_name):
-    #    input_names = []
-    #    output_names = []
-    #    self.log.debug(f'get plugin input and output names for {step_name}')
-    #    for (independent, dependent) in self.solution.links:
-    #        # remove indices from index based links
-    #        if '[' in  independent:
-    #            independent, _ = handle_brackets(independent)
-    #        if dependent.split('.')[0] == step_name:
-    #            input_names.append(dependent)
-    #        if independent.split('.')[0] == step_name:
-    #            output_names.append(independent)
-    #    for independent in self.solution.tracked_outputs:
-    #        if independent.split('.')[0] == step_name:
-    #            output_names.append(independent)
-    #    return set(input_names), set(output_names)
-
-
     def get_value(self, dotted_path: str):
-        """
-        Retrieve a value from the study using a dotted path string, e.g.:
+        """Retrieve a value from the study using a dotted path string, e.g.:.
+
         'vehicles.multi_objective_vehicle.wing1.aspect_ratio'
+
+        Parameters
+        ----------
+        dotted_path : str
+            Dotted attribute path used to resolve nested values.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
         """
         self.log.debug(f'get the value of {dotted_path}')
         inds = None
@@ -261,7 +412,7 @@ class Study:
             # vehicles names, component names, mode names, and parameter names. which [ is not allowed
             # are all not allowed.
             #This handles and has checks for the brackets.
-            dotted_path, inds = handle_brackets(dotted_path)
+            dotted_path, inds = split_dotted_path_and_indices(dotted_path)
 
         value = attrgetter(dotted_path)(self)
         if inds is not None:
@@ -269,6 +420,16 @@ class Study:
         return value
 
     def set_value(self,dotted_path:str,value):
+        """Set a vehicle parameter value from a dotted path.
+
+        Parameters
+        ----------
+        dotted_path : str
+            Dotted attribute path used to resolve a study or group value.
+        value : Any
+            New value to assign.
+
+        """
         split_up_path=dotted_path.split('.')
 
         param=split_up_path[-1]
@@ -282,6 +443,19 @@ class Study:
         attrgetter(comp)(self).set_parameter(param,value)
 
     def get_param_type(self,dotted_path:str):
+        """Return param type.
+
+        Parameters
+        ----------
+        dotted_path : str
+            Dotted attribute path used to resolve a study or group value.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         split_up_path=dotted_path.split('.')
 
         param=split_up_path[-1]
@@ -300,16 +474,7 @@ class Study:
 
         return param_type
 
-    def get_plugin_link_inputs(self, step_name, state):
-        self.log.debug(f'get plugin inputs for {step_name}')
-        inputs = {}
-        for (independent, dependent) in self.solution.links:
-            dependent_split = dependent.split('.')
-            if dependent_split[0] == step_name:
-                inputs[".".join(dependent_split[1:])] = self._get_value_with_overwrites(independent, state)
-        return inputs
-
-    def get_all_names_by_category(self):
+    def get_all_vehicle_param_names(self):
         """
         Get all possible vehicle names and step input/output names that are links.
 
@@ -322,8 +487,6 @@ class Study:
             - 'step_outputs': List of all step output names (e.g., 'step1.weights.wing_weight')
         """
         vehicle_names = []
-        step_inputs = []
-        step_outputs = []
 
         # Get all vehicle parameter names
         for vehicle in self.vehicles:
@@ -337,55 +500,31 @@ class Study:
                 for mode_name, mode in component._modes.items():
                     for param_name in mode._parameters.keys():
                         vehicle_names.append(f"vehicles.{vehicle_name}.{component.name}.{mode_name}.{param_name}")
-
-        # Get step input and output names from links
-        for independent, dependent in self.solution.links:
-            # Extract step name from dependent (input)
-            dependent_parts = dependent.split('.')
-            if len(dependent_parts) > 1:
-                step_name = dependent_parts[0]
-                if step_name.startswith('step'):
-                    step_inputs.append(dependent)
-
-            # Extract step name from independent (output)
-            independent_parts = independent.split('.')
-            if len(independent_parts) > 1:
-                step_name = independent_parts[0]
-                if step_name.startswith('step'):
-                    step_outputs.append(independent)
-
-        # Add tracked outputs as step outputs
-        for tracked_output in self.solution.tracked_outputs:
-            output_parts = tracked_output.split('.')
-            if len(output_parts) > 1:
-                step_name = output_parts[0]
-                if step_name.startswith('step'):
-                    step_outputs.append(tracked_output)
-
+        
         # Remove duplicates and sort
         vehicle_names = sorted(list(set(vehicle_names)))
-        step_inputs = sorted(list(set(step_inputs)))
-        step_outputs = sorted(list(set(step_outputs)))
 
-        return {
-            'vehicle_names': vehicle_names,
-            'step_inputs': step_inputs,
-            'step_outputs': step_outputs
-        }
-
-    def get_all_names(self):
-        """
-        Get all possible vehicle names and step input/output names.
-
-        Returns:
-            list: List of all possible vehicle names and step input/output names.
-        """
-        all_names = self.get_all_names_by_category()
-        return all_names['vehicle_names'] + all_names['step_inputs'] + all_names['step_outputs']
+        return vehicle_names
+    
 
 class Variants:
+    """Represent the variants component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='variants')
     def __init__(self, dir: str) -> None:
+        """Initialize variant generation settings and output directories.
+
+        Parameters
+        ----------
+        dir : str
+            Input value for `dir`.
+
+        """
         self.dir = dir
         self.variants = {}
         variants_dir = os.path.join(self.dir,'variants')
@@ -395,10 +534,33 @@ class Variants:
         self.log = Variants.log
 
     def add_variant(self, name, func_list:list):
+        """Add variant.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        func_list : list
+            Input value for `func_list`.
+
+        """
         self.log.debug(f"add variant {name}")
         self.variants[name] = func_list
 
     def generate_variants(self,commit=False):
+        """Generate, save, and return all configured study variants.
+
+        Parameters
+        ----------
+        commit : Any, optional
+            If `True`, also commit generated JSON artifacts to git.
+
+        Returns
+        -------
+        Any
+            List of generated `Study` objects, one per configured variant.
+
+        """
         self.log.debug('generate variants')
         studies = []
 
@@ -483,15 +645,9 @@ if __name__ == "__main__":
 
     # Test the new get_all_names method
     print("\n=== Testing get_all_names method ===")
-    all_names = study.get_all_names_by_category()
+    vehicle_names = study.get_all_vehicle_param_names()
     print("Vehicle names:")
-    for name in all_names['vehicle_names']:
-        print(f"  {name}")
-    print("Step inputs:")
-    for name in all_names['step_inputs']:
-        print(f"  {name}")
-    print("Step outputs:")
-    for name in all_names['step_outputs']:
+    for name in vehicle_names:
         print(f"  {name}")
 
 
@@ -529,5 +685,3 @@ if __name__ == "__main__":
     engine = Engine(study, "test_work")
     print(study.get_param_type("vehicles.TestVehicle.left_wing.happy.span"))
     print(study.get_param_type("vehicles.TestVehicle.left_wing.span"))
-
-

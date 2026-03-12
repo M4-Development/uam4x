@@ -29,6 +29,7 @@ release = '1.0.0'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
@@ -104,6 +105,14 @@ autodoc_warningiserror = False
 # This value controls whether to scan all found documents for autosummary
 # generation, and to generate stub files for each.
 autosummary_generate = True
+
+# Default autodoc behavior: include full API surfaces.
+autodoc_default_options = {
+    'members': True,
+    'undoc-members': True,
+    'show-inheritance': True,
+    'inherited-members': True,
+}
 
 # -- Options for intersphinx extension ---------------------------------------
 
@@ -211,4 +220,3 @@ epub_title = project
 
 # A list of files that should not be packed into the epub file.
 epub_exclude_files = ['search.html']
-

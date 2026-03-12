@@ -17,11 +17,12 @@ from uam4x.utils import log
 _node_registry = {}
 
 class Node:
-    """
-    Base class for all nodes in the UAM4X system.
+    """Represent the node component in the UAM4X workflow.
 
-    A node represents a function that takes a Study object and modifies it.
-    Nodes are the building blocks of variants and can be registered and discovered.
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
     """
     log = get_log(log, object_name='node')
     def __init__(self, name: str, description: str = "", function: Callable = None):
@@ -46,13 +47,13 @@ class Node:
         self.node_type = "Node"
 
     def execute(self, study):
-        """
-        Execute the node function on a study.
+        """Execute execute.
 
         Parameters
         ----------
-        study : Study
-            The study object to modify
+        study : Any
+            Input value for `study`.
+
         """
         if self.function:
             self.function(study)
@@ -94,7 +95,14 @@ class Node:
             return False
 
     def get_docstring(self) -> str:
-        """Get the docstring of the node function."""
+        """Get the docstring of the node function.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         if self.function:
             return self.function.__doc__ or ""
         return ""
@@ -122,7 +130,14 @@ class Node:
 
 
     def _to_dict(self) -> dict:
-        """Serialize the Node to a dictionary."""
+        """Serialize the Node to a dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             "node_type": "Node",
             "name": self.name
@@ -146,6 +161,19 @@ def register_node(name: str = None, description: str = ""):
         The decorator function
     """
     def decorator(func):
+        """Execute decorator.
+
+        Parameters
+        ----------
+        func : Any
+            Input value for `func`.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         node_name = name or func.__name__
 
         # Create the node

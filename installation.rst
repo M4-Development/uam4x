@@ -4,13 +4,21 @@ Installation
 Prerequisites
 -------------
 
-UAM4X requires Python 3.8 or higher. The following packages are required:
+UAM4X requires Python 3.8 or higher. The following packages are required
+(as defined in ``setup.py``):
 
-* NumPy
-* SciPy
-* Matplotlib
-* OpenMDAO (for optimization)
-* wxPython (for GUI)
+* ``numpy>=2.2.6``
+* ``pytest>=8.4.2``
+* ``openmdao>=3.39.0``
+* ``cpylog``
+* ``pytest-cov``
+* ``pytest``
+* ``pytest-html``
+* ``pygit2``
+* ``matplotlib>=3.10.0``
+* ``openturns==1.26.0``
+* ``scipy>=1.16.1``
+* ``tzdata==2025.2``
 
 Installation
 ------------
@@ -19,23 +27,19 @@ Installation
 
    .. code-block:: bash
 
-      git clone <repository-url>
+      git clone https://github.com/M4-Development/uam4x.git
       cd uam4x
 
-2. Create a virtual environment (recommended):
+2. Install Anaconda (if needed) and create a conda environment (recommended):
+
+   Download Anaconda: https://www.anaconda.com/download
 
    .. code-block:: bash
 
-      python -m venv uam4x_env
-      source uam4x_env/bin/activate  # On Windows: uam4x_env\Scripts\activate
+      conda create -n uam4x python=3.12
+      conda activate uam4x
 
-3. Install dependencies:
-
-   .. code-block:: bash
-
-      pip install -r requirements.txt
-
-4. Install UAM4X in development mode:
+3. Install UAM4X in development mode (this installs all required packages from ``setup.py``):
 
    .. code-block:: bash
 
@@ -66,17 +70,39 @@ For GUI development:
 
    pip install wxpython
 
+For plugin packages (from ``uam4x_plugins``):
+
+Some plugins require additional external software and licenses. Install only the
+plugin package(s) you need.
+
+.. code-block:: bash
+
+   git clone https://github.com/M4-Development/uam4x_plugins.git
+   cd uam4x_plugins
+   pip install -r requirements.txt
+
+To install only the OpenVSP plugin package:
+
+.. code-block:: bash
+
+   cd uam4x_plugins/openvsp
+   pip install -e .
+
 Troubleshooting
 ---------------
 
 Common installation issues:
 
 1. **wxPython installation fails**: Use conda instead of pip:
+
    .. code-block:: bash
+
       conda install wxpython
 
 2. **OpenMDAO conflicts**: Ensure you're using a compatible version:
+
    .. code-block:: bash
-      pip install openmdao>=3.0.0
+
+      pip install openmdao>=3.39.0
 
 3. **Import errors**: Make sure the uam4x package is in your Python path.

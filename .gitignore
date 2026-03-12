@@ -1,5 +1,6 @@
 requirements.yml
-
+/_autosummary/
+/.venv_docs/
 # SQLite databases and journals
 *.sqlite
 *.sqlite-journal

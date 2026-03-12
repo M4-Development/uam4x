@@ -38,7 +38,6 @@ Quick Start
 .. code-block:: python
 
    from uam4x import Study, Vehicle, Wing
-   from uam4x.subsystems import Wing
 
    # Create a new study
    study = Study()

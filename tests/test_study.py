@@ -126,26 +126,15 @@ def test_study_load_from_json_mutates_current_instance(tmp_path, demo_study):
     assert fresh.solution.links == demo_study.solution.links
 
 
-def test_get_all_names_by_category_and_flat_names(demo_study):
+def test_get_all_vehicle_param_names(demo_study):
     s = demo_study
-    s.solution.links = [
-        ("step1.y", "step2.input_a"),
-        ("vehicles.demo_vehicle.wing.span", "step1.x"),
-    ]
-    s.solution.tracked_outputs = ["step2.output_a", "vehicles.demo_vehicle.wing.count"]
+    names = s.get_all_vehicle_param_names()
 
-    by_category = s.get_all_names_by_category()
-    all_names = s.get_all_names()
-
-    assert "vehicles.demo_vehicle.wing.span" in by_category["vehicle_names"]
-    assert "step2.input_a" in by_category["step_inputs"]
-    assert "step1.y" in by_category["step_outputs"]
-    assert "step2.output_a" in by_category["step_outputs"]
-    assert all_names == (
-        by_category["vehicle_names"]
-        + by_category["step_inputs"]
-        + by_category["step_outputs"]
-    )
+    assert names == sorted(names)
+    assert len(names) == len(set(names))
+    assert "vehicles.demo_vehicle.wing.span" in names
+    assert "vehicles.demo_vehicle.wing.count" in names
+    assert "vehicles.demo_vehicle.wing.vec" in names
 
 
 def test_variants_generate_variants(tmp_path):

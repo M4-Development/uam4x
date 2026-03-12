@@ -17,18 +17,70 @@ post_workflow_name_to_class_registry={}
 #Orchestrator class, manages workflows and interfaces with uam4x
 
 def register_workflow(Workflow):
+    """Register a UQ workflow class in the global workflow registry.
+
+    Parameters
+    ----------
+    Workflow : Any
+        Workflow class to register.
+
+    Returns
+    -------
+    Any
+        The registered class (decorator passthrough).
+
+    """
     workflow_name_to_class_registry[Workflow.__name__]=Workflow
     return Workflow
 
 def register_sampler(Sampler):
+    """Register a sampler class in the global sampler registry.
+
+    Parameters
+    ----------
+    Sampler : Any
+        Sampler class to register.
+
+    Returns
+    -------
+    Any
+        The registered class (decorator passthrough).
+
+    """
     sampler_name_to_class_registry[Sampler.__name__]=Sampler
     return Sampler
 
 def register_distribution(Distribution):
+    """Register a distribution class in the global distribution registry.
+
+    Parameters
+    ----------
+    Distribution : Any
+        Distribution class to register.
+
+    Returns
+    -------
+    Any
+        The registered class (decorator passthrough).
+
+    """
     distribution_name_to_class_registry[Distribution.__name__]=Distribution
     return Distribution 
 
 def register_post_workflow(PostWorkflow):
+    """Register a post-processing workflow class in the global post registry.
+
+    Parameters
+    ----------
+    PostWorkflow : Any
+        Post-processing workflow class to register.
+
+    Returns
+    -------
+    Any
+        The registered class (decorator passthrough).
+
+    """
     post_workflow_name_to_class_registry[PostWorkflow.__name__]=PostWorkflow
     return PostWorkflow
 
@@ -38,7 +90,24 @@ class UQAnalysis:
     #MIGHT CHANGE THIS TO ALEATORYANALYSIS, 
     #THEN MAYBE HAVE A MIXED ANALYSIS 
     # AND PURE EPISTEMIC ALL ESSENTIALLY AT PARAMETERSWEEP/OPTIMIZATION level
+    """Represent the uqanalysis component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,UQ_workflow,seed=None):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        UQ_workflow : Any
+            Workflow object that generates uncertainty states.
+        seed : Any, optional
+            Random seed used for OpenTurns sample generation.
+
+        """
         self.UQ_workflow = UQ_workflow
         self.seed=seed if seed is not None else 42        
         self.aleatory_var_to_dist = {}
@@ -46,22 +115,52 @@ class UQAnalysis:
 
 
     def _check_analysis(self):
+        """Validate that workflow settings are consistent with requested analysis.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         if hasattr(self.UQ_workflow,'_check_analysis'):
             self.UQ_workflow._check_analysis(self)
     
 
-    #def set_post_class(self,PostClass):
-    #    self.post_spec=PostClass
-
     def add_aleatory_variable(self, var_name, PDFObject):
+        """Associate one aleatory variable name with a probability distribution.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        PDFObject : Any
+            Distribution object associated with one aleatory variable.
+
+        """
         self.aleatory_var_to_dist[var_name] = PDFObject
 
     def get_states(self):
+        """Generate state dictionaries for all uncertainty samples in this workflow.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         ot.RandomGenerator.SetSeed(self.seed)
         #self.UQ_workflow.
         return self.UQ_workflow._get_states(self.aleatory_var_to_dist)
     
     def _to_dict(self):
+        """Serialize this object to a JSON-compatible dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             'type':self.__class__.__name__,
             'seed':self.seed,
@@ -74,6 +173,19 @@ class UQAnalysis:
     def _from_dict(cls,UQdict):
         
         #load in the workflow from dictionary
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        UQdict : Any
+            Serialized uncertainty-analysis dictionary.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         workflow_dict=UQdict['analysis_workflow']
         workflow=workflow_name_to_class_registry[workflow_dict['name']]._from_dict(workflow_dict)
         # load in seed
@@ -96,12 +208,42 @@ class BasicStats:
 
     #post_class=BasicStatsPost
 
+    """Represent the basicstats component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,num_samples,SamplingClass):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        num_samples : Any
+            Number of samples to generate.
+        SamplingClass : Any
+            Sampler class used to generate uncertainty samples.
+
+        """
         self.num_samples = num_samples
         self.SamplingClass = SamplingClass
 
     def _get_states(self,aleatory_to_distribution):
         #states should be a list of dictionaries
+        """Generate analysis state dictionaries from configured distributions.
+
+        Parameters
+        ----------
+        aleatory_to_distribution : Any
+            Mapping from aleatory variable names to distributions.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         sample_points,var_name_to_col=self.SamplingClass.sample(aleatory_to_distribution,self.num_samples)
         states=[]
         for row in range(sample_points.shape[0]):
@@ -112,6 +254,14 @@ class BasicStats:
         return states
     
     def _to_dict(self):
+        """Serialize this object to a JSON-compatible dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             'name':self.__class__.__name__,
             'sampler': self.SamplingClass.__name__,
@@ -120,13 +270,45 @@ class BasicStats:
     
     @classmethod
     def _from_dict(cls,workflow_dict):
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        workflow_dict : Any
+            Serialized workflow dictionary.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         sampler=sampler_name_to_class_registry[workflow_dict['sampler']]
         num_samples=workflow_dict['num_samples']
         return cls(num_samples,sampler)
     
 @register_workflow
 class RegressionPCE(BasicStats):
+    """Represent the regressionpce component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,num_samples,SamplingClass,poly_order):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        num_samples : Any
+            Number of samples to generate.
+        SamplingClass : Any
+            Sampler class used to generate uncertainty samples.
+        poly_order : Any
+            Polynomial order used for chaos expansions.
+
+        """
         super().__init__(num_samples,SamplingClass)
         self.poly_order=poly_order
 
@@ -134,6 +316,14 @@ class RegressionPCE(BasicStats):
         #check order and number of aleatory vs. num samples
         # from XIU Polynomial expansion, dimension of space is C(order+number of random vars,number of random vars)
         # should oversample 2-3x
+        """Validate that workflow settings are consistent with requested analysis.
+
+        Parameters
+        ----------
+        UQAnalysis : Any
+            Input value for `UQAnalysis`.
+
+        """
         num_aleatory=len(UQAnalysis.aleatory_var_to_dist)
         min_terms=comb(self.poly_order+num_aleatory,self.poly_order)
         if min_terms>self.num_samples:
@@ -142,6 +332,14 @@ class RegressionPCE(BasicStats):
             print('Warning')
         
     def _to_dict(self):
+        """Serialize this object to a JSON-compatible dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             'name': self.__class__.__name__,
             'sampler':self.SamplingClass.__name__,
@@ -151,6 +349,19 @@ class RegressionPCE(BasicStats):
     
     @classmethod
     def _from_dict(cls,workflow_dict):
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        workflow_dict : Any
+            Serialized workflow dictionary.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         sampler=sampler_name_to_class_registry[workflow_dict['sampler']]
         num_samples=workflow_dict['num_samples']
         poly_order=workflow_dict['polynomial_order']
@@ -159,15 +370,51 @@ class RegressionPCE(BasicStats):
 
 @register_workflow
 class GaussQuadraturePCE:
+    """Represent the gaussquadraturepce component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,poly_order):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        poly_order : Any
+            Polynomial order used for chaos expansions.
+
+        """
         self.poly_order=poly_order
 
     def _check_analysis(self,UQAnalysis):
+        """Validate that workflow settings are consistent with requested analysis.
+
+        Parameters
+        ----------
+        UQAnalysis : Any
+            Input value for `UQAnalysis`.
+
+        """
         num_aleatory=len(UQAnalysis.aleatory_var_to_dist)
         if num_aleatory>5:
             raise ValueError('Quadrature based PCE may not be efficient for more than 5 aleatory variables')
 
     def _get_states(self, aleatory_to_distribution):
+        """Generate analysis state dictionaries from configured distributions.
+
+        Parameters
+        ----------
+        aleatory_to_distribution : Any
+            Mapping from aleatory variable names to distributions.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         num_aleatory=len(aleatory_to_distribution)
 
         if num_aleatory==1:
@@ -202,6 +449,14 @@ class GaussQuadraturePCE:
 
 
     def _to_dict(self):
+        """Serialize this object to a JSON-compatible dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             'name': self.__class__.__name__,
             'polynomial_order':self.poly_order
@@ -209,22 +464,62 @@ class GaussQuadraturePCE:
     
     @classmethod
     def _from_dict(cls,workflow_dict):
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        workflow_dict : Any
+            Serialized workflow dictionary.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         poly_order=workflow_dict['polynomial_order']
         return cls(poly_order)
 
 @register_workflow
 class SobolSensitivity(BasicStats):
-    '''
-    Docstring for SobolSensitivity
-    '''
+    """Represent the sobolsensitivity component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,num_samples,SamplingClass,computeSecondOrder:bool=False):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        num_samples : Any
+            Number of samples to generate.
+        SamplingClass : Any
+            Sampler class used to generate uncertainty samples.
+        computeSecondOrder : bool, optional
+            Whether second-order Sobol terms are generated.
+
+        """
         super().__init__(num_samples,SamplingClass)
         self.computeSecondOrder=computeSecondOrder
     
-    #def _check_analysis(self):
-    #    pass
 
     def _get_states(self, aleatory_to_distribution):
+        """Generate analysis state dictionaries from configured distributions.
+
+        Parameters
+        ----------
+        aleatory_to_distribution : Any
+            Mapping from aleatory variable names to distributions.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         ot.ResourceMap.Set('SobolIndicesExperiment-SamplingMethod',self.SamplingClass._OT_ResourceMapName)
         if len(aleatory_to_distribution)==1:
             (name,dist),=aleatory_to_distribution.items()
@@ -265,6 +560,14 @@ class SobolSensitivity(BasicStats):
     
     
     def _to_dict(self):
+        """Serialize this object to a JSON-compatible dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             'name': self.__class__.__name__,
             'sampler':self.SamplingClass.__name__,
@@ -274,6 +577,19 @@ class SobolSensitivity(BasicStats):
     
     @classmethod
     def _from_dict(cls,workflow_dict):
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        workflow_dict : Any
+            Serialized workflow dictionary.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         sampler=sampler_name_to_class_registry[workflow_dict['sampler']]
         num_samples=workflow_dict['num_samples']
         second_order_sobol=workflow_dict['second_order_sobol']
@@ -286,14 +602,57 @@ class SobolSensitivity(BasicStats):
 # Define post process classes:
 @register_post_workflow
 class BasicStatsPost:
+    """Represent the basicstatspost component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,tradestudy:Tradestudy):
+            """Initialize object state and configuration.
+
+            Parameters
+            ----------
+            tradestudy : Tradestudy
+                Trade-study results container used for post-processing.
+
+            """
             self.tradestudy=tradestudy
 
     def compute_mean(self,var_name):
+        """Compute the sample mean for a variable across trade-study results.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         vals=self.tradestudy.get_variable(var_name)
         return np.average(vals)
 
     def compute_variance(self, var_name,method='sample'):        
+        """Compute the sample or population variance for a variable.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        method : Any, optional
+            Method identifier controlling algorithm behavior.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         vals = self.tradestudy.get_variable(var_name)
         sample=['s','sample']
         population=['p','pop','population']
@@ -305,6 +664,21 @@ class BasicStatsPost:
             raise ValueError()
                  
     def compute_std(self, var_name,method='sample'):
+        """Compute the sample or population standard deviation for a variable.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        method : Any, optional
+            Method identifier controlling algorithm behavior.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         vals = self.tradestudy.get_variable(var_name)
         sample=['s','sample']
         population=['p','pop','population']
@@ -319,15 +693,70 @@ class BasicStatsPost:
     def compute_skewness(self,var_name,bias=True):
 
         # uses Fisher-Pearson
+        """Compute Fisher-Pearson skewness for a variable.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        bias : Any, optional
+            Input value for `bias`.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         vals = np.array(self.tradestudy.get_variable(var_name))
         return stats.skew(vals,nan_policy='raise',bias=bias)
 
     def compute_kurtosis(self,var_name,fisher=True,bias=True):
         # uses fisher or pearson
+        """Compute kurtosis for a variable using SciPy conventions.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        fisher : Any, optional
+            Input value for `fisher`.
+        bias : Any, optional
+            Input value for `bias`.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         vals = np.array(self.tradestudy.get_variable(var_name))
         return stats.kurtosis(vals,nan_policy='raise',bias=bias,fisher=fisher)
 
     def plot_pdf(self,var_name,x_axis_title=None,plot_title='',method='histogram',bins=20,save_dir=None):
+        """Plot a PDF from previously generated surrogate samples.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        x_axis_title : Any, optional
+            Input value for `x_axis_title`.
+        plot_title : Any, optional
+            Input value for `plot_title`.
+        method : Any, optional
+            Method identifier controlling algorithm behavior.
+        bins : Any, optional
+            Number of bins used for histogram-based plots.
+        save_dir : Any, optional
+            Optional directory where plots are saved.
+
+        Returns
+        -------
+        Any
+            Plot artifact (axes object or plotted data).
+
+        """
         histo=['histogram','h']
         kernal=['kde','kernel_density_estimate','kernel','k']
         if method in histo:
@@ -356,6 +785,25 @@ class BasicStatsPost:
         return ax
         
     def plot_cdf(self,var_name,x_axis_title=None,plot_title='',save_dir=None):
+        """Plot a CDF from previously generated surrogate samples.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        x_axis_title : Any, optional
+            Input value for `x_axis_title`.
+        plot_title : Any, optional
+            Input value for `plot_title`.
+        save_dir : Any, optional
+            Optional directory where plots are saved.
+
+        Returns
+        -------
+        Any
+            Plot artifact (axes object or plotted data).
+
+        """
         vals=np.array(self.tradestudy.get_variable(var_name))
         ecdf=stats.ecdf(vals)
         quantiles=ecdf.cdf.quantiles
@@ -377,21 +825,79 @@ class BasicStatsPost:
         return np.hstack((quantiles,probabilities))
 
     def get_cdf_function(self,var_name,method='empirical'):
+        """Return a callable CDF approximation for a variable.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        method : Any, optional
+            Method identifier controlling algorithm behavior.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         vals=np.array(self.tradestudy.get_variable(var_name))
         ecdf=stats.ecdf(vals)
         quantiles=ecdf.cdf.quantiles
         probabilities=ecdf.cdf.probabilities
         if method=='empirical':
             def cdf(x):
+                """Execute cdf.
+
+                Parameters
+                ----------
+                x : Any
+                    Input value for `x`.
+
+                Returns
+                -------
+                Any
+                    Return value produced by this operation.
+
+                """
                 return ecdf.cdf.evaluate(x) 
         elif method=='smooth':
             def cdf(x):
+                """Execute cdf.
+
+                Parameters
+                ----------
+                x : Any
+                    Input value for `x`.
+
+                Returns
+                -------
+                Any
+                    Return value produced by this operation.
+
+                """
                 return np.interp(x,quantiles,probabilities,left=0.0,right=1.0)
         else:
             raise ValueError
         return cdf
     
     def compute_cdf_value(self,var_name,value,method='empirical'):
+        """Evaluate the CDF value at a specified point.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        value : Any
+            Value at which to evaluate a distribution/CDF.
+        method : Any, optional
+            Method identifier controlling algorithm behavior.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         vals=np.array(self.tradestudy.get_variable(var_name))
         ecdf=stats.ecdf(vals)
         quantiles=ecdf.cdf.quantiles
@@ -405,9 +911,23 @@ class BasicStatsPost:
 
     
     def compute_quantile(self,var_name,quantile,method='inverted_cdf'):
-        ''''
-        Computes probability levels (quantiles)
-        '''
+        """Compute a quantile value for a variable distribution.
+
+        Parameters
+        ----------
+        var_name : Any
+            Variable name to analyze or evaluate.
+        quantile : Any
+            Requested quantile level in the interval [0, 1].
+        method : Any, optional
+            Method identifier controlling algorithm behavior.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         if quantile<0.0 or quantile>1.0:
             raise ValueError()
         methods=[
@@ -431,6 +951,21 @@ class BasicStatsPost:
 
     def compute_spearman_correlation(self,var_name1,var_name2):
         #NEED TO DETERMINE NAN POLICY
+        """Compute Spearman rank correlation between two variables.
+
+        Parameters
+        ----------
+        var_name1 : Any
+            First variable name for correlation calculations.
+        var_name2 : Any
+            Second variable name for correlation calculations.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         var1_vals=np.array(self.tradestudy.get_variable(var_name1))
         var2_vals=np.array(self.tradestudy.get_variable(var_name2))
         significance_res,p_val=stats.spearmanr(var1_vals,var2_vals)
@@ -439,6 +974,21 @@ class BasicStatsPost:
 
     def compute_pearson_correlation(self,var_name1,var_name2):
         #NEED TO DETERMINE NAN POLICY
+        """Compute Pearson linear correlation between two variables.
+
+        Parameters
+        ----------
+        var_name1 : Any
+            First variable name for correlation calculations.
+        var_name2 : Any
+            Second variable name for correlation calculations.
+
+        Returns
+        -------
+        Any
+            Computed statistic or metric.
+
+        """
         var1_vals=np.array(self.tradestudy.get_variable(var_name1))
         var2_vals=np.array(self.tradestudy.get_variable(var_name2))
         significance_res,p_val=stats.pearsonr(var1_vals,var2_vals)
@@ -448,23 +998,80 @@ class BasicStatsPost:
 
 
 class MixedBasicStatsPost(BasicStatsPost):
+    """Represent the mixedbasicstatspost component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,tradestudy:Tradestudy):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
+
+        """
         super().__init__(tradestudy)
 
     def plot_probability_box():
+        """Placeholder for probability-box visualization for mixed uncertainty.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         pass
 
     def compute_confidence_intervals():
+        """Placeholder for confidence-interval calculations.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         pass
 
 
 
 @register_post_workflow
 class RegressionPCEPost(BasicStatsPost):
+    """Represent the regressionpcepost component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,tradestudy:Tradestudy):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
+
+        """
         super().__init__(tradestudy)
 
     def generate_surrogate(self,output_name):
+        """Build and return a polynomial-chaos surrogate for one output variable.
+
+        Parameters
+        ----------
+        output_name : Any
+            Output variable name used for surrogate or Sobol calculations.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         trade_name=self.tradestudy.trade_name
         ts=self.tradestudy.study.control.trade_studies[trade_name]
         num_samples=ts.UQ_workflow.num_samples
@@ -536,10 +1143,38 @@ class RegressionPCEPost(BasicStatsPost):
     
 @register_post_workflow    
 class GaussQuadtraturePCEPost(BasicStatsPost):
+    """Represent the gaussquadtraturepcepost component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,tradestudy:Tradestudy):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
+
+        """
         super().__init__(tradestudy)
 
     def generate_surrogate(self,output_name):
+        """Build and return a polynomial-chaos surrogate for one output variable.
+
+        Parameters
+        ----------
+        output_name : Any
+            Output variable name used for surrogate or Sobol calculations.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         trade_name=self.tradestudy.trade_name
         ts=self.tradestudy.study.control.trade_studies[trade_name]
         aleatory_var_to_dist=ts.aleatory_var_to_dist
@@ -617,9 +1252,26 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
         return Surrogate(aleatory_var_to_dist,res)
 
 class Surrogate:
+    """Represent the surrogate component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self,aleatory_var_to_dist,result):
         #NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
         #FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        aleatory_var_to_dist : Any
+            Mapping from aleatory variable names to distributions.
+        result : Any
+            OpenTurns functional-chaos result object.
+
+        """
         self.aleatory_var_to_dist=aleatory_var_to_dist
         self._ot_res=result
         self.new_sample_points=None
@@ -629,6 +1281,19 @@ class Surrogate:
     def predict(self,name_to_value_dict):
         #Note, name_to_value_dict should be PHYSICAL inputs, not 
         #probabalistic based inputs 
+        """Evaluate the surrogate at one dictionary of input variable values.
+
+        Parameters
+        ----------
+        name_to_value_dict : Any
+            Mapping from variable names to surrogate input values.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         vals=[]
         for name,distribution in self.aleatory_var_to_dist.items():
             if isinstance(distribution,LogNormalDistribution):
@@ -641,9 +1306,25 @@ class Surrogate:
     
     @property
     def analytical_mean(self):
+        """Execute analytical mean.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         return ot.FunctionalChaosRandomVector(self._ot_res).getMean()[0]
     @property
     def analytical_variance(self):
+        """Execute analytical variance.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         ot_var=np.array(ot.FunctionalChaosRandomVector(self._ot_res).getCovariance())[0][0]
         coeffs=np.array(self._ot_res.getCoefficients())
         #skip first term which is mean
@@ -653,9 +1334,32 @@ class Surrogate:
         return variance
     @property
     def analytical_std(self):
+        """Execute analytical std.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         return np.sqrt(self.analytical_variance)
     
     def sample(self,num_samples,method='MC'):
+        """Generate new surrogate samples using a selected sampling strategy.
+
+        Parameters
+        ----------
+        num_samples : Any
+            Number of samples to generate.
+        method : Any, optional
+            Method identifier controlling algorithm behavior.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         model=self._ot_res.getMetaModel()
         # need to add method here? 
         dist=self._ot_res.getDistribution()
@@ -690,6 +1394,19 @@ class Surrogate:
         return np.array(self.new_sample_points),np.array(self.new_sample_values)
     
     def plot_cdf(self,save_dir=None):
+        """Plot a CDF from previously generated surrogate samples.
+
+        Parameters
+        ----------
+        save_dir : Any, optional
+            Optional directory where plots are saved.
+
+        Returns
+        -------
+        Any
+            Plot artifact (axes object or plotted data).
+
+        """
         if self.new_sample_values is None:
             raise ValueError('Must generate samples before plotting cdf')
         vals=self.new_sample_values.flatten()
@@ -711,6 +1428,21 @@ class Surrogate:
 
 
     def plot_pdf(self,bins=20,save_dir=None):
+        """Plot a PDF from previously generated surrogate samples.
+
+        Parameters
+        ----------
+        bins : Any, optional
+            Number of bins used for histogram-based plots.
+        save_dir : Any, optional
+            Optional directory where plots are saved.
+
+        Returns
+        -------
+        Any
+            Plot artifact (axes object or plotted data).
+
+        """
         if self.new_sample_values is None:
             raise ValueError('Must generate samples before plotting pdf')
         vals=self.new_sample_values.flatten()
@@ -730,6 +1462,13 @@ class Surrogate:
 @register_post_workflow
 class SobolSensitivityPost(BasicStatsPost):
 
+    """Represent the sobolsensitivitypost component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     METHOD_TO_CLASS={
         'Saltelli':ot.SaltelliSensitivityAlgorithm,
         'Jansen':ot.JansenSensitivityAlgorithm,
@@ -739,10 +1478,33 @@ class SobolSensitivityPost(BasicStatsPost):
 
 
     def init(self,tradestudy):
+        """Execute init.
+
+        Parameters
+        ----------
+        tradestudy : Any
+            Input value for `tradestudy`.
+
+        """
         super().init(tradestudy)
     
     def generate_Sobol_indices(self,output_name,algo='Jansen'):
         # Output values
+        """Compute Sobol indices for one model output.
+
+        Parameters
+        ----------
+        output_name : Any
+            Output variable name used for surrogate or Sobol calculations.
+        algo : Any, optional
+            Sobol index algorithm name supported by OpenTurns.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         outs=np.array(self.tradestudy.get_variable(output_name))[:,None]
 
         # Overarching UQ distributor class
@@ -802,10 +1564,40 @@ class SobolSensitivityPost(BasicStatsPost):
         return results,otSobol
 
     def get_first_order_indices(self,output_name,algo='Jansen'):
+        """Return first-order Sobol indices for one output.
+
+        Parameters
+        ----------
+        output_name : Any
+            Output variable name used for surrogate or Sobol calculations.
+        algo : Any, optional
+            Sobol index algorithm name supported by OpenTurns.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         results,_=self.generate_Sobol_indices(output_name,algo)
         return results['first_order']
 
     def get_second_order_indices(self,output_name,algo='Jansen'):
+        """Return second-order Sobol indices for one output.
+
+        Parameters
+        ----------
+        output_name : Any
+            Output variable name used for surrogate or Sobol calculations.
+        algo : Any, optional
+            Sobol index algorithm name supported by OpenTurns.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         UQ_Distrubutor=self.tradestudy.study.control.trade_studies[self.tradestudy.trade_name]
         if not UQ_Distrubutor.UQ_workflow.computeSecondOrder:
             raise ValueError(f'This run did not support second order Sobol')
@@ -815,6 +1607,21 @@ class SobolSensitivityPost(BasicStatsPost):
         return results['second_order']
     
     def get_total_order_indices(self,output_name,algo='Jansen'):
+        """Return total-order Sobol indices for one output.
+
+        Parameters
+        ----------
+        output_name : Any
+            Output variable name used for surrogate or Sobol calculations.
+        algo : Any, optional
+            Sobol index algorithm name supported by OpenTurns.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         results,_=self.generate_Sobol_indices(output_name,algo)
         return results['total_order']
 
@@ -824,17 +1631,53 @@ class SobolSensitivityPost(BasicStatsPost):
 # Define various sampling methods
 
 class BaseSampler:
+    """Define a base interface for basesampler.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     @staticmethod
     def sample():
+        """Generate new surrogate samples using a selected sampling strategy.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         pass
 
 @register_sampler
 class MonteCarloSampler(BaseSampler):
 
+    """Provide montecarlosampler behavior for uncertainty workflows.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     _OT_ResourceMapName='MonteCarlo'
 
     @staticmethod
     def sample(aleatory_to_dist, num_samples):
+        """Generate new surrogate samples using a selected sampling strategy.
+
+        Parameters
+        ----------
+        aleatory_to_dist : Any
+            Mapping from aleatory variable names to distributions.
+        num_samples : Any
+            Number of samples to generate.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         if len(aleatory_to_dist)==1:
             (name,dist),=aleatory_to_dist.items()
             var_name_to_col={name:0}
@@ -855,12 +1698,34 @@ class MonteCarloSampler(BaseSampler):
 @register_sampler
 class LatinHypercubeSampler(BaseSampler):
 
+    """Provide latinhypercubesampler behavior for uncertainty workflows.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     _OT_ResourceMapName='LHS'
 
     
     @staticmethod
     def sample(aleatory_to_dist,num_samples):
         #first generate the evenly spaced values on [0,1]
+        """Generate new surrogate samples using a selected sampling strategy.
+
+        Parameters
+        ----------
+        aleatory_to_dist : Any
+            Mapping from aleatory variable names to distributions.
+        num_samples : Any
+            Number of samples to generate.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         if len(aleatory_to_dist)==1:
             (name,dist),=aleatory_to_dist.items()
             var_name_to_col={name:0}
@@ -883,12 +1748,34 @@ class SobolSampler(BaseSampler):
 
     #Note this use here is for SobolExperiment, where the
     #Quasi monte carlo uses the Sobol sampler
+    """Provide sobolsampler behavior for uncertainty workflows.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     _OT_ResourceMapName='QMC'
 
 
 
     @staticmethod
     def sample(aleatory_to_dist,num_samples):
+        """Generate new surrogate samples using a selected sampling strategy.
+
+        Parameters
+        ----------
+        aleatory_to_dist : Any
+            Mapping from aleatory variable names to distributions.
+        num_samples : Any
+            Number of samples to generate.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         if len(aleatory_to_dist)==1:
             (name,dist),=aleatory_to_dist.items()
             var_name_to_col={name:0}
@@ -909,9 +1796,30 @@ class SobolSampler(BaseSampler):
 
 @register_sampler
 class HaltonSampler(BaseSampler):
+    """Provide haltonsampler behavior for uncertainty workflows.
 
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     @staticmethod
     def sample(aleatory_to_dist,num_samples):
+        """Generate new surrogate samples using a selected sampling strategy.
+
+        Parameters
+        ----------
+        aleatory_to_dist : Any
+            Mapping from aleatory variable names to distributions.
+        num_samples : Any
+            Number of samples to generate.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         if len(aleatory_to_dist)==1:
             (name,dist),=aleatory_to_dist.items()
             var_name_to_col={name:0}
@@ -932,14 +1840,47 @@ class HaltonSampler(BaseSampler):
 # Define various continuous distribution classes
 @register_distribution
 class NormalDistribution:
+    """Represent a normaldistribution with serialization and sampling support.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self, mean, std):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        mean : Any
+            Mean value of the normal distribution.
+        std : Any
+            Standard deviation of the normal distribution.
+
+        """
         self.mean = mean
         self.std = std
 
     def _OT_Dist(self):
+        """Return the equivalent OpenTurns distribution object.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         return ot.Normal(self.mean,self.std)
     
     def _to_dict(self):
+        """Serialize this object to a JSON-compatible dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             'name':self.__class__.__name__,
             'mean':self.mean,
@@ -948,20 +1889,66 @@ class NormalDistribution:
     
     @classmethod
     def _from_dict(cls,data):
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        data : Any
+            Input value for `data`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         return cls(data['mean'],data['std'])
         
 
 @register_distribution
 class UniformDistribution:
+    """Represent a uniformdistribution with serialization and sampling support.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self, low, high):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        low : Any
+            Lower bound of the uniform distribution.
+        high : Any
+            Upper bound of the uniform distribution.
+
+        """
         self.low = low
         self.high=high
         self.scale = self.high-self.low
 
     def _OT_Dist(self):
+        """Return the equivalent OpenTurns distribution object.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         return ot.Uniform(self.low,self.high)
     
     def _to_dict(self):
+        """Serialize this object to a JSON-compatible dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             'name':self.__class__.__name__,
             'low':self.low,
@@ -969,20 +1956,68 @@ class UniformDistribution:
     
     @classmethod
     def _from_dict(cls,data):
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        data : Any
+            Input value for `data`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         return cls(data['low'],data['high'])
 
 
 @register_distribution
 class LogNormalDistribution:
+    """Represent a lognormaldistribution with serialization and sampling support.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self, mu_log, sigma_log, gamma=0.0):
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        mu_log : Any
+            Log-space mean parameter for the log-normal distribution.
+        sigma_log : Any
+            Log-space standard deviation for the log-normal distribution.
+        gamma : Any, optional
+            Shift parameter for the log-normal distribution.
+
+        """
         self.mu_log = mu_log
         self.sigma_log = sigma_log
         self.gamma = gamma
 
     def _OT_Dist(self):
+        """Return the equivalent OpenTurns distribution object.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         return ot.LogNormal(self.mu_log, self.sigma_log, self.gamma)
 
     def _to_dict(self):
+        """Serialize this object to a JSON-compatible dictionary.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         return {
             'name': self.__class__.__name__,
             'mu': self.mu_log,
@@ -992,6 +2027,19 @@ class LogNormalDistribution:
 
     @classmethod
     def _from_dict(cls, data):
+        """Reconstruct this object from serialized dictionary data.
+
+        Parameters
+        ----------
+        data : Any
+            Input value for `data`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         return cls(data['mu'], data['sigma'], data.get('gamma', 0.0))
     
 # Pair all workflow classes with their post process classes    

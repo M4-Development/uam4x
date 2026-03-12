@@ -5,7 +5,7 @@ from uam4x.study import Study
 import os
 import shutil
 import numpy as np
-from uam4x.utils import check_continuous, check_if_scalar, handle_brackets
+from uam4x.utils import is_continuous_type_or_value, is_scalar_type_or_value, split_dotted_path_and_indices
 from uam4x.log import get_log
 from uam4x.utils import log
 from uam4x.results import Results, Result
@@ -17,8 +17,31 @@ driver_name_to_driver={'pyOptSparseDriver':om.pyOptSparseDriver,
 cycle_solver_name_to_solver={'NonlinearBlockGS':om.NonlinearBlockGS}
 
 class Optimization:
+    """Represent the optimization component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='optimization')
     def __init__(self, study:Study, state, plugins, out_dir,check_partials=False) -> None:
+        """Initialize object state and configuration.
+
+        Parameters
+        ----------
+        study : Study
+            Study instance containing control, solution, and vehicle definitions.
+        state : Any
+            State dictionary for the current optimization/evaluation point.
+        plugins : Any
+            Instantiated plugin mapping aligned with the solution structure.
+        out_dir : Any
+            Directory used for component/group execution artifacts.
+        check_partials : Any, optional
+            Flag indicating whether derivative checks should be enabled.
+
+        """
         self.study = study
         self.state = state
         self.plugins = plugins
@@ -27,6 +50,14 @@ class Optimization:
         self.log = Optimization.log
 
     def run_problem(self):
+        """Build, execute, and collect results from an OpenMDAO optimization problem.
+
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+
+        """
         problem = om.Problem()
         self.log.debug('run problem')
 
@@ -41,7 +72,6 @@ class Optimization:
                 value= self.study.get_value(param_name)
             vehicle_val_dict[param_name] = value
             vehicle_type_dict[param_name] = self.study.get_param_type(param_name)
-        # comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(self.log), promotes=['*'])
         comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(), promotes=['*'])
         comp.options["vehicle_val_dict"] = vehicle_val_dict
         comp.options["vehicle_type_dict"] = vehicle_type_dict
@@ -54,7 +84,6 @@ class Optimization:
                 input_names = set([step_name + '.' + input_name for input_name in self.plugins[step_name].plugin_input_names.keys()])
                 output_names = set([step_name + '.' + output_name for output_name in self.plugins[step_name].plugin_output_names.keys()])
                 comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(), promotes=['*'])
-                # comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(self.log), promotes=['*'])
                 comp.options["plugin"] = self.plugins[step_name]
                 comp.options["input_names"] = input_names
                 comp.options["output_names"] = output_names
@@ -83,7 +112,7 @@ class Optimization:
             # parse slices where applicable here:
             inds = None
             if '[' in  independent:
-                independent, inds = handle_brackets(independent)
+                independent, inds = split_dotted_path_and_indices(independent)
             problem.model.connect(independent.replace(".", "~"), dependent.replace(".", "~"), src_indices=inds)
 
         # add desvars
@@ -128,10 +157,10 @@ class Optimization:
 
         result=Result(state=self.state)
         #add template hashes to results before template files are run in optimization
-        #for plug_name,plug in self.plugins.items():
-        #    if plug._template_to_checksum:
-        #        for path, checksum in  plug._template_to_checksum.items():
-        #            result._add_template_checksum(path, checksum)
+        for plug_name,plug in self.study.solution.recurse_generated_plugins(self.plugins).items():
+            if plug._template_to_checksum:
+                for path, checksum in  plug._template_to_checksum.items():
+                    result._add_template_checksum(path, checksum)
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
         driver_name = self.state['optimizer']
@@ -157,7 +186,7 @@ class Optimization:
 
         for tracked_output in self.study.solution.tracked_outputs + list(self.state['des_vars'].keys()):
             if '[' in  tracked_output:
-                no_ind_tracked_output, inds = handle_brackets(tracked_output)
+                no_ind_tracked_output, inds = split_dotted_path_and_indices(tracked_output)
                 
                 result._add_result(tracked_output, problem.get_val(no_ind_tracked_output.replace(".", "~"))[inds])
             else:  
@@ -171,7 +200,7 @@ class Optimization:
                 #assumes outputs to openmdao are essentially always arrays for scalars
                 #strings might be treated differently
                 if not var_type is np.ndarray:
-                    if isinstance(value, np.ndarray) and check_if_scalar(var_type):
+                    if isinstance(value, np.ndarray) and is_scalar_type_or_value(var_type):
                         value=value[0]
                     else:
                         value=var_type(value)
@@ -181,27 +210,62 @@ class Optimization:
         return result
 
 class OpenmdaoPreComp(om.IndepVarComp):
+    """Represent the openmdaoprecomp component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='OpenmdaoPreComp')
     def initialize(self):
+        """Declare OpenMDAO options required before setup.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         self.log = get_log(log, object_name='OpenmdaoPreComp')
         self.log.debug('initialize')
         self.options.declare("vehicle_val_dict")
         self.options.declare("vehicle_type_dict")
 
     def setup(self):
+        """Define OpenMDAO variables, subsystems, and derivative declarations.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         self.log.debug('setup')
         vehicle_val_dict = self.options["vehicle_val_dict"]
         vehicle_type_dict = self.options["vehicle_type_dict"]
         for param_name, value in vehicle_val_dict.items():
             param_type = vehicle_type_dict[param_name]
-            if not check_continuous(param_type):
+            if not is_continuous_type_or_value(param_type):
                 self.add_discrete_output(param_name.replace(".", "~"), val=value)
             else:
                 self.add_output(param_name.replace(".", "~"), val=value)
 
 class UniversalOpenmdaoComp(om.ExplicitComponent):
+    """Represent the universalopenmdaocomp component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='UniversalOpenmdaoComp')
     def initialize(self):
+        """Declare OpenMDAO options required before setup.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         self.log = UniversalOpenmdaoComp.log
         self.log.debug('initialize')
         self.options.declare("plugin")
@@ -211,6 +275,13 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         self.options.declare("step_name")
 
     def setup(self):
+        """Define OpenMDAO variables, subsystems, and derivative declarations.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         self.log.debug('setup')
         self.plugin = self.options["plugin"]
         self.input_names = self.options["input_names"]
@@ -229,7 +300,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             name = '.'.join(input_name.split('.')[start_ind:])
             input_type = self.plugin.plugin_input_names[name]['type']
             input_shape = self.plugin.plugin_input_names[name]['shape']
-            if not check_continuous(input_type):
+            if not is_continuous_type_or_value(input_type):
                 if input_type is int:
                     temp = 1
                 else:
@@ -246,7 +317,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             output_type = self.plugin.plugin_output_names[name]['type']
             output_shape = self.plugin.plugin_output_names[name]['shape']
             
-            if not check_continuous(output_type):
+            if not is_continuous_type_or_value(output_type):
                 if output_type is int:
                     temp = 1
                 else:
@@ -271,6 +342,20 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
 
 
     def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
+        """Run the wrapped plugin using OpenMDAO-provided inputs.
+
+        Parameters
+        ----------
+        inputs : Any
+            Continuous OpenMDAO input vector.
+        outputs : Any
+            Continuous OpenMDAO output vector.
+        discrete_inputs : Any, optional
+            Discrete OpenMDAO input mapping.
+        discrete_outputs : Any, optional
+            Discrete OpenMDAO output mapping.
+
+        """
         self.log.debug('compute')
         self.plugin_dict = {}
         plugin_name=self.step_name.split('.')
@@ -280,7 +365,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             var_name='.'.join(var_name.split('.')[start_ind:])
             var_type=self.plugin.plugin_input_names[var_name]['type']
             if not self.plugin.plugin_input_names[var_name]['type'] is np.ndarray:
-                if isinstance(value,np.ndarray) and check_if_scalar(var_type):
+                if isinstance(value,np.ndarray) and is_scalar_type_or_value(var_type):
                     value=value[0]
                 else:
                     value = self.plugin.plugin_input_names[var_name]['type'](value)
@@ -293,13 +378,25 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         for name, value in results.items():
             name_with_plugin = self.step_name + "." + name
             if name_with_plugin in self.output_names:
-                if not check_continuous(self.plugin.plugin_output_names[name]['type']):
+                if not is_continuous_type_or_value(self.plugin.plugin_output_names[name]['type']):
                     discrete_outputs[name_with_plugin.replace(".", "~")] = value
                 else:
                     outputs[name_with_plugin.replace(".", "~")] = value
 
 
     def compute_partials(self, inputs, partials, discrete_inputs={}):
+        """Populate OpenMDAO partial-derivative entries from plugin results.
+
+        Parameters
+        ----------
+        inputs : Any
+            Continuous OpenMDAO input vector.
+        partials : Any
+            OpenMDAO partial-derivative accumulator.
+        discrete_inputs : Any, optional
+            Discrete OpenMDAO input mapping.
+
+        """
         self.log.debug('compute partials')
         if not self.plugin._declare_partials:
             return
@@ -319,7 +416,21 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 
 
 class UniversalOpenMDAOGroup(om.Group):
+    """Represent the universalopenmdaogroup component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def initialize(self):
+        """Declare OpenMDAO options required before setup.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         self.options.declare("group")
         self.options.declare("step_name")
         self.options.declare("sub_plugins")
@@ -328,6 +439,13 @@ class UniversalOpenMDAOGroup(om.Group):
 
     def setup(self):
         
+        """Define OpenMDAO variables, subsystems, and derivative declarations.
+
+        Notes
+        -----
+        This method performs class-internal setup or validation logic.
+
+        """
         group_name=self.options['step_name']
         group=self.options['group']
         sub_plugs=self.options['sub_plugins']
@@ -362,7 +480,7 @@ class UniversalOpenMDAOGroup(om.Group):
             # parse slices where applicable here:
             inds = None
             if '[' in  independent:
-                independent, inds = handle_brackets(independent)
+                independent, inds = split_dotted_path_and_indices(independent)
             independent=group_name+'.'+independent
             dependent=group_name+'.'+dependent
             self.connect(independent.replace(".", "~"), dependent.replace(".", "~"), src_indices=inds)

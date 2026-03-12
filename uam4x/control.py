@@ -4,7 +4,7 @@ import copy
 from uam4x.log import get_log
 from uam4x.utils import log
 import numpy as np
-from uam4x.utils import check_continuous, is_numpy_array, value_to_type_name,replace_empty_quotes_with_none
+from uam4x.utils import is_continuous_type_or_value, is_numpy_array, value_to_type_name,replace_empty_quotes_with_none
 from uam4x.UQ import UQAnalysis
 from uam4x.local_sensitivity import LocalSensitivity
 
@@ -12,7 +12,21 @@ DEFAULT_TRADE_NAME = "Default State"
 
 
 class Optimization:
+    """Represent the optimization component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     def __init__(self) -> None:
+        """Initialize object state and default configuration.
+
+        Notes
+        -----
+        This method performs internal setup or validation logic.
+
+        """
         self.des_vars = {}
         self.constraints = {}
         self.objective_name = ''
@@ -24,6 +38,14 @@ class Optimization:
 
 
     def _to_dict(self):
+        """Execute to dict.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         save_dict = {
             'type': self.__class__.__name__,
             'des_vars': self.des_vars,
@@ -36,25 +58,68 @@ class Optimization:
         return save_dict
 
     def set_optimizer(self,name):
+        """Set optimizer.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+
+        """
         self.optimizer=name
 
     def add_driver_option(self,name,value):
-        '''
-        Sets problem.driver.options settings in openmdao
-        '''
+        """Add driver option.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        value : Any
+            Input value for `value`.
+
+        """
         self._mdao_driver_options[name]=value
 
     def add_optimizer_option(self,name,value):
-        '''
-        Sets problem.driver.opt_settings in openmdao problem
-        '''
+        """Add optimizer option.
+
+        Parameters
+        ----------
+        name : Any
+            Identifier used by this operation.
+        value : Any
+            Input value for `value`.
+
+        """
         self._optimizer_options[name]=value
 
     def get_desvar_names(self):
+        """Return desvar names.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         return list(self.des_vars.keys())
 
     @classmethod
     def _from_dict(cls, data: dict) -> 'Optimization':
+        """Execute from dict.
+
+        Parameters
+        ----------
+        data : dict
+            Input value for `data`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         obj = cls()
         # if upper/lower for DV or constraints are lists, must be
         #desired to be arrays, so convert.
@@ -86,6 +151,20 @@ class Optimization:
     def add_design_var(self, name: str, lower: np.ndarray|float|np.floating|None=None,
                        upper:np.ndarray|float|np.floating|None=None, indices: list|None=None):
 
+        """Add design var.
+
+        Parameters
+        ----------
+        name : str
+            Identifier used by this operation.
+        lower : np.ndarray | float | np.floating | None, optional
+            Input value for `lower`.
+        upper : np.ndarray | float | np.floating | None, optional
+            Input value for `upper`.
+        indices : list | None, optional
+            Input value for `indices`.
+
+        """
         self.check_upper_lower(name, 'design variable', lower=lower, upper=upper, indices=indices)
         self.des_vars[name] = {
             'lower': lower,
@@ -96,6 +175,20 @@ class Optimization:
     def add_constraint(self, name: str, lower: np.ndarray|float|np.floating|None=None,
                        upper: np.ndarray|float|np.floating|None=None, indices=None):
 
+        """Add constraint.
+
+        Parameters
+        ----------
+        name : str
+            Identifier used by this operation.
+        lower : np.ndarray | float | np.floating | None, optional
+            Input value for `lower`.
+        upper : np.ndarray | float | np.floating | None, optional
+            Input value for `upper`.
+        indices : Any, optional
+            Input value for `indices`.
+
+        """
         self.check_upper_lower(name, const_or_dv='constraint', lower=lower, upper=upper, indices=indices)
         self.constraints[name] = {
             'lower': lower,
@@ -109,16 +202,32 @@ class Optimization:
 
         # At least one bound must be declared on a constraint
 
+        """Validate upper lower.
+
+        Parameters
+        ----------
+        name : str
+            Identifier used by this operation.
+        const_or_dv : Any
+            Input value for `const_or_dv`.
+        lower : np.ndarray | float | np.floating | None, optional
+            Input value for `lower`.
+        upper : np.ndarray | float | np.floating | None, optional
+            Input value for `upper`.
+        indices : list | np.ndarray | None, optional
+            Input value for `indices`.
+
+        """
         if lower is  None and  upper is  None and  const_or_dv == 'constraint':
             raise ValueError(f'At least one constraint must be declared. The constraint {name}\n'
                              f'does not have at least a lower or upper bound declared.')
 
         # Check continuity within our paradigm (here user would not be able to declare constraints as lists, ints etc.)
         #without, relies on MDAO to consolidate mismatch e.g declared as array but some weird list is provided.
-        if lower is not None and  not check_continuous(lower):
+        if lower is not None and  not is_continuous_type_or_value(lower):
             raise TypeError(f'The lower bound for {name} is not continuos.\n'
                             f'Only floats and floating point arrays are accepted.')
-        if upper is not None and  not check_continuous(upper):
+        if upper is not None and  not is_continuous_type_or_value(upper):
             raise TypeError(f'The upper bound for {name} is not continuos.\n'
                             f'Only floats and floating point arrays are accepted.')
 
@@ -141,11 +250,36 @@ class Optimization:
                                      f'The following {const_or_dv} {name} has lower={lower} and upper={upper}.')
 
     def add_objective(self, name: str):
+        """Add objective.
+
+        Parameters
+        ----------
+        name : str
+            Identifier used by this operation.
+
+        """
         self.objective_name = name
 
 class ParameterSweep:
+    """Represent the parametersweep component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='parameter sweep')
     def __init__(self, param_name_to_value_list: Dict[str, Any], child:Union['ParameterSweep', Optimization]=None) -> None:
+        """Initialize object state and default configuration.
+
+        Parameters
+        ----------
+        param_name_to_value_list : Dict[str, Any]
+            Input value for `param_name_to_value_list`.
+        child : Union['ParameterSweep', Optimization], optional
+            Input value for `child`.
+
+        """
         self.child = child
         self.length: int = None
         self.param_name_to_value_list = param_name_to_value_list
@@ -162,6 +296,14 @@ class ParameterSweep:
                 raise ValueError(f"All parameter value lists must have the same length, but '{name}' has length {len(value_list)} while others have length {self.length}")
 
     def set_child(self, child: Union['ParameterSweep', Optimization]) -> None:
+        """Set child.
+
+        Parameters
+        ----------
+        child : Union['ParameterSweep', Optimization]
+            Input value for `child`.
+
+        """
         self.log.debug('set child')
         if not isinstance(child, (Optimization, ParameterSweep)):
             self.log.error("Child must be ParameterSweep or Optimization")
@@ -169,6 +311,14 @@ class ParameterSweep:
         self.child = child
 
     def get_optim_child(self):
+        """Return optim child.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         child=self.child
         if child is None:
             return None
@@ -180,6 +330,14 @@ class ParameterSweep:
 
     def get_desvar_names(self):
         #assumes optimization cannot have child
+        """Return desvar names.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         child=self.child
         if self.child is None:
                 return []
@@ -188,6 +346,14 @@ class ParameterSweep:
 
     def get_all_param_names(self):
         #assumes optimization cannot have child
+        """Return all param names.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         child=self.child
         params=set(self.param_name_to_value_list.keys())
         if isinstance(self.child,ParameterSweep):
@@ -196,6 +362,14 @@ class ParameterSweep:
             return params
 
     def get_states(self) -> List[Dict[str, Any]]:
+        """Return states.
+
+        Returns
+        -------
+        Any
+            Requested value.
+
+        """
         states = []
         self.log.debug('get states')
         for i in range(self.length):
@@ -222,6 +396,14 @@ class ParameterSweep:
                 states.append(state)
         return states
     def _to_dict(self):
+        """Execute to dict.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         self.log.debug('write to dict')
         return {
             "type": "ParameterSweep",
@@ -230,6 +412,19 @@ class ParameterSweep:
         }
     @classmethod
     def _from_dict(cls, data):
+        """Execute from dict.
+
+        Parameters
+        ----------
+        data : Any
+            Input value for `data`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         cls.log.debug('parameter sweep from dict')
         child_dict = data["child"]
         if not child_dict:
@@ -241,8 +436,29 @@ class ParameterSweep:
         return ParameterSweep(data["param_name_to_value_list"], child=child)
 
 class Control:
+    """Represent the control component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
     log = get_log(log, object_name='control')
     def __init__(self, title: str = "Default Title", author: str = "Default Author", description: str = "Default Description", repo_root: str = None) -> None:
+        """Initialize object state and default configuration.
+
+        Parameters
+        ----------
+        title : str, optional
+            Input value for `title`.
+        author : str, optional
+            Input value for `author`.
+        description : str, optional
+            Input value for `description`.
+        repo_root : str, optional
+            Input value for `repo_root`.
+
+        """
         self.title = title
         self.author = author
         self.description = description
@@ -253,17 +469,44 @@ class Control:
 
 
     def _set_variant_name(self, variant_name: str) -> None:
+        """Set variant name.
+
+        Parameters
+        ----------
+        variant_name : str
+            Identifier used by this operation.
+
+        """
         self.variant_name = variant_name
 
     def add_metadata(self, title: str = "Default Title", author: str = "Default Author", description: str = "Default Description") -> None:
-        '''
-        Allows user to set the metadata via the Study API
-        '''
+        """Add metadata.
+
+        Parameters
+        ----------
+        title : str, optional
+            Input value for `title`.
+        author : str, optional
+            Input value for `author`.
+        description : str, optional
+            Input value for `description`.
+
+        """
         self.title = title
         self.author = author
         self.description = description
 
     def add_tradestudy(self, trade_name:str, trade:Union[ParameterSweep, Optimization,UQAnalysis]) -> None:
+        """Add tradestudy.
+
+        Parameters
+        ----------
+        trade_name : str
+            Identifier used by this operation.
+        trade : Union[ParameterSweep, Optimization, UQAnalysis]
+            Input value for `trade`.
+
+        """
         if trade_name == DEFAULT_TRADE_NAME:
             self.log.error('Trade study name cannot be "Default State", as this is reserved.')
             raise ValueError('Trade study name cannot be "Default State", as this is reserved.')
@@ -271,6 +514,14 @@ class Control:
         self.trade_studies[trade_name] = trade
 
     def _to_dict(self) -> dict:
+        """Execute to dict.
+
+        Returns
+        -------
+        Any
+            JSON-serializable representation.
+
+        """
         self.log.debug('write to dict')
         return {
             "title": self.title,
@@ -282,6 +533,19 @@ class Control:
         }
     @classmethod
     def _from_dict(cls, data: dict) -> 'Control':
+        """Execute from dict.
+
+        Parameters
+        ----------
+        data : dict
+            Input value for `data`.
+
+        Returns
+        -------
+        Any
+            Reconstructed object instance.
+
+        """
         cls.log.debug('control from dict')
         control = cls(
             title=data["title"],

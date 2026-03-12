@@ -3,101 +3,130 @@ API Reference
 
 This section contains the complete API reference for UAM4X.
 
-Core Modules
-------------
+Package Interface
+-----------------
 
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   uam4x
-   uam4x.study
-   uam4x.vehicle
-   uam4x.subsystems
-   uam4x.solution
-   uam4x.utils
-   uam4x.units
-   uam4x.execution_engine
-   uam4x.node
-   uam4x.execution_engine
-
-Subsystem System
-----------------
-
-The subsystem system provides modular aircraft subsystems:
-
-.. automodule:: uam4x.subsystems
+.. automodule:: uam4x
    :members:
    :undoc-members:
    :show-inheritance:
 
-Study Management
-----------------
+Module: ``uam4x.UQ``
+--------------------
 
-Study management handles aircraft studies and variants:
-
-.. automodule:: uam4x.study
+.. automodule:: uam4x.UQ
    :members:
    :undoc-members:
    :show-inheritance:
 
+Module: ``uam4x.control``
+-------------------------
 
-Plugin System
--------------
-
-The plugin system provides extensibility:
-
-.. automodule:: uam4x.solution
+.. automodule:: uam4x.control
    :members:
    :undoc-members:
    :show-inheritance:
 
-Utilities
----------
+Module: ``uam4x.custom_errors``
+-------------------------------
 
-Utility functions and classes:
-
-.. automodule:: uam4x.utils
+.. automodule:: uam4x.custom_errors
    :members:
    :undoc-members:
    :show-inheritance:
 
-Units System
-------------
-
-Units and dimensional analysis:
-
-.. automodule:: uam4x.units
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Execution Engine
-----------------
-
-The execution engine manages study execution and optimization:
+Module: ``uam4x.execution_engine``
+----------------------------------
 
 .. automodule:: uam4x.execution_engine
    :members:
    :undoc-members:
    :show-inheritance:
 
-Node Registry
--------------
+Module: ``uam4x.local_sensitivity``
+-----------------------------------
 
-The node registry system manages workflow nodes:
+.. automodule:: uam4x.local_sensitivity
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.log``
+---------------------
+
+.. automodule:: uam4x.log
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.node``
+----------------------
 
 .. automodule:: uam4x.node
    :members:
    :undoc-members:
    :show-inheritance:
 
-Execution Engine
-----------------
+Module: ``uam4x.openmdao_optimization``
+---------------------------------------
 
-The execution engine manages study execution and optimization:
+.. automodule:: uam4x.openmdao_optimization
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-.. automodule:: uam4x.execution_engine
+Module: ``uam4x.results``
+-------------------------
+
+.. automodule:: uam4x.results
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.solution``
+--------------------------
+
+.. automodule:: uam4x.solution
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.study``
+-----------------------
+
+.. automodule:: uam4x.study
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.subsystems``
+----------------------------
+
+.. automodule:: uam4x.subsystems
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.units``
+-----------------------
+
+.. automodule:: uam4x.units
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.utils``
+-----------------------
+
+.. automodule:: uam4x.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.vehicle``
+-------------------------
+
+.. automodule:: uam4x.vehicle
    :members:
    :undoc-members:
    :show-inheritance:

@@ -25,12 +25,41 @@ TYPE_MAP = {
 }
 
 def is_main_process():
+    """Check whether main process.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     return mp.current_process().name == 'MainProcess'
 
 def registry_writes_enabled():
+    """Execute registry writes enabled.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     return os.getenv('UAM4X_DISABLE_REGISTRY_WRITES') != '1'
 
 def check_and_get_config(conf_path):
+    """Validate and get config.
+
+    Parameters
+    ----------
+    conf_path : Any
+        Path used by this operation.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     if not os.path.exists(conf_path):
         if is_main_process() and registry_writes_enabled():
             log.info(f'No config found at {conf_path}. Creating new empty config file.')
@@ -63,8 +92,21 @@ def check_and_get_config(conf_path):
     return _config
 
 
-def check_continuous(val_or_type):
+def is_continuous_type_or_value(val_or_type):
     #Handle values (e.g 1, 2.0, np.array([0.0,0.0,...]),np.array([0,0,...]))
+    """Validate continuous type or value.
+
+    Parameters
+    ----------
+    val_or_type : Any
+        Input value for `val_or_type`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     if is_float(val_or_type):
         return True
     elif is_numpy_array(val_or_type):
@@ -75,12 +117,24 @@ def check_continuous(val_or_type):
 
     return False
 
-def check_if_scalar(val_or_type):
-    '''
-    Checks if a provided value or type is a scalar
-    to be used primarily for checking upper and
-    lower bounds for constraints and des vars
-    '''
+def check_continuous(val_or_type):
+    """Backward-compatible alias for `is_continuous_type_or_value`."""
+    return is_continuous_type_or_value(val_or_type)
+
+def is_scalar_type_or_value(val_or_type):
+    """Validate if scalar type or value.
+
+    Parameters
+    ----------
+    val_or_type : Any
+        Input value for `val_or_type`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     if isinstance(val_or_type, (Real)) and not is_bool(val_or_type):
         return True
     if isinstance(val_or_type, type) and (issubclass(val_or_type, (Real, np.integer, np.floating)) and val_or_type not in (np.bool_,bool)):
@@ -88,56 +142,40 @@ def check_if_scalar(val_or_type):
 
     return False
 
+def check_if_scalar(val_or_type):
+    """Backward-compatible alias for `is_scalar_type_or_value`."""
+    return is_scalar_type_or_value(val_or_type)
+
 def type_string_to_type(type_name:str):
+    """Execute type string to type.
+
+    Parameters
+    ----------
+    type_name : str
+        Identifier used by this operation.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     return TYPE_MAP[type_name.lower()]
 
-
-#def get_param_type(dotted_path: str, study, plugins= None):
-#    '''
-#    Get a the type of a given parameter
-#    assumes general form vehicles. ... .attribute
-#    '''
-#    if '[' in  dotted_path:
-#        dotted_path, _ = handle_brackets(dotted_path)
-#    parts = dotted_path.split('.')
-#    obj = study
-#    if parts[0] == 'vehicles':
-#        for part in parts:
-#            # Try dict access first (for vehicles, parameters, etc.)
-#            if isinstance(obj, dict) and part in obj:
-#                obj = obj[part]
-#            # Try attribute access
-#            elif hasattr(obj, part):
-#                if hasattr(obj,'_modes'):
-#                    modes = list(obj._modes.keys())
-#                else:
-#                    modes = []
-#                if hasattr(obj, 'get_parameter_type') :
-#                        if part not in modes:
-#                            return obj.get_parameter_type(part)
-#                else:
-#                    obj = getattr(obj, part)
-#            else:
-#                raise AttributeError(f"Cannot access '{part}' in path '{dotted_path}'")
-#    elif plugins:
-#        plugin_name = dotted_path.split('.')[0]
-#        part = '.'.join(dotted_path.split('.')[1:])
-#        plugin = plugins[plugin_name]
-#        if part in  plugin.plugin_input_names:
-#            obj = plugin.plugin_input_names[part]['type']
-#        elif part in  plugin.plugin_output_names:
-#            obj = plugin.plugin_output_names[part]['type']
-#        else:
-#            raise KeyError(f'Provided path is not an input/output to the plugin {plugin_name}')
-#
-#    return obj
-
-
 def convert_numpy_to_python(value):
-    '''
-    Converts numpy type instances (np.ndarray,np.floating,np.int)
-    to python types for Json serialization
-    '''
+    """Convert numpy to python.
+
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     if isinstance(value, (np.integer, np.floating, np.bool_)):
         return value.item()
     if isinstance(value, np.ndarray):
@@ -152,6 +190,19 @@ def convert_numpy_to_python(value):
 
 def check_numpy_shape(shape):
     #Integer shapes are allowed
+    """Validate numpy shape.
+
+    Parameters
+    ----------
+    shape : Any
+        Input value for `shape`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     if is_bool(shape):
         return False
     elif is_integer(shape):
@@ -170,16 +221,19 @@ def check_numpy_shape(shape):
     return False
 
 def normalize_shape(shape):
-    '''
-    Given a shape intended for a numpy array
-    if the provided shape is a tuple, then
-    the returns original value, if it is an int
-    then it returns the canonical (N,) form shown
-    by numpy when shape is requested
+    """Normalize shape.
 
-    NOTE: ASSUMES check_numpy_shape has been run on the shape
-    already.
-    '''
+    Parameters
+    ----------
+    shape : Any
+        Input value for `shape`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     if is_tuple(shape):
         return shape
 
@@ -187,24 +241,101 @@ def normalize_shape(shape):
 # Nicer type checkers
 
 def is_bool(value):
+    """Check whether a value is boolean-like.
+
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     return isinstance(value, (bool, np.bool_))
 
 def is_integer(value):
+    """Check whether a value is an integer.
 
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
 
 def is_float(value):
+    """Check whether a value is a floating-point number.
+
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     return isinstance(value, (float, np.floating))
 
 def is_tuple(value):
+    """Check whether a value is a tuple.
+
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     return isinstance(value, tuple)
 
 def is_numpy_array(value):
+    """Check whether a value is a NumPy array.
+
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     return isinstance(value, np.ndarray)
 
 #Get type name from a value
 def value_to_type_name(value):
 
+    """Execute value to type name.
+
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     value_type = type(value)
     if hasattr(value_type, '__name__'):
         return value_type.__name__
@@ -215,9 +346,19 @@ def value_to_type_name(value):
 
 
 def canonicalize_state(x):
-    '''
-    Given a state dictionary, sorts for hashing
-    '''
+    """Execute canonicalize state.
+
+    Parameters
+    ----------
+    x : Any
+        Input value for `x`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     if isinstance(x, dict):
         return {k: canonicalize_state(x[k]) for k in sorted(x.keys())}
 
@@ -236,9 +377,19 @@ def canonicalize_state(x):
     return x
 
 def hash_state(state):
-    '''
-    hashes an input state
-    '''
+    """Execute hash state.
+
+    Parameters
+    ----------
+    state : Any
+        Input value for `state`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     canon = canonicalize_state(state)
 
     data = json.dumps(
@@ -253,9 +404,19 @@ def hash_state(state):
 
 
 def is_valid_square_brackets(string):
-    '''
-    Checks if the string has the proper square brackets
-    '''
+    """Check whether valid square brackets.
+
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     stack = []
     for letter in  string:
         if letter == "[":
@@ -270,17 +431,19 @@ def is_valid_square_brackets(string):
         raise ValueError(f'Brackets are inalid in indexing string: {string}')
 
 def is_valid_index(string: str):
-    '''
-    Checks list for valid characters and order run after is_valid_square_brackets.
+    """Check whether valid index.
 
-    Note, the string should be the index, not the full variable name.
+    Parameters
+    ----------
+    string : str
+        Input value for `string`.
 
-    examples of valid indexing:
-    simple: inds=[2,5,7,11,3], inds=[-2,5,-1,3]
-    slicing: inds=[::-1], inds=[4:3:2]
-    listed SUBSYSTEMS: inds=[[1,2],[6,7]]
-    any combination: inds=[[6,7],3:4:2,4]
-    '''
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
 
     valid_characters = [',', '-', ':', '[', ']']
     # At most two consectutive colons
@@ -317,11 +480,19 @@ def is_valid_index(string: str):
 
 
 def is_simple(string):
-    '''
-    Run after is_valid_square_brackets to characterize
-    the slice type. Check if a declared index is simple (aka just a list
-    no slices or fancy indexing)
-    '''
+    """Check whether simple.
+
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     for letter in  string:
         if letter == '[':
             return False
@@ -330,19 +501,37 @@ def is_simple(string):
     return True
 
 def is_slice(string):
-    '''
-    Ran only when index is grouped,
-    so run on: 2:3:4 or [1,2,3] or 1
-    '''
+    """Check whether slice.
+
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     if ':' in  string:
         return True
     return False
 
 def is_fancy(string):
-    '''
-    Ran only when index is grouped,
-    so run on: 2:3:4 or [1,2,3] or 1
-    '''
+    """Check whether fancy.
+
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Boolean status for the requested check.
+
+    """
     if '[' in  string and ']' in string:
         if ':' in  string:
             raise ValueError(f'Slicing not allowed in fancy indexing')
@@ -352,9 +541,19 @@ def is_fancy(string):
 
 
 def parse_simple(string):
-    '''
+    """Parse simple.
 
-    '''
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     indices = re.findall(r'[-]?\d+', string)
     indices = [int(num) for  num in  indices]
     if len(indices) == 1:
@@ -364,11 +563,37 @@ def parse_simple(string):
 
 def parse_fancy(string):
 
+    """Parse fancy.
+
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     indices = re.findall(r'[-]?\d+', string)
     return [int(num) for  num in  indices]
 
 def parse_slice(string):
 
+    """Parse slice.
+
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     if string.count(':') > 2:
         raise ValueError(f'At most 2 colons for slicing within category {string} in violation')
 
@@ -378,6 +603,19 @@ def parse_slice(string):
         s.append('')
 
     def empty_to_none(ex_string):
+        """Execute empty to none.
+
+        Parameters
+        ----------
+        ex_string : Any
+            Input value for `ex_string`.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
         if ex_string == '':
             return None
         return int(ex_string)
@@ -391,10 +629,19 @@ def parse_slice(string):
 
 
 def parse_complicated(string):
-    '''
-    parse complex indexing string
-    form is assumed as [...]
-    '''
+    """Parse complicated.
+
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     comma_inds = []
     depth = 0
     for i, letter in  enumerate(string[1:-1]):
@@ -432,15 +679,19 @@ def parse_complicated(string):
 
 
 def parse_index(string):
-    '''
-    Parse the slices out of a string.
-    Acceptable forms:
-    1.) N-dimensional simple index call out e.g [1,4,6]
-    2.) N-dimensional advanced call out e.g [[1,5,3],[1,2],[8]]
-    3.) N-dimensional slicing e.g [1:,2:-1,3].
+    """Parse index.
 
-    Assumes the string passed in is the list of indexes in string form
-    '''
+    Parameters
+    ----------
+    string : Any
+        Input value for `string`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     is_valid_square_brackets(string)
     is_valid_index(string)
     #Try first form:
@@ -450,17 +701,44 @@ def parse_index(string):
         return parse_complicated(string)
 
 
-def handle_brackets(dotted_path):
+def split_dotted_path_and_indices(dotted_path):
+    """Split a dotted path and trailing index expression.
+
+    Parameters
+    ----------
+    dotted_path : Any
+        Input value for `dotted_path`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     bracket_ind = dotted_path.find('[')
     inds = parse_index(dotted_path[bracket_ind:])
     dotted_path = dotted_path[:bracket_ind]
 
     return dotted_path, inds
 
+def handle_brackets(dotted_path):
+    """Backward-compatible alias for `split_dotted_path_and_indices`."""
+    return split_dotted_path_and_indices(dotted_path)
+
 def replace_none_with_empty_quotes(value):
-    '''
-    Converts None types quotes '' for Json serialization
-    '''
+    """Execute replace none with empty quotes.
+
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     if value is None:
         return ""
     if isinstance(value, np.ndarray):
@@ -473,9 +751,19 @@ def replace_none_with_empty_quotes(value):
     return value
 
 def replace_empty_quotes_with_none(value):
-    '''
-    Converts None types quotes '' for Json serialization
-    '''
+    """Execute replace empty quotes with none.
+
+    Parameters
+    ----------
+    value : Any
+        Input value for `value`.
+
+    Returns
+    -------
+    Any
+        Return value produced by this operation.
+
+    """
     if isinstance(value,str) and value =='':
         return None
     if isinstance(value, np.ndarray):
