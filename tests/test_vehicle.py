@@ -307,7 +307,7 @@ def test_vehicle_component_attribute_identity(
     demo_vehicle.add_component(demo_aircraft)
 
     # -------------------------
-    # Identity: access via name returns the same component objects
+    # Identity: access via name returns the same subsystem objects
     # -------------------------
     assert demo_vehicle.wing_demo is demo_wing
     assert demo_vehicle.rotor_demo is demo_rotor
@@ -430,7 +430,7 @@ def test_vehicle_component_access(demo_vehicle,demo_wing):
     assert demo_vehicle.get_component('wing_demo').span is demo_wing.span
     assert demo_vehicle.get_component('wing_demo') is demo_vehicle.wing_demo
 
-# Ensure test_get_subsystem_names is correct
+# Ensure test_get_component_names is correct
 def test_get_component_names(demo_vehicle,demo_wing,demo_aircraft):
 
 

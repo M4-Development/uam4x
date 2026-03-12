@@ -25,11 +25,11 @@ def test_check_and_get_config_good():
 
     sample_dict = {
     "SUBSYSTEMS": {
-        "Wing": "e:\\nasa_uam\\uam4x\\uam4x\\components.py",
-        "Rotor": "e:\\nasa_uam\\uam4x\\uam4x\\components.py",
-        "Aircraft": "e:\\nasa_uam\\uam4x\\uam4x\\components.py",
+        "Wing": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
+        "Rotor": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
+        "Aircraft": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
         "WeightingFactor": "E:\\NASA_UAM\\uam4x_examples\\multi_objective\\custom.py",
-        "RotorBladeRegion": "e:\\nasa_uam\\uam4x\\uam4x\\components.py",
+        "RotorBladeRegion": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
         "NdarcTechFactors": "E:\\NASA_UAM\\uam4x_examples\\tilt_rotor\\custom.py",
         "LineSegment": "E:\\NASA_UAM\\uam4x_examples\\time_tracking\\n_segments\\increasing_input_des_vars\\n_segments_exact\\custom.py",
         "MultiConstraintInp": "E:\\NASA_UAM\\uam4x_examples\\time_tracking\\multi_constraint\\constant_output_variable_constraint\\custom.py",
@@ -677,7 +677,7 @@ def test_get_param_type():
             return results
 
     @register_subsystem
-    class BridgeComponent(Subsystem):
+    class BridgeSubsystem(Subsystem):
         def setup(self):
             self.add_parameter("Ace",   default_value=4.0, dtype=float)
             self.add_parameter("King",  default_value=3.0, dtype=float)
@@ -716,7 +716,7 @@ def test_get_param_type():
     mtr.add_component(aircraft)
 
     # -------- Vehicle 2: Bridge --------
-    BC = BridgeComponent("bridge_face_cards")
+    BC = BridgeSubsystem("bridge_face_cards")
     V2 = Vehicle("Bridge")
     V2.add_component(BC)
 

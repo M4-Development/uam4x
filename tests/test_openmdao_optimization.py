@@ -15,7 +15,7 @@ from uam4x.solution import Plugin, register_plugin
 
 
 @register_subsystem
-class OMOComponent(Subsystem):
+class OMOSubsystem(Subsystem):
     def setup(self):
         self.add_parameter("x", default_value=2.0, dtype=float)
 
@@ -91,7 +91,7 @@ class _FakeProblem:
 def _build_study_and_state(tmp_path, tracked_outputs):
     study = Study()
     vehicle = Vehicle("v")
-    vehicle.add_component(OMOComponent("core"))
+    vehicle.add_component(OMOSubsystem("core"))
     study.add_vehicle(vehicle)
 
     study.solution.add_step(OMOPlugin, "analysis")

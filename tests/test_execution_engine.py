@@ -17,7 +17,7 @@ from uam4x.control import ParameterSweep
 
 
 @register_subsystem
-class ExecComponent(Subsystem):
+class ExecSubsystem(Subsystem):
     def setup(self):
         self.add_parameter("x", default_value=2.0, dtype=float)
         self.add_parameter(
@@ -92,7 +92,7 @@ def engine_setup(tmp_path):
     study = Study()
 
     vehicle = Vehicle("exec_vehicle")
-    vehicle.add_component(ExecComponent("core"))
+    vehicle.add_component(ExecSubsystem("core"))
     study.add_vehicle(vehicle)
 
     study.solution.add_step(Stage1Plugin, "stage1")
@@ -297,7 +297,7 @@ def test_run_single_point_returns_tracked_output(engine_setup, tmp_path):
 def test_run_state_parallel_rebuilds_study_and_runs(tmp_path):
     study = Study()
     vehicle = Vehicle("exec_vehicle")
-    vehicle.add_component(ExecComponent("core"))
+    vehicle.add_component(ExecSubsystem("core"))
     study.add_vehicle(vehicle)
 
     study.solution.add_step(Stage1Plugin, "stage1")

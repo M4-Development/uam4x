@@ -331,8 +331,8 @@ def test_Mode_parameters_property_bad(name, value, error):
     with  pytest.raises(error):
         vt_mode_params = R.vertical_rotor.parameters
 
-#-----------------------------------Component checks
-def test_Component_instantiation():
+#-----------------------------------Subsystem checks
+def test_Subsystem_instantiation():
 
     C = Subsystem('sample_component')
     assert  C._parameters == {}
@@ -340,21 +340,21 @@ def test_Component_instantiation():
     assert C._is_setup == False
     assert C._parent is  None
 
-def test_Component_add_param():
+def test_Subsystem_add_param():
 
-    class CustomComponent(Subsystem):
+    class CustomSubsystem(Subsystem):
         def setup(self):
             self.add_parameter('king',3.0, float)
             self.add_parameter('ace', 4.0, float)
 
-    C = CustomComponent('bridge')
+    C = CustomSubsystem('bridge')
     assert C.king == 3.0
 
     C.ace = 5.0
 
     assert C.ace == 5.0
 
-def test_Component_set_parameter():
+def test_Subsystem_set_parameter():
 
     W = Wing('sample_wing')
 
@@ -367,7 +367,7 @@ def test_Component_set_parameter():
     assert W._parameters['chord'].unit_type is UnitType.LENGTH
 
 
-def test_Component_add_mode():
+def test_Subsystem_add_mode():
     R = Rotor('sample_rotor')
 
     R.add_mode('vertical')
@@ -447,8 +447,8 @@ def test_RotorBladeRegion_get_parameter_after_set():
     assert RBR._parameters["airfoil_start"].value == "NACA2412"
 
 
-def test_Component_get_parameter_type():
-    class CustomComponent(Subsystem):
+def test_Subsystem_get_parameter_type():
+    class CustomSubsystem(Subsystem):
         def setup(self):
             self.add_parameter('sample_array', np.arange(1, 10), np.ndarray)
 
@@ -459,7 +459,7 @@ def test_Component_get_parameter_type():
     R = Rotor('sample_rotor')
     assert R.get_parameter_type('nblade') is int
 
-    CC = CustomComponent('sample_custom')
+    CC = CustomSubsystem('sample_custom')
     assert CC.get_parameter_type('sample_array') is np.ndarray
 
 def test_check_all_parameter_types_good():
@@ -487,7 +487,7 @@ def test_check_all_parameter_types_good():
     assert mode_result['sweep'] is True
 
 
-def test_Component_str_with_mode():
+def test_Subsystem_str_with_mode():
     rbr = RotorBladeRegion("sample_rotor_blade_region")
 
     # Add a mode and set some overrides to make sure values show up
@@ -498,15 +498,15 @@ def test_Component_str_with_mode():
     s = str(rbr)
     lines = s.splitlines()
 
-    # First line: component header
+    # First line: subsystem header
     assert lines[0] == "RotorBladeRegion('sample_rotor_blade_region')"
 
     # All parameters (base values) should appear in the string as "name: value"
     for pname, param in rbr._parameters.items():
         expected_fragment = f"{pname}: {param.value}"
-        assert expected_fragment in s, f"Missing '{expected_fragment}' in Component.__str__ output"
+        assert expected_fragment in s, f"Missing '{expected_fragment}' in Subsystem.__str__ output"
 
-def test_Component_to_dict_with_mode():
+def test_Subsystem_to_dict_with_mode():
     rbr = RotorBladeRegion("sample_rotor_blade_region")
 
     # Set some non-default values
@@ -555,7 +555,7 @@ def test_Component_to_dict_with_mode():
     # And no unexpected overrides
     assert set(cruise_mode_data["overrides"].keys()) == {"chord_start", "dihedral"}
 
-def test_Component_from_dict():
+def test_Subsystem_from_dict():
     # Hand-crafted dict mimicking JSON for a Wing with a mode + overrides
     data = {
         "name": "test_wing",
@@ -647,31 +647,31 @@ def test_Wing_get_param_dict():
     assert param_dict["span"] == W.span == W._parameters["span"].value
     assert param_dict["chord"] == W.chord == W._parameters["chord"].value
 #--------------Negative checks
-def test_Component_bad_name():
+def test_Subsystem_bad_name():
     with pytest.raises(ValueError):
         C = Subsystem('rand[om')
 
-def test_Component_bad_add_parameter():
-    class CustomComponent(Subsystem):
+def test_Subsystem_bad_add_parameter():
+    class CustomSubsystem(Subsystem):
         def setup(self):
             self.add_parameter('ki[ng',3.0, float)
             self.add_parameter('ace', 4.0, float)
 
     with pytest.raises(ValueError):
-        C = CustomComponent('bridge')
+        C = CustomSubsystem('bridge')
 
 
-def test_Component_bad_add_parameter_outside_setup():
-    class CustomComponent(Subsystem):
+def test_Subsystem_bad_add_parameter_outside_setup():
+    class CustomSubsystem(Subsystem):
         def setup(self):
             self.add_parameter('king',3.0, float)
             self.add_parameter('ace', 4.0, float)
 
-    C = CustomComponent('sample_component')
+    C = CustomSubsystem('sample_component')
     with pytest.raises(RuntimeError):
         C.add_parameter('jack', 1.0, float)
 
-def test_Component_set_parameter_bad_unit():
+def test_Subsystem_set_parameter_bad_unit():
 
     W = Wing('sample_wing')
 
@@ -682,7 +682,7 @@ def test_Component_set_parameter_bad_unit():
 
         W.set_parameter('chord', 4.0, 'hello')
 
-def test_Component_set_parameter_bad_name():
+def test_Subsystem_set_parameter_bad_name():
     W = Wing('sample_wing')
 
     with  pytest.raises(AttributeError):
@@ -706,14 +706,14 @@ def test_Component_set_parameter_bad_name():
         (object(), TypeError),             # arbitrary object
     ],
 )
-def test_Component_add_mode_bad_name(name, error):
+def test_Subsystem_add_mode_bad_name(name, error):
     R = Rotor("sample_rotor")
 
     with pytest.raises(error):
         R.add_mode(name)
 
 
-def test_Component_get_parameter_missing_name():
+def test_Subsystem_get_parameter_missing_name():
 
     RBR = RotorBladeRegion('sample_rotor_blade_region')
 
@@ -721,8 +721,8 @@ def test_Component_get_parameter_missing_name():
         RBR.get_parameter('random_param')
 
 
-def test_Component_get_parameter_type_missing_param():
-    class CustomComponent(Subsystem):
+def test_Subsystem_get_parameter_type_missing_param():
+    class CustomSubsystem(Subsystem):
         def setup(self):
             self.add_parameter('sample_array', np.arange(1, 10), np.ndarray)
 
@@ -730,7 +730,7 @@ def test_Component_get_parameter_type_missing_param():
     with pytest.raises(AttributeError):
         RBR.get_parameter_type('random_var')
 
-    CC = CustomComponent('sample_custom')
+    CC = CustomSubsystem('sample_custom')
 
     with pytest.raises(AttributeError):
         CC.get_parameter('non_existent_param')
@@ -785,8 +785,8 @@ def test_aircraft_parameters():
     aircraft.set_parameter("wpass", 180.0)
     assert aircraft.wpass == 180.0
 
-#----------------------------------Component registry
-def test_register_component_good():
+#----------------------------------Subsystem registry
+def test_register_subsystem_good():
 
     file_path = os.path.abspath(__file__)
     test_dir = os.path.dirname(file_path)
@@ -818,7 +818,7 @@ def test_subsystem_registry():
     assert get_subsystem_class("Rotor") is Rotor
     assert get_subsystem_class("Aircraft") is Aircraft
     with pytest.raises(ImportError):
-        get_subsystem_class("NotAComponent")
+        get_subsystem_class("NotASubsystem")
 if __name__ == "__main__":
-    test_Component_set_parameter()
+    test_Subsystem_set_parameter()
     pass

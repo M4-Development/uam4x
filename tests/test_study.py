@@ -14,7 +14,7 @@ from uam4x.solution import Solution, Plugin, register_plugin
 
 
 @register_subsystem
-class StudyComponent(Subsystem):
+class StudySubsystem(Subsystem):
     def setup(self):
         self.add_parameter("span", default_value=12.0, dtype=float)
         self.add_parameter("count", default_value=3, dtype=int)
@@ -35,7 +35,7 @@ class StudyPlugin(Plugin):
 def demo_study():
     s = Study()
     v = Vehicle("demo_vehicle")
-    v.add_component(StudyComponent("wing"))
+    v.add_component(StudySubsystem("wing"))
     s.add_vehicle(v)
 
     s.solution.add_step(StudyPlugin, "step1")
@@ -153,7 +153,7 @@ def test_variants_generate_variants(tmp_path):
 
     def add_vehicle_func(study):
         v = Vehicle("variant_vehicle")
-        v.add_component(StudyComponent("wing"))
+        v.add_component(StudySubsystem("wing"))
         study.add_vehicle(v)
 
     def add_solution_func(study):
