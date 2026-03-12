@@ -26,7 +26,7 @@ UAM4X is a comprehensive framework for Urban Air Mobility (UAM) aircraft design,
 Key Features
 ------------
 
-* **Component System**: Modular aircraft components (wings, rotors, aircraft, etc.)
+* **Subsystem System**: Modular aircraft subsystems (wings, rotors, aircraft, etc.)
 * **Plugin Architecture**: Extensible plugin system for analysis tools
 * **Node Registry**: Workflow management through registered nodes
 * **Study Management**: Comprehensive study and variant management
@@ -38,7 +38,7 @@ Quick Start
 .. code-block:: python
 
    from uam4x import Study, Vehicle, Wing
-   from uam4x.components import Wing
+   from uam4x.subsystems import Wing
 
    # Create a new study
    study = Study()

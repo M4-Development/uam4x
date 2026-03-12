@@ -13,7 +13,7 @@ Core Modules
    uam4x
    uam4x.study
    uam4x.vehicle
-   uam4x.components
+   uam4x.subsystems
    uam4x.solution
    uam4x.utils
    uam4x.units
@@ -21,12 +21,12 @@ Core Modules
    uam4x.node
    uam4x.execution_engine
 
-Component System
+Subsystem System
 ----------------
 
-The component system provides modular aircraft components:
+The subsystem system provides modular aircraft subsystems:
 
-.. automodule:: uam4x.components
+.. automodule:: uam4x.subsystems
    :members:
    :undoc-members:
    :show-inheritance:

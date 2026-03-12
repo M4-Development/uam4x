@@ -14,7 +14,7 @@ A study in UAM4X represents a complete aircraft analysis or optimization problem
 .. code-block:: python
 
    from uam4x import Study, Vehicle
-   from uam4x.components import Wing, Rotor
+   from uam4x.subsystem import Wing, Rotor
 
    # Create a new study
    study = Study("My First Study")
@@ -31,14 +31,14 @@ A study in UAM4X represents a complete aircraft analysis or optimization problem
    # Add vehicle to study
    study.add_vehicle(vehicle)
 
-Working with Components
+Working with Subsystems
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Components are the building blocks of aircraft in UAM4X:
+ Subsystems are the building blocks of aircraft in UAM4X:
 
 .. code-block:: python
 
-   from uam4x.components import Wing, Rotor, Aircraft
+   from uam4x.subsystems import Wing, Rotor, Aircraft
 
    # Create a wing
    wing = Wing("main_wing")
@@ -142,6 +142,6 @@ Troubleshooting
 Common issues and solutions:
 
 1. **Import Errors**: Ensure all required packages are installed
-2. **Parameter Errors**: Check that parameter names match component definitions
+2. **Parameter Errors**: Check that parameter names match subsystem definitions
 3. **Study Execution**: Verify that all required components are properly configured
 4. **GUI Issues**: Restart the GUI if it becomes unresponsive

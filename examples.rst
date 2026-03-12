@@ -11,7 +11,7 @@ This example shows how to create a simple aircraft study:
 .. code-block:: python
 
    from uam4x import Study, Vehicle
-   from uam4x.components import Wing, Rotor
+   from uam4x.subsystems import Wing, Rotor
 
    def create_basic_aircraft():
        """Create a basic aircraft study."""
@@ -47,7 +47,7 @@ This example demonstrates multi-objective optimization:
 .. code-block:: python
 
    from uam4x import Study, Vehicle
-   from uam4x.components import Wing
+   from uam4x.subsystems import Wing
    from uam4x.control import Optimization
 
    def multi_objective_optimization():
@@ -85,7 +85,7 @@ This example shows how to use the node registry for workflow management:
 
    from uam4x.node import register_node
    from uam4x.study import Study
-   from uam4x.components import Wing, Rotor
+   from uam4x.subsystems import Wing, Rotor
 
    @register_node(description="Set up a tiltrotor aircraft")
    def setup_tiltrotor(study: Study):
@@ -149,7 +149,7 @@ This example demonstrates parameter sweep analysis:
 .. code-block:: python
 
    from uam4x import Study, Vehicle
-   from uam4x.components import Wing
+   from uam4x.subsystems import Wing
    from uam4x.control import ParameterSweep
 
    def parameter_sweep_study():
