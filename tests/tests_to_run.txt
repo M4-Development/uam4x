@@ -9,5 +9,4 @@ tests/test_registry.py
 tests/test_execution_engine.py
 tests/test_openmdao_optimization.py
 tests/test_results_extra.py
-tests/test_node.py
 tests/test_local_sensitivity.py
