@@ -3,6 +3,7 @@ import time
 
 DEV = True
 
+
 def get_log(log=None, filename_log=None, object_name=None):
     """
     Returns a a new log if none given, or returns the log given with an appropriate object_name.
@@ -24,7 +25,7 @@ def get_log(log=None, filename_log=None, object_name=None):
     """
     if log is None:
         log = FileLogger()
-        log.warning('new log created')
+        log.warning("new log created")
         if filename_log is not None:
             log.set_filename_log(filename_log)
 
@@ -36,7 +37,8 @@ def get_log(log=None, filename_log=None, object_name=None):
     log_with_layer = LoggerObjectNameLayer(log, object_name)
     return log_with_layer
 
-class LoggerObjectNameLayer():
+
+class LoggerObjectNameLayer:
     """Represent the loggerobjectnamelayer component in the UAM4X workflow.
 
     Notes
@@ -44,6 +46,7 @@ class LoggerObjectNameLayer():
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
+
     def __init__(self, logger, object_name):
         """Initialize object state and default configuration.
 
@@ -59,6 +62,7 @@ class LoggerObjectNameLayer():
         if object_name:
             assert isinstance(object_name, str)
         self.object_name = object_name
+
     def debug(self, msg):
         """Execute debug.
 
@@ -69,7 +73,8 @@ class LoggerObjectNameLayer():
 
         """
         self.root_logger.set_next_actor_name(self.object_name)
-        self.root_logger.msg_typ('DEBUG', msg)
+        self.root_logger.msg_typ("DEBUG", msg)
+
     def info(self, msg):
         """Execute info.
 
@@ -80,7 +85,8 @@ class LoggerObjectNameLayer():
 
         """
         self.root_logger.set_next_actor_name(self.object_name)
-        self.root_logger.msg_typ('INFO', msg)
+        self.root_logger.msg_typ("INFO", msg)
+
     def warning(self, msg):
         """Execute warning.
 
@@ -91,7 +97,8 @@ class LoggerObjectNameLayer():
 
         """
         self.root_logger.set_next_actor_name(self.object_name)
-        self.root_logger.msg_typ('WARNING', msg)
+        self.root_logger.msg_typ("WARNING", msg)
+
     def error(self, msg):
         """Execute error.
 
@@ -102,7 +109,8 @@ class LoggerObjectNameLayer():
 
         """
         self.root_logger.set_next_actor_name(self.object_name)
-        self.root_logger.msg_typ('ERROR', msg)
+        self.root_logger.msg_typ("ERROR", msg)
+
     def exception(self, msg):
         """Execute exception.
 
@@ -113,7 +121,8 @@ class LoggerObjectNameLayer():
 
         """
         self.root_logger.set_next_actor_name(self.object_name)
-        self.root_logger.msg_typ('EXCEPTION', msg)
+        self.root_logger.msg_typ("EXCEPTION", msg)
+
     def critical(self, msg):
         """Execute critical.
 
@@ -124,7 +133,9 @@ class LoggerObjectNameLayer():
 
         """
         self.root_logger.set_next_actor_name(self.object_name)
-        self.root_logger.msg_typ('CRITICAL', msg)
+        self.root_logger.msg_typ("CRITICAL", msg)
+
+
 class FileLogger(SimpleLogger):
     """Represent the filelogger component in the UAM4X workflow.
 
@@ -133,15 +144,19 @@ class FileLogger(SimpleLogger):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
+
     msg_level_dict = {
-        "DEBUG":0,
-        "INFO":1,
-        "WARNING":2,
-        "ERROR":3,
-        "EXCEPTION":4,
-        "CRITICAL":5
+        "DEBUG": 0,
+        "INFO": 1,
+        "WARNING": 2,
+        "ERROR": 3,
+        "EXCEPTION": 4,
+        "CRITICAL": 5,
     }
-    def __init__(self, filename_log=None, write_to_stdout=True, level='debug', encoding='utf-8'):
+
+    def __init__(
+        self, filename_log=None, write_to_stdout=True, level="debug", encoding="utf-8"
+    ):
         """Initialize object state and default configuration.
 
         Parameters
@@ -169,9 +184,9 @@ class FileLogger(SimpleLogger):
         self.min_filelog_level = "DEBUG"
         self.min_console_level = "INFO"
         self.next_actor_name = None
-        super(FileLogger, self).__init__(level=level, encoding=encoding,
-                                         log_func=self.log_function_handler)
-
+        super(FileLogger, self).__init__(
+            level=level, encoding=encoding, log_func=self.log_function_handler
+        )
 
     def set_gui_log(self, handler):
         """
@@ -250,7 +265,6 @@ class FileLogger(SimpleLogger):
         self.open_file = None
         self.write_to_file = False
 
-
     def log_function_handler(self, typ, filename, lineno, msg):
         """
         Default logging function. Takes a text and outputs to stdout.
@@ -267,18 +281,26 @@ class FileLogger(SimpleLogger):
             message to be displayed
 
         """
-        if self.do_capture_log and self.msg_level_dict[typ] >= self.msg_level_dict[self.capture_level_min]:
+        if (
+            self.do_capture_log
+            and self.msg_level_dict[typ] >= self.msg_level_dict[self.capture_level_min]
+        ):
             self.capture_log.append((typ, msg))
-        if self.write_to_stdout and self.msg_level_dict[typ] >= self.msg_level_dict[self.min_console_level]:
+        if (
+            self.write_to_stdout
+            and self.msg_level_dict[typ] >= self.msg_level_dict[self.min_console_level]
+        ):
             self.stdout_logging(typ, filename, lineno, msg)
-        if (self.write_to_file and self.open_file is not None and
-                not self.open_file.closed and
-                self.msg_level_dict[typ] >= self.msg_level_dict[self.min_filelog_level]):
+        if (
+            self.write_to_file
+            and self.open_file is not None
+            and not self.open_file.closed
+            and self.msg_level_dict[typ] >= self.msg_level_dict[self.min_filelog_level]
+        ):
             self.file_logging(typ, filename, lineno, msg)
         self.next_actor_name = None
 
-    def stdout_logging(self, typ: str, filename: str, lineno: int,
-                       msg: str) -> None:
+    def stdout_logging(self, typ: str, filename: str, lineno: int, msg: str) -> None:
         """
         Default logging function. Takes a text and outputs to stdout.
         Parameters
@@ -294,13 +316,19 @@ class FileLogger(SimpleLogger):
         Message will have format 'typ: msg'
         """
         # max length of 'INFO', 'DEBUG', 'WARNING', etc.
-        name = '%-8s' % (typ + ':')
-        asctime = time.strftime('%Y-%m-%d %H:%M:%S')
+        name = "%-8s" % (typ + ":")
+        asctime = time.strftime("%Y-%m-%d %H:%M:%S")
         if DEV:
-            asctime = '%s %s:%d' % (asctime, filename, lineno)
+            asctime = "%s %s:%d" % (asctime, filename, lineno)
         # msg2 = ' %-28s %s\n' % (filename_lineno, msg)
         if self.next_actor_name:
-            msg2 = "%s - %s - %s - %s - %s\n" % (asctime, "uam4x",self.next_actor_name, typ, msg)
+            msg2 = "%s - %s - %s - %s - %s\n" % (
+                asctime,
+                "uam4x",
+                self.next_actor_name,
+                typ,
+                msg,
+            )
         else:
             msg2 = "%s - %s - %s - %s\n" % (asctime, "uam4x", typ, msg)
         # msg2 = "%s - %s - %s - %s\n" % (asctime, "uam4x", typ, msg)
@@ -308,7 +336,6 @@ class FileLogger(SimpleLogger):
         if self.gui_log:
             self.gui_log.emit(msg2)
         _write(typ, name, msg2, self.encoding)
-
 
     def file_logging(self, typ, filename, lineno, msg):
         """
@@ -327,12 +354,12 @@ class FileLogger(SimpleLogger):
 
         """
         # max length of 'INFO', 'DEBUG', 'WARNING', etc.
-        name = '%-8s' % (typ + ':')
-        filename_n = '%s:%s' % (filename[:-3], lineno)
+        name = "%-8s" % (typ + ":")
+        filename_n = "%s:%s" % (filename[:-3], lineno)
         if self.next_actor_name:
-            msg2 = ' %-28s - %s - %s\n' % (filename_n, self.next_actor_name, msg)
+            msg2 = " %-28s - %s - %s\n" % (filename_n, self.next_actor_name, msg)
         else:
-            msg2 = ' %-28s %s\n' % (filename_n, msg)
+            msg2 = " %-28s %s\n" % (filename_n, msg)
 
         self.open_file.write((name + msg2) if typ else msg2)
         self.open_file.flush()
@@ -352,7 +379,9 @@ class FileLogger(SimpleLogger):
         """
         assert capture_level_min in self.msg_level_dict
         if self.do_capture_log:
-            self.error("Begin Log Capture called without ending the previous log capture")
+            self.error(
+                "Begin Log Capture called without ending the previous log capture"
+            )
         else:
             self.do_capture_log = True
             self.capture_level_min = capture_level_min
@@ -402,9 +431,11 @@ class FileLogger(SimpleLogger):
             Return value produced by this operation.
 
         """
-        return 'FileLogger(filename_log=%r, write_to_stdout=%r, level=%r, encoding=%r)' % (
-            self.filename_log, self.write_to_file, self.level, self.encoding
+        return (
+            "FileLogger(filename_log=%r, write_to_stdout=%r, level=%r, encoding=%r)"
+            % (self.filename_log, self.write_to_file, self.level, self.encoding)
         )
+
 
 def open_file(filename_log):
     """Execute open file.
@@ -422,5 +453,5 @@ def open_file(filename_log):
     """
     open_file = None
     if filename_log is not None:
-        open_file = open(filename_log, 'w')
+        open_file = open(filename_log, "w")
     return open_file

@@ -5,16 +5,24 @@ from uam4x.study import Study
 import os
 import shutil
 import numpy as np
-from uam4x.utils import is_continuous_type_or_value, is_scalar_type_or_value, split_dotted_path_and_indices, is_numpy_array
+from uam4x.utils import (
+    is_continuous_type_or_value,
+    is_scalar_type_or_value,
+    split_dotted_path_and_indices,
+    is_numpy_array,
+)
 from uam4x.log import get_log
 from uam4x.utils import log
 from uam4x.results import Results, Result
 from uam4x.solution import Group
 
-driver_name_to_driver={'pyOptSparseDriver':om.pyOptSparseDriver,
-                       'ScipyOptimizeDriver':om.ScipyOptimizeDriver}
+driver_name_to_driver = {
+    "pyOptSparseDriver": om.pyOptSparseDriver,
+    "ScipyOptimizeDriver": om.ScipyOptimizeDriver,
+}
 
-cycle_solver_name_to_solver={'NonlinearBlockGS':om.NonlinearBlockGS}
+cycle_solver_name_to_solver = {"NonlinearBlockGS": om.NonlinearBlockGS}
+
 
 class Optimization:
     """Represent the optimization component in the UAM4X workflow.
@@ -24,8 +32,12 @@ class Optimization:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    log = get_log(log, object_name='optimization')
-    def __init__(self, study:Study, state, plugins, out_dir,check_partials=False) -> None:
+
+    log = get_log(log, object_name="optimization")
+
+    def __init__(
+        self, study: Study, state, plugins, out_dir, check_partials=False
+    ) -> None:
         """Initialize object state and configuration.
 
         Parameters
@@ -59,31 +71,49 @@ class Optimization:
 
         """
         problem = om.Problem()
-        self.log.debug('run problem')
+        self.log.debug("run problem")
 
-        #make vehicle step
+        # make vehicle step
         used_vehicle_param_names = self.study.solution.get_all_used_vehicle_params()
         vehicle_val_dict = {}
         vehicle_type_dict = {}
         for param_name in used_vehicle_param_names:
             if param_name in self.state:
-                value= self.state[param_name]
+                value = self.state[param_name]
             else:
-                value= self.study.get_value(param_name)
+                value = self.study.get_value(param_name)
             vehicle_val_dict[param_name] = value
             vehicle_type_dict[param_name] = self.study.get_param_type(param_name)
-        comp = problem.model.add_subsystem('indep_var', OpenmdaoPreComp(), promotes=['*'])
+        comp = problem.model.add_subsystem(
+            "indep_var", OpenmdaoPreComp(), promotes=["*"]
+        )
         comp.options["vehicle_val_dict"] = vehicle_val_dict
         comp.options["vehicle_type_dict"] = vehicle_type_dict
 
-        #make plugin steps
-        for step_name,data in self.study.solution._execution_steps.items():
+        # make plugin steps
+        for step_name, data in self.study.solution._execution_steps.items():
             work_dir = os.path.join(self.out_dir, step_name)
 
-            if isinstance(data,dict):
-                input_names = set([step_name + '.' + input_name for input_name in self.plugins[step_name].plugin_input_names.keys()])
-                output_names = set([step_name + '.' + output_name for output_name in self.plugins[step_name].plugin_output_names.keys()])
-                comp = problem.model.add_subsystem(step_name, UniversalOpenmdaoComp(), promotes=['*'])
+            if isinstance(data, dict):
+                input_names = set(
+                    [
+                        step_name + "." + input_name
+                        for input_name in self.plugins[
+                            step_name
+                        ].plugin_input_names.keys()
+                    ]
+                )
+                output_names = set(
+                    [
+                        step_name + "." + output_name
+                        for output_name in self.plugins[
+                            step_name
+                        ].plugin_output_names.keys()
+                    ]
+                )
+                comp = problem.model.add_subsystem(
+                    step_name, UniversalOpenmdaoComp(), promotes=["*"]
+                )
                 comp.options["plugin"] = self.plugins[step_name]
                 comp.options["input_names"] = input_names
                 comp.options["output_names"] = output_names
@@ -94,32 +124,37 @@ class Optimization:
                 os.makedirs(work_dir)
                 comp.options["step_name"] = step_name
 
-            elif isinstance(data,Group):
-                group=problem.model.add_subsystem(step_name,UniversalOpenMDAOGroup(),promotes=['*'])
-                group.options['group']=data
-                group.options['step_name']=step_name
+            elif isinstance(data, Group):
+                group = problem.model.add_subsystem(
+                    step_name, UniversalOpenMDAOGroup(), promotes=["*"]
+                )
+                group.options["group"] = data
+                group.options["step_name"] = step_name
                 group.options["work_dir"] = work_dir
-                group.options["links"]=data.links
-                if isinstance(self.plugins[step_name],dict):
-                    group.options['sub_plugins']=self.plugins[step_name]
+                group.options["links"] = data.links
+                if isinstance(self.plugins[step_name], dict):
+                    group.options["sub_plugins"] = self.plugins[step_name]
                 else:
-                    group.options['sub_plugins']=None
-
+                    group.options["sub_plugins"] = None
 
         # Add connections
         for independent, dependent in self.study.solution.links:
 
             # parse slices where applicable here:
             inds = None
-            if '[' in independent:
+            if "[" in independent:
                 independent, inds = split_dotted_path_and_indices(independent)
-            problem.model.connect(independent.replace(".", "~"), dependent.replace(".", "~"), src_indices=inds)
+            problem.model.connect(
+                independent.replace(".", "~"),
+                dependent.replace(".", "~"),
+                src_indices=inds,
+            )
 
         # add desvars
-        for name, data in self.state['des_vars'].items():
+        for name, data in self.state["des_vars"].items():
             dv_type = self.study.get_param_type(name)
-            lower, upper = data['lower'], data['upper']
-            indices = data['indices']
+            lower, upper = data["lower"], data["upper"]
+            indices = data["indices"]
 
             # additional array wrapping here for floats, lists already wrapped
             if dv_type == np.ndarray:
@@ -132,14 +167,16 @@ class Optimization:
                     lower = dv_type(lower)
                 if upper is not None:
                     upper = dv_type(upper)
-            problem.model.add_design_var(name.replace(".", "~"), lower=lower, upper=upper, indices=indices)
+            problem.model.add_design_var(
+                name.replace(".", "~"), lower=lower, upper=upper, indices=indices
+            )
 
         # add constraints
-        for name, data in self.state['constraints'].items():
+        for name, data in self.state["constraints"].items():
 
-            const_type = self.study.solution.get_var_type(name,self.plugins)
-            lower,upper = data['lower'], data['upper']
-            indices = data['indices']
+            const_type = self.study.solution.get_var_type(name, self.plugins)
+            lower, upper = data["lower"], data["upper"]
+            indices = data["indices"]
 
             # additional array wrapping here for floats, lists already wrapped
             if const_type == np.ndarray:
@@ -152,62 +189,72 @@ class Optimization:
                     lower = const_type(lower)
                 if upper is not None:
                     upper = const_type(upper)
-            problem.model.add_constraint(name.replace(".", "~"), lower=lower, upper=upper, indices=indices)
+            problem.model.add_constraint(
+                name.replace(".", "~"), lower=lower, upper=upper, indices=indices
+            )
 
-
-        result=Result(state=self.state)
-        #add template hashes to results before template files are run in optimization
-        for plug_name,plug in self.study.solution.recurse_generated_plugins(self.plugins).items():
+        result = Result(state=self.state)
+        # add template hashes to results before template files are run in optimization
+        for plug_name, plug in self.study.solution.recurse_generated_plugins(
+            self.plugins
+        ).items():
             if plug._template_to_checksum:
                 for path, checksum in plug._template_to_checksum.items():
                     result._add_template_checksum(path, checksum)
         # add objectives
-        problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
-        driver_name = self.state['optimizer']
+        problem.model.add_objective(self.state["objective_name"].replace(".", "~"))
+        driver_name = self.state["optimizer"]
         driver_cls = driver_name_to_driver[driver_name]
         problem.driver = driver_cls()
 
-        for name, value in self.state['driver_options'].items():
+        for name, value in self.state["driver_options"].items():
             problem.driver.options[name] = value
-        if hasattr(problem.driver, 'opt_settings'):
-            for name, value in self.state['optimizer_options'].items():
+        if hasattr(problem.driver, "opt_settings"):
+            for name, value in self.state["optimizer_options"].items():
                 problem.driver.opt_settings[name] = value
 
         problem.setup()
         problem.run_driver()
-
-
-
 
         if problem.driver.fail:
             result._add_convergence_status(False)
         else:
             result._add_convergence_status(True)
 
-        for tracked_output in self.study.solution.tracked_outputs + list(self.state['des_vars'].keys()):
-            if '[' in tracked_output:
-                no_ind_tracked_output, inds = split_dotted_path_and_indices(tracked_output)
+        for tracked_output in self.study.solution.tracked_outputs + list(
+            self.state["des_vars"].keys()
+        ):
+            if "[" in tracked_output:
+                no_ind_tracked_output, inds = split_dotted_path_and_indices(
+                    tracked_output
+                )
 
-                result._add_result(tracked_output, problem.get_val(no_ind_tracked_output.replace(".", "~"))[inds])
+                result._add_result(
+                    tracked_output,
+                    problem.get_val(no_ind_tracked_output.replace(".", "~"))[inds],
+                )
             else:
-                name_start=tracked_output.split('.')[0]
-                if name_start=='vehicles':
-                    var_type=self.study.get_param_type(tracked_output)
+                name_start = tracked_output.split(".")[0]
+                if name_start == "vehicles":
+                    var_type = self.study.get_param_type(tracked_output)
                 else:
-                    var_type=self.study.solution.get_var_type(tracked_output,self.plugins)
-                value=problem.get_val(tracked_output.replace(".", "~"))
+                    var_type = self.study.solution.get_var_type(
+                        tracked_output, self.plugins
+                    )
+                value = problem.get_val(tracked_output.replace(".", "~"))
 
-                #assumes outputs to openmdao are essentially always arrays for scalars
-                #strings might be treated differently
+                # assumes outputs to openmdao are essentially always arrays for scalars
+                # strings might be treated differently
                 if not var_type is np.ndarray:
                     if is_numpy_array(value) and is_scalar_type_or_value(var_type):
-                        value=value[0]
+                        value = value[0]
                     else:
-                        value=var_type(value)
+                        value = var_type(value)
 
                 result._add_result(tracked_output, value)
 
         return result
+
 
 class OpenmdaoPreComp(om.IndepVarComp):
     """Represent the openmdaoprecomp component in the UAM4X workflow.
@@ -217,7 +264,9 @@ class OpenmdaoPreComp(om.IndepVarComp):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    log = get_log(log, object_name='OpenmdaoPreComp')
+
+    log = get_log(log, object_name="OpenmdaoPreComp")
+
     def initialize(self):
         """Declare OpenMDAO options required before setup.
 
@@ -226,8 +275,8 @@ class OpenmdaoPreComp(om.IndepVarComp):
         This method performs class-internal setup or validation logic.
 
         """
-        self.log = get_log(log, object_name='OpenmdaoPreComp')
-        self.log.debug('initialize')
+        self.log = get_log(log, object_name="OpenmdaoPreComp")
+        self.log.debug("initialize")
         self.options.declare("vehicle_val_dict")
         self.options.declare("vehicle_type_dict")
 
@@ -239,7 +288,7 @@ class OpenmdaoPreComp(om.IndepVarComp):
         This method performs class-internal setup or validation logic.
 
         """
-        self.log.debug('setup')
+        self.log.debug("setup")
         vehicle_val_dict = self.options["vehicle_val_dict"]
         vehicle_type_dict = self.options["vehicle_type_dict"]
         for param_name, value in vehicle_val_dict.items():
@@ -249,6 +298,7 @@ class OpenmdaoPreComp(om.IndepVarComp):
             else:
                 self.add_output(param_name.replace(".", "~"), val=value)
 
+
 class UniversalOpenmdaoComp(om.ExplicitComponent):
     """Represent the universalopenmdaocomp component in the UAM4X workflow.
 
@@ -257,7 +307,9 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    log = get_log(log, object_name='UniversalOpenmdaoComp')
+
+    log = get_log(log, object_name="UniversalOpenmdaoComp")
+
     def initialize(self):
         """Declare OpenMDAO options required before setup.
 
@@ -267,7 +319,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
 
         """
         self.log = UniversalOpenmdaoComp.log
-        self.log.debug('initialize')
+        self.log.debug("initialize")
         self.options.declare("plugin")
         self.options.declare("input_names")
         self.options.declare("output_names")
@@ -282,7 +334,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         This method performs class-internal setup or validation logic.
 
         """
-        self.log.debug('setup')
+        self.log.debug("setup")
         self.plugin = self.options["plugin"]
         self.input_names = self.options["input_names"]
         self.output_names = self.options["output_names"]
@@ -291,55 +343,66 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         cont_input = False
         cont_output = False
         if self.plugin._check_partials_options:
-            self.set_check_partial_options(wrt=['*'], form=self.plugin.check_form, step=self.plugin.check_step)
+            self.set_check_partial_options(
+                wrt=["*"], form=self.plugin.check_form, step=self.plugin.check_step
+            )
 
         for input_name in self.input_names:
-            #plugin_name = input_name.split('.')[0]
-            plugin_name=self.options['step_name']
-            start_ind=len(plugin_name.split('.'))
-            name = '.'.join(input_name.split('.')[start_ind:])
-            input_type = self.plugin.plugin_input_names[name]['type']
-            input_shape = self.plugin.plugin_input_names[name]['shape']
+            # plugin_name = input_name.split('.')[0]
+            plugin_name = self.options["step_name"]
+            start_ind = len(plugin_name.split("."))
+            name = ".".join(input_name.split(".")[start_ind:])
+            input_type = self.plugin.plugin_input_names[name]["type"]
+            input_shape = self.plugin.plugin_input_names[name]["shape"]
             if not is_continuous_type_or_value(input_type):
                 if input_type is int:
                     temp = 1
                 else:
-                    temp = 'temp'
+                    temp = "temp"
                 self.add_discrete_input(input_name.replace(".", "~"), temp)
             else:
                 cont_input = True
                 self.add_input(input_name.replace(".", "~"), shape=input_shape)
 
         for output_name in self.output_names:
-            plugin_name=self.options['step_name']
-            start_ind=len(plugin_name.split('.'))
-            name = '.'.join(output_name.split('.')[start_ind:])
-            output_type = self.plugin.plugin_output_names[name]['type']
-            output_shape = self.plugin.plugin_output_names[name]['shape']
+            plugin_name = self.options["step_name"]
+            start_ind = len(plugin_name.split("."))
+            name = ".".join(output_name.split(".")[start_ind:])
+            output_type = self.plugin.plugin_output_names[name]["type"]
+            output_shape = self.plugin.plugin_output_names[name]["shape"]
 
             if not is_continuous_type_or_value(output_type):
                 if output_type is int:
                     temp = 1
                 else:
-                    temp = 'temp'
+                    temp = "temp"
                 self.add_discrete_output(output_name.replace(".", "~"), temp)
             else:
                 cont_output = True
                 self.add_output(output_name.replace(".", "~"), shape=output_shape)
 
         if cont_input and cont_output:
-            partials = self.plugin.build_partials(self.input_names, self.output_names,self.step_name)
+            partials = self.plugin.build_partials(
+                self.input_names, self.output_names, self.step_name
+            )
             self.plugin.categorize_partials()
-            for pair,data in partials.items():
-                #note since strings are immutable
+            for pair, data in partials.items():
+                # note since strings are immutable
                 # self.step_name.replace does not modify original step name attribute
-                of = self.step_name.replace('.','~') + '~' + pair[0].replace('.', '~')
-                wrt = self.step_name.replace('.','~') + '~' + pair[1].replace('.', '~')
-                method = data['method']
-                step,form = data['step'], data['form']
-                rows,cols = data['rows'], data['cols']
-                self.declare_partials(of=of, wrt=wrt, method=method, step=step, form=form, rows=rows, cols=cols)
-
+                of = self.step_name.replace(".", "~") + "~" + pair[0].replace(".", "~")
+                wrt = self.step_name.replace(".", "~") + "~" + pair[1].replace(".", "~")
+                method = data["method"]
+                step, form = data["step"], data["form"]
+                rows, cols = data["rows"], data["cols"]
+                self.declare_partials(
+                    of=of,
+                    wrt=wrt,
+                    method=method,
+                    step=step,
+                    form=form,
+                    rows=rows,
+                    cols=cols,
+                )
 
     def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
         """Run the wrapped plugin using OpenMDAO-provided inputs.
@@ -356,33 +419,34 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             Discrete OpenMDAO output mapping.
 
         """
-        self.log.debug('compute')
+        self.log.debug("compute")
         self.plugin_dict = {}
-        plugin_name=self.step_name.split('.')
-        start_ind=len(plugin_name)
+        plugin_name = self.step_name.split(".")
+        start_ind = len(plugin_name)
         for name, value in inputs.items():
             var_name = name.replace("~", ".")
-            var_name='.'.join(var_name.split('.')[start_ind:])
-            var_type=self.plugin.plugin_input_names[var_name]['type']
-            if not self.plugin.plugin_input_names[var_name]['type'] is np.ndarray:
+            var_name = ".".join(var_name.split(".")[start_ind:])
+            var_type = self.plugin.plugin_input_names[var_name]["type"]
+            if not self.plugin.plugin_input_names[var_name]["type"] is np.ndarray:
                 if is_numpy_array(value) and is_scalar_type_or_value(var_type):
-                    value=value[0]
+                    value = value[0]
                 else:
-                    value = self.plugin.plugin_input_names[var_name]['type'](value)
+                    value = self.plugin.plugin_input_names[var_name]["type"](value)
             self.plugin_dict[var_name] = value
         for name, value in discrete_inputs.items():
             var_name = name.replace("~", ".")
-            var_name='.'.join(var_name.split('.')[start_ind:])
+            var_name = ".".join(var_name.split(".")[start_ind:])
             self.plugin_dict[var_name] = value
         results = self.plugin.run_plugin(self.plugin_dict, self.work_dir)
         for name, value in results.items():
             name_with_plugin = self.step_name + "." + name
             if name_with_plugin in self.output_names:
-                if not is_continuous_type_or_value(self.plugin.plugin_output_names[name]['type']):
+                if not is_continuous_type_or_value(
+                    self.plugin.plugin_output_names[name]["type"]
+                ):
                     discrete_outputs[name_with_plugin.replace(".", "~")] = value
                 else:
                     outputs[name_with_plugin.replace(".", "~")] = value
-
 
     def compute_partials(self, inputs, partials, discrete_inputs={}):
         """Populate OpenMDAO partial-derivative entries from plugin results.
@@ -397,22 +461,22 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             Discrete OpenMDAO input mapping.
 
         """
-        self.log.debug('compute partials')
+        self.log.debug("compute partials")
         if not self.plugin._declare_partials:
             return
         else:
             results = self.plugin.compute_partials_plugin(self.plugin_dict)
             for name, value in results.items():
-                output_name = self.step_name + '.' + name[0]
-                input_name = self.step_name + '.' + name[1]
+                output_name = self.step_name + "." + name[0]
+                input_name = self.step_name + "." + name[1]
 
                 if output_name in self.output_names and input_name in self.input_names:
-                    output_name_with_plugin = output_name.replace('.', '~')
-                    input_name_with_plugin = input_name.replace('.', '~')
+                    output_name_with_plugin = output_name.replace(".", "~")
+                    input_name_with_plugin = input_name.replace(".", "~")
                     partials[output_name_with_plugin, input_name_with_plugin] = value
                 else:
-                    self.log.error('Missing links somewhere')
-                    raise ValueError('Missing links somewhere')
+                    self.log.error("Missing links somewhere")
+                    raise ValueError("Missing links somewhere")
 
 
 class UniversalOpenMDAOGroup(om.Group):
@@ -423,6 +487,7 @@ class UniversalOpenMDAOGroup(om.Group):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
+
     def initialize(self):
         """Declare OpenMDAO options required before setup.
 
@@ -438,7 +503,6 @@ class UniversalOpenMDAOGroup(om.Group):
         self.options.declare("links")
 
     def setup(self):
-
         """Define OpenMDAO variables, subsystems, and derivative declarations.
 
         Notes
@@ -446,15 +510,29 @@ class UniversalOpenMDAOGroup(om.Group):
         This method performs class-internal setup or validation logic.
 
         """
-        group_name=self.options['step_name']
-        group=self.options['group']
-        sub_plugs=self.options['sub_plugins']
-        work_dir=self.options['work_dir']
+        group_name = self.options["step_name"]
+        group = self.options["group"]
+        sub_plugs = self.options["sub_plugins"]
+        work_dir = self.options["work_dir"]
         for step_name, data in group._execution_steps.items():
-            if isinstance(data,dict):
-                input_names = set([group_name+'.'+step_name+'.' + input_name for input_name in sub_plugs[step_name].plugin_input_names.keys()])
-                output_names = set([group_name+'.'+step_name+'.' + output_name for output_name in sub_plugs[step_name].plugin_output_names.keys()])
-                comp=self.add_subsystem(step_name,UniversalOpenmdaoComp(),promotes=['*'])
+            if isinstance(data, dict):
+                input_names = set(
+                    [
+                        group_name + "." + step_name + "." + input_name
+                        for input_name in sub_plugs[step_name].plugin_input_names.keys()
+                    ]
+                )
+                output_names = set(
+                    [
+                        group_name + "." + step_name + "." + output_name
+                        for output_name in sub_plugs[
+                            step_name
+                        ].plugin_output_names.keys()
+                    ]
+                )
+                comp = self.add_subsystem(
+                    step_name, UniversalOpenmdaoComp(), promotes=["*"]
+                )
                 comp.options["plugin"] = sub_plugs[step_name]
                 comp.options["input_names"] = input_names
                 comp.options["output_names"] = output_names
@@ -463,33 +541,38 @@ class UniversalOpenMDAOGroup(om.Group):
                 if os.path.isdir(work_dir):
                     shutil.rmtree(work_dir)
                 os.makedirs(work_dir)
-                comp.options["step_name"] = group_name+'.'+step_name
-            elif isinstance(data,Group):
-                group=self.add_subsystem(step_name,UniversalOpenMDAOGroup(),promotes=['*'])
-                group.options['group']=data
-                group.options['step_name']=group_name+'.'+step_name
+                comp.options["step_name"] = group_name + "." + step_name
+            elif isinstance(data, Group):
+                group = self.add_subsystem(
+                    step_name, UniversalOpenMDAOGroup(), promotes=["*"]
+                )
+                group.options["group"] = data
+                group.options["step_name"] = group_name + "." + step_name
                 group.options["work_dir"] = work_dir
-                group.options['links']=data.links
-                if isinstance(sub_plugs[step_name],dict):
-                    group.options['sub_plugins']=sub_plugs[step_name]
+                group.options["links"] = data.links
+                if isinstance(sub_plugs[step_name], dict):
+                    group.options["sub_plugins"] = sub_plugs[step_name]
                 else:
-                    group.options['sub_plugins']=None
+                    group.options["sub_plugins"] = None
 
-        for independent, dependent in self.options['links']:
+        for independent, dependent in self.options["links"]:
 
             # parse slices where applicable here:
             inds = None
-            if '[' in independent:
+            if "[" in independent:
                 independent, inds = split_dotted_path_and_indices(independent)
-            independent=group_name+'.'+independent
-            dependent=group_name+'.'+dependent
-            self.connect(independent.replace(".", "~"), dependent.replace(".", "~"), src_indices=inds)
+            independent = group_name + "." + independent
+            dependent = group_name + "." + dependent
+            self.connect(
+                independent.replace(".", "~"),
+                dependent.replace(".", "~"),
+                src_indices=inds,
+            )
         if group._is_cycle:
-            self.nonlinear_solver=cycle_solver_name_to_solver[group.cycle_solver]()
-        approx_totals_dict=group._approx_totals
-        if approx_totals_dict['compute']:
-            method=approx_totals_dict['method']
-            form=approx_totals_dict['form']
-            step=approx_totals_dict['step']
-            self.approx_totals(method=method,form=form,step=step)
-
+            self.nonlinear_solver = cycle_solver_name_to_solver[group.cycle_solver]()
+        approx_totals_dict = group._approx_totals
+        if approx_totals_dict["compute"]:
+            method = approx_totals_dict["method"]
+            form = approx_totals_dict["form"]
+            step = approx_totals_dict["step"]
+            self.approx_totals(method=method, form=form, step=step)

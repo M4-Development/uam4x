@@ -7,14 +7,14 @@ import openturns as ot
 import matplotlib.pyplot as plt
 from math import comb
 
-
 # Global registry
-workflow_name_to_class_registry={}
-sampler_name_to_class_registry={}
-distribution_name_to_class_registry={}
-post_workflow_name_to_class_registry={}
+workflow_name_to_class_registry = {}
+sampler_name_to_class_registry = {}
+distribution_name_to_class_registry = {}
+post_workflow_name_to_class_registry = {}
 
-#Orchestrator class, manages workflows and interfaces with uam4x
+# Orchestrator class, manages workflows and interfaces with uam4x
+
 
 def register_workflow(Workflow):
     """Register a UQ workflow class in the global workflow registry.
@@ -30,8 +30,9 @@ def register_workflow(Workflow):
         The registered class (decorator passthrough).
 
     """
-    workflow_name_to_class_registry[Workflow.__name__]=Workflow
+    workflow_name_to_class_registry[Workflow.__name__] = Workflow
     return Workflow
+
 
 def register_sampler(Sampler):
     """Register a sampler class in the global sampler registry.
@@ -47,8 +48,9 @@ def register_sampler(Sampler):
         The registered class (decorator passthrough).
 
     """
-    sampler_name_to_class_registry[Sampler.__name__]=Sampler
+    sampler_name_to_class_registry[Sampler.__name__] = Sampler
     return Sampler
+
 
 def register_distribution(Distribution):
     """Register a distribution class in the global distribution registry.
@@ -64,8 +66,9 @@ def register_distribution(Distribution):
         The registered class (decorator passthrough).
 
     """
-    distribution_name_to_class_registry[Distribution.__name__]=Distribution
+    distribution_name_to_class_registry[Distribution.__name__] = Distribution
     return Distribution
+
 
 def register_post_workflow(PostWorkflow):
     """Register a post-processing workflow class in the global post registry.
@@ -81,14 +84,13 @@ def register_post_workflow(PostWorkflow):
         The registered class (decorator passthrough).
 
     """
-    post_workflow_name_to_class_registry[PostWorkflow.__name__]=PostWorkflow
+    post_workflow_name_to_class_registry[PostWorkflow.__name__] = PostWorkflow
     return PostWorkflow
 
 
-
 class UQAnalysis:
-    #MIGHT CHANGE THIS TO ALEATORYANALYSIS,
-    #THEN MAYBE HAVE A MIXED ANALYSIS
+    # MIGHT CHANGE THIS TO ALEATORYANALYSIS,
+    # THEN MAYBE HAVE A MIXED ANALYSIS
     # AND PURE EPISTEMIC ALL ESSENTIALLY AT PARAMETERSWEEP/OPTIMIZATION level
     """Represent the uqanalysis component in the UAM4X workflow.
 
@@ -97,7 +99,8 @@ class UQAnalysis:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,UQ_workflow,seed=None):
+
+    def __init__(self, UQ_workflow, seed=None):
         """Initialize object state and configuration.
 
         Parameters
@@ -109,10 +112,9 @@ class UQAnalysis:
 
         """
         self.UQ_workflow = UQ_workflow
-        self.seed=seed if seed is not None else 42
+        self.seed = seed if seed is not None else 42
         self.aleatory_var_to_dist = {}
-        self.post_spec=pre_to_post_workflow_registry[UQ_workflow.__class__.__name__]
-
+        self.post_spec = pre_to_post_workflow_registry[UQ_workflow.__class__.__name__]
 
     def _check_analysis(self):
         """Validate that workflow settings are consistent with requested analysis.
@@ -122,9 +124,8 @@ class UQAnalysis:
         This method performs class-internal setup or validation logic.
 
         """
-        if hasattr(self.UQ_workflow,'_check_analysis'):
+        if hasattr(self.UQ_workflow, "_check_analysis"):
             self.UQ_workflow._check_analysis(self)
-
 
     def add_aleatory_variable(self, var_name, PDFObject):
         """Associate one aleatory variable name with a probability distribution.
@@ -161,17 +162,20 @@ class UQAnalysis:
 
         """
         return {
-            'type':self.__class__.__name__,
-            'seed':self.seed,
-            'aleatory_variables':{name:dist._to_dict() for name, dist in self.aleatory_var_to_dist.items()},
-            'analysis_workflow':self.UQ_workflow._to_dict(),
-            'post_processing':self.post_spec.__name__ if self.post_spec else None
+            "type": self.__class__.__name__,
+            "seed": self.seed,
+            "aleatory_variables": {
+                name: dist._to_dict()
+                for name, dist in self.aleatory_var_to_dist.items()
+            },
+            "analysis_workflow": self.UQ_workflow._to_dict(),
+            "post_processing": self.post_spec.__name__ if self.post_spec else None,
         }
 
     @classmethod
-    def _from_dict(cls,UQdict):
+    def _from_dict(cls, UQdict):
 
-        #load in the workflow from dictionary
+        # load in the workflow from dictionary
         """Reconstruct this object from serialized dictionary data.
 
         Parameters
@@ -185,26 +189,30 @@ class UQAnalysis:
             Reconstructed object instance.
 
         """
-        workflow_dict=UQdict['analysis_workflow']
-        workflow=workflow_name_to_class_registry[workflow_dict['name']]._from_dict(workflow_dict)
+        workflow_dict = UQdict["analysis_workflow"]
+        workflow = workflow_name_to_class_registry[workflow_dict["name"]]._from_dict(
+            workflow_dict
+        )
         # load in seed
-        seed=UQdict['seed']
-        #instantiate class
-        UQanalysis=cls(workflow,seed)
-        #iterate through the aleatory variables to readd
-        for name,distribution_data in UQdict['aleatory_variables'].items():
-            dist=distribution_name_to_class_registry[distribution_data['name']]._from_dict(distribution_data)
-            UQanalysis.add_aleatory_variable(name,dist)
-        if UQdict['post_processing'] is not None:
-            UQanalysis.post_spec=post_workflow_name_to_class_registry[UQdict['post_processing']]
+        seed = UQdict["seed"]
+        # instantiate class
+        UQanalysis = cls(workflow, seed)
+        # iterate through the aleatory variables to readd
+        for name, distribution_data in UQdict["aleatory_variables"].items():
+            dist = distribution_name_to_class_registry[
+                distribution_data["name"]
+            ]._from_dict(distribution_data)
+            UQanalysis.add_aleatory_variable(name, dist)
+        if UQdict["post_processing"] is not None:
+            UQanalysis.post_spec = post_workflow_name_to_class_registry[
+                UQdict["post_processing"]
+            ]
         return UQanalysis
 
 
-
-#Analysis workflow pre classes
+# Analysis workflow pre classes
 @register_workflow
 class BasicStats:
-
     """Represent the basicstats component in the UAM4X workflow.
 
     Notes
@@ -212,7 +220,8 @@ class BasicStats:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,num_samples,SamplingClass):
+
+    def __init__(self, num_samples, SamplingClass):
         """Initialize object state and configuration.
 
         Parameters
@@ -226,8 +235,8 @@ class BasicStats:
         self.num_samples = num_samples
         self.SamplingClass = SamplingClass
 
-    def _get_states(self,aleatory_to_distribution):
-        #states should be a list of dictionaries
+    def _get_states(self, aleatory_to_distribution):
+        # states should be a list of dictionaries
         """Generate analysis state dictionaries from configured distributions.
 
         Parameters
@@ -241,12 +250,14 @@ class BasicStats:
             Return value produced by this method.
 
         """
-        sample_points,var_name_to_col=self.SamplingClass.sample(aleatory_to_distribution,self.num_samples)
-        states=[]
+        sample_points, var_name_to_col = self.SamplingClass.sample(
+            aleatory_to_distribution, self.num_samples
+        )
+        states = []
         for row in range(sample_points.shape[0]):
-            local_state={}
-            for name,col in var_name_to_col.items():
-                local_state[name]=sample_points[row,col]
+            local_state = {}
+            for name, col in var_name_to_col.items():
+                local_state[name] = sample_points[row, col]
             states.append(local_state)
         return states
 
@@ -260,13 +271,13 @@ class BasicStats:
 
         """
         return {
-            'name':self.__class__.__name__,
-            'sampler': self.SamplingClass.__name__,
-            'num_samples':self.num_samples
+            "name": self.__class__.__name__,
+            "sampler": self.SamplingClass.__name__,
+            "num_samples": self.num_samples,
         }
 
     @classmethod
-    def _from_dict(cls,workflow_dict):
+    def _from_dict(cls, workflow_dict):
         """Reconstruct this object from serialized dictionary data.
 
         Parameters
@@ -280,9 +291,10 @@ class BasicStats:
             Reconstructed object instance.
 
         """
-        sampler=sampler_name_to_class_registry[workflow_dict['sampler']]
-        num_samples=workflow_dict['num_samples']
-        return cls(num_samples,sampler)
+        sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
+        num_samples = workflow_dict["num_samples"]
+        return cls(num_samples, sampler)
+
 
 @register_workflow
 class RegressionPCE(BasicStats):
@@ -293,7 +305,8 @@ class RegressionPCE(BasicStats):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,num_samples,SamplingClass,poly_order):
+
+    def __init__(self, num_samples, SamplingClass, poly_order):
         """Initialize object state and configuration.
 
         Parameters
@@ -306,11 +319,11 @@ class RegressionPCE(BasicStats):
             Polynomial order used for chaos expansions.
 
         """
-        super().__init__(num_samples,SamplingClass)
-        self.poly_order=poly_order
+        super().__init__(num_samples, SamplingClass)
+        self.poly_order = poly_order
 
-    def _check_analysis(self,UQAnalysis):
-        #check order and number of aleatory vs. num samples
+    def _check_analysis(self, UQAnalysis):
+        # check order and number of aleatory vs. num samples
         # from XIU Polynomial expansion, dimension of space is C(order+number of random vars,number of random vars)
         # should oversample 2-3x
         """Validate that workflow settings are consistent with requested analysis.
@@ -321,12 +334,14 @@ class RegressionPCE(BasicStats):
             Input value for `UQAnalysis`.
 
         """
-        num_aleatory=len(UQAnalysis.aleatory_var_to_dist)
-        min_terms=comb(self.poly_order+num_aleatory,self.poly_order)
-        if min_terms>self.num_samples:
-            raise ValueError(f'Insufficient terms for polynomial chaos expansion of degree {self.poly_order} for {num_aleatory} random variables')
-        elif min_terms*3>self.num_samples:
-            print('Warning')
+        num_aleatory = len(UQAnalysis.aleatory_var_to_dist)
+        min_terms = comb(self.poly_order + num_aleatory, self.poly_order)
+        if min_terms > self.num_samples:
+            raise ValueError(
+                f"Insufficient terms for polynomial chaos expansion of degree {self.poly_order} for {num_aleatory} random variables"
+            )
+        elif min_terms * 3 > self.num_samples:
+            print("Warning")
 
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
@@ -338,14 +353,14 @@ class RegressionPCE(BasicStats):
 
         """
         return {
-            'name': self.__class__.__name__,
-            'sampler':self.SamplingClass.__name__,
-            'num_samples':self.num_samples,
-            'polynomial_order':self.poly_order
+            "name": self.__class__.__name__,
+            "sampler": self.SamplingClass.__name__,
+            "num_samples": self.num_samples,
+            "polynomial_order": self.poly_order,
         }
 
     @classmethod
-    def _from_dict(cls,workflow_dict):
+    def _from_dict(cls, workflow_dict):
         """Reconstruct this object from serialized dictionary data.
 
         Parameters
@@ -359,10 +374,10 @@ class RegressionPCE(BasicStats):
             Reconstructed object instance.
 
         """
-        sampler=sampler_name_to_class_registry[workflow_dict['sampler']]
-        num_samples=workflow_dict['num_samples']
-        poly_order=workflow_dict['polynomial_order']
-        return cls(num_samples,sampler,poly_order)
+        sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
+        num_samples = workflow_dict["num_samples"]
+        poly_order = workflow_dict["polynomial_order"]
+        return cls(num_samples, sampler, poly_order)
 
 
 @register_workflow
@@ -374,7 +389,8 @@ class GaussQuadraturePCE:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,poly_order):
+
+    def __init__(self, poly_order):
         """Initialize object state and configuration.
 
         Parameters
@@ -383,9 +399,9 @@ class GaussQuadraturePCE:
             Polynomial order used for chaos expansions.
 
         """
-        self.poly_order=poly_order
+        self.poly_order = poly_order
 
-    def _check_analysis(self,UQAnalysis):
+    def _check_analysis(self, UQAnalysis):
         """Validate that workflow settings are consistent with requested analysis.
 
         Parameters
@@ -394,9 +410,11 @@ class GaussQuadraturePCE:
             Input value for `UQAnalysis`.
 
         """
-        num_aleatory=len(UQAnalysis.aleatory_var_to_dist)
-        if num_aleatory>5:
-            raise ValueError('Quadrature based PCE may not be efficient for more than 5 aleatory variables')
+        num_aleatory = len(UQAnalysis.aleatory_var_to_dist)
+        if num_aleatory > 5:
+            raise ValueError(
+                "Quadrature based PCE may not be efficient for more than 5 aleatory variables"
+            )
 
     def _get_states(self, aleatory_to_distribution):
         """Generate analysis state dictionaries from configured distributions.
@@ -412,38 +430,36 @@ class GaussQuadraturePCE:
             Return value produced by this method.
 
         """
-        num_aleatory=len(aleatory_to_distribution)
+        num_aleatory = len(aleatory_to_distribution)
 
-        if num_aleatory==1:
-            (name,dist),=aleatory_to_distribution.items()
-            var_name_to_col={name:0}
-            dist=dist._OT_Dist()
+        if num_aleatory == 1:
+            ((name, dist),) = aleatory_to_distribution.items()
+            var_name_to_col = {name: 0}
+            dist = dist._OT_Dist()
         else:
-            joint=[]
-            var_name_to_col={}
-            for i,(name, dist) in enumerate(aleatory_to_distribution.items()):
+            joint = []
+            var_name_to_col = {}
+            for i, (name, dist) in enumerate(aleatory_to_distribution.items()):
                 joint.append(dist._OT_Dist())
-                var_name_to_col[name]=i
-            dist=ot.JointDistribution(joint)
+                var_name_to_col[name] = i
+            dist = ot.JointDistribution(joint)
 
         # Experiment with joint distribution with k marginals
         # the points per var is poly deg+1, the total number of points is
         # (deg+1)^k for full tensor implementation (used here)
-        points_per_var=[self.poly_order+1]*num_aleatory
-        experiment=ot.GaussProductExperiment(dist,points_per_var)
-        nodes,weights=experiment.generateWithWeights()
-        nodes,weights=np.array(nodes),np.array(weights)
+        points_per_var = [self.poly_order + 1] * num_aleatory
+        experiment = ot.GaussProductExperiment(dist, points_per_var)
+        nodes, weights = experiment.generateWithWeights()
+        nodes, weights = np.array(nodes), np.array(weights)
 
-        states=[]
+        states = []
         for row in range(nodes.shape[0]):
-            local_state={'weight':weights[row]}
-            for name,col in var_name_to_col.items():
-                local_state[name]=nodes[row,col]
+            local_state = {"weight": weights[row]}
+            for name, col in var_name_to_col.items():
+                local_state[name] = nodes[row, col]
             states.append(local_state)
 
         return states
-
-
 
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
@@ -454,13 +470,10 @@ class GaussQuadraturePCE:
             JSON-serializable representation.
 
         """
-        return {
-            'name': self.__class__.__name__,
-            'polynomial_order':self.poly_order
-        }
+        return {"name": self.__class__.__name__, "polynomial_order": self.poly_order}
 
     @classmethod
-    def _from_dict(cls,workflow_dict):
+    def _from_dict(cls, workflow_dict):
         """Reconstruct this object from serialized dictionary data.
 
         Parameters
@@ -474,8 +487,9 @@ class GaussQuadraturePCE:
             Reconstructed object instance.
 
         """
-        poly_order=workflow_dict['polynomial_order']
+        poly_order = workflow_dict["polynomial_order"]
         return cls(poly_order)
+
 
 @register_workflow
 class SobolSensitivity(BasicStats):
@@ -486,7 +500,8 @@ class SobolSensitivity(BasicStats):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,num_samples,SamplingClass,computeSecondOrder:bool=False):
+
+    def __init__(self, num_samples, SamplingClass, computeSecondOrder: bool = False):
         """Initialize object state and configuration.
 
         Parameters
@@ -499,9 +514,8 @@ class SobolSensitivity(BasicStats):
             Whether second-order Sobol terms are generated.
 
         """
-        super().__init__(num_samples,SamplingClass)
-        self.computeSecondOrder=computeSecondOrder
-
+        super().__init__(num_samples, SamplingClass)
+        self.computeSecondOrder = computeSecondOrder
 
     def _get_states(self, aleatory_to_distribution):
         """Generate analysis state dictionaries from configured distributions.
@@ -517,44 +531,51 @@ class SobolSensitivity(BasicStats):
             Return value produced by this method.
 
         """
-        ot.ResourceMap.Set('SobolIndicesExperiment-SamplingMethod',self.SamplingClass._OT_ResourceMapName)
-        if len(aleatory_to_distribution)==1:
-            (name,dist),=aleatory_to_distribution.items()
-            var_name_to_col={name:0}
-            dist=dist._OT_Dist()
+        ot.ResourceMap.Set(
+            "SobolIndicesExperiment-SamplingMethod",
+            self.SamplingClass._OT_ResourceMapName,
+        )
+        if len(aleatory_to_distribution) == 1:
+            ((name, dist),) = aleatory_to_distribution.items()
+            var_name_to_col = {name: 0}
+            dist = dist._OT_Dist()
         else:
-            joint=[]
-            var_name_to_col={}
-            for i,(name, dist) in enumerate(aleatory_to_distribution.items()):
+            joint = []
+            var_name_to_col = {}
+            for i, (name, dist) in enumerate(aleatory_to_distribution.items()):
                 joint.append(dist._OT_Dist())
-                var_name_to_col[name]=i
-            dist=ot.JointDistribution(joint)
+                var_name_to_col[name] = i
+            dist = ot.JointDistribution(joint)
 
-        experiment=ot.SobolIndicesExperiment(dist,self.num_samples,self.computeSecondOrder)
-        results=np.array(experiment.generate())
+        experiment = ot.SobolIndicesExperiment(
+            dist, self.num_samples, self.computeSecondOrder
+        )
+        results = np.array(experiment.generate())
 
         # check matrix size:
         # from OpenTurns documentation: if computeSecondOrder is false, number of rows is N(2+nx) where N is num
         # samples and nx is number of marginals (distributions/aleatory vars)
         # if computeSecondOrder is true and nx=2, same as above
         # elif computeSecondOrder and nx!=2, rows is N(2+2*nx)
-        if (not self.computeSecondOrder) or len(aleatory_to_distribution)==2:
-            if results.shape[0]!=self.num_samples*(2+len(aleatory_to_distribution)):
-                raise ValueError(f'Number of rows is unexpected {results.shape[0]}')
+        if (not self.computeSecondOrder) or len(aleatory_to_distribution) == 2:
+            if results.shape[0] != self.num_samples * (
+                2 + len(aleatory_to_distribution)
+            ):
+                raise ValueError(f"Number of rows is unexpected {results.shape[0]}")
         else:
-            if results.shape[0]!=self.num_samples*(2+2*len(aleatory_to_distribution)):
-                raise ValueError(f'Number of rows is unexpected {results.shape[0]}')
+            if results.shape[0] != self.num_samples * (
+                2 + 2 * len(aleatory_to_distribution)
+            ):
+                raise ValueError(f"Number of rows is unexpected {results.shape[0]}")
 
-        states=[]
+        states = []
         for row in range(results.shape[0]):
-            local_state={}
-            for name,col in var_name_to_col.items():
-                local_state[name]=results[row,col]
+            local_state = {}
+            for name, col in var_name_to_col.items():
+                local_state[name] = results[row, col]
             states.append(local_state)
 
-
         return states
-
 
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
@@ -566,14 +587,14 @@ class SobolSensitivity(BasicStats):
 
         """
         return {
-            'name': self.__class__.__name__,
-            'sampler':self.SamplingClass.__name__,
-            'num_samples':self.num_samples,
-            'second_order_sobol':self.computeSecondOrder,
+            "name": self.__class__.__name__,
+            "sampler": self.SamplingClass.__name__,
+            "num_samples": self.num_samples,
+            "second_order_sobol": self.computeSecondOrder,
         }
 
     @classmethod
-    def _from_dict(cls,workflow_dict):
+    def _from_dict(cls, workflow_dict):
         """Reconstruct this object from serialized dictionary data.
 
         Parameters
@@ -587,11 +608,11 @@ class SobolSensitivity(BasicStats):
             Reconstructed object instance.
 
         """
-        sampler=sampler_name_to_class_registry[workflow_dict['sampler']]
-        num_samples=workflow_dict['num_samples']
-        second_order_sobol=workflow_dict['second_order_sobol']
+        sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
+        num_samples = workflow_dict["num_samples"]
+        second_order_sobol = workflow_dict["second_order_sobol"]
 
-        sobol_workflow=cls(num_samples,sampler,second_order_sobol)
+        sobol_workflow = cls(num_samples, sampler, second_order_sobol)
 
         return sobol_workflow
 
@@ -606,18 +627,19 @@ class BasicStatsPost:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,tradestudy:Tradestudy):
-            """Initialize object state and configuration.
 
-            Parameters
-            ----------
-            tradestudy : Tradestudy
-                Trade-study results container used for post-processing.
+    def __init__(self, tradestudy: Tradestudy):
+        """Initialize object state and configuration.
 
-            """
-            self.tradestudy=tradestudy
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
 
-    def compute_mean(self,var_name):
+        """
+        self.tradestudy = tradestudy
+
+    def compute_mean(self, var_name):
         """Compute the sample mean for a variable across trade-study results.
 
         Parameters
@@ -631,10 +653,10 @@ class BasicStatsPost:
             Computed statistic or metric.
 
         """
-        vals=self.tradestudy.get_variable(var_name)
+        vals = self.tradestudy.get_variable(var_name)
         return np.average(vals)
 
-    def compute_variance(self, var_name,method='sample'):
+    def compute_variance(self, var_name, method="sample"):
         """Compute the sample or population variance for a variable.
 
         Parameters
@@ -651,8 +673,8 @@ class BasicStatsPost:
 
         """
         vals = self.tradestudy.get_variable(var_name)
-        sample=['s','sample']
-        population=['p','pop','population']
+        sample = ["s", "sample"]
+        population = ["p", "pop", "population"]
         if method in sample:
             return float(np.var(vals, ddof=1))
         elif method in population:
@@ -660,7 +682,7 @@ class BasicStatsPost:
         else:
             raise ValueError()
 
-    def compute_std(self, var_name,method='sample'):
+    def compute_std(self, var_name, method="sample"):
         """Compute the sample or population standard deviation for a variable.
 
         Parameters
@@ -677,8 +699,8 @@ class BasicStatsPost:
 
         """
         vals = self.tradestudy.get_variable(var_name)
-        sample=['s','sample']
-        population=['p','pop','population']
+        sample = ["s", "sample"]
+        population = ["p", "pop", "population"]
         if method in sample:
             return float(np.std(vals, ddof=1))
         elif method in population:
@@ -686,8 +708,7 @@ class BasicStatsPost:
         else:
             raise ValueError()
 
-
-    def compute_skewness(self,var_name,bias=True):
+    def compute_skewness(self, var_name, bias=True):
 
         # uses Fisher-Pearson
         """Compute Fisher-Pearson skewness for a variable.
@@ -706,9 +727,9 @@ class BasicStatsPost:
 
         """
         vals = np.array(self.tradestudy.get_variable(var_name))
-        return stats.skew(vals,nan_policy='raise',bias=bias)
+        return stats.skew(vals, nan_policy="raise", bias=bias)
 
-    def compute_kurtosis(self,var_name,fisher=True,bias=True):
+    def compute_kurtosis(self, var_name, fisher=True, bias=True):
         # uses fisher or pearson
         """Compute kurtosis for a variable using SciPy conventions.
 
@@ -728,9 +749,17 @@ class BasicStatsPost:
 
         """
         vals = np.array(self.tradestudy.get_variable(var_name))
-        return stats.kurtosis(vals,nan_policy='raise',bias=bias,fisher=fisher)
+        return stats.kurtosis(vals, nan_policy="raise", bias=bias, fisher=fisher)
 
-    def plot_pdf(self,var_name,x_axis_title=None,plot_title='',method='histogram',bins=20,save_dir=None):
+    def plot_pdf(
+        self,
+        var_name,
+        x_axis_title=None,
+        plot_title="",
+        method="histogram",
+        bins=20,
+        save_dir=None,
+    ):
         """Plot a PDF from previously generated surrogate samples.
 
         Parameters
@@ -754,34 +783,50 @@ class BasicStatsPost:
             Plot artifact (axes object or plotted data).
 
         """
-        histo=['histogram','h']
-        kernal=['kde','kernel_density_estimate','kernel','k']
+        histo = ["histogram", "h"]
+        kernal = ["kde", "kernel_density_estimate", "kernel", "k"]
         if method in histo:
             vals = np.array(self.tradestudy.get_variable(var_name))
-            fig,ax=plt.subplots(figsize=(10,6))
-            ax.hist(vals,bins=bins,color='blue',edgecolor='black')
-            ax.set_title(plot_title if plot_title else f'PDF of {var_name}', fontsize=16,fontweight='bold')
-            ax.set_xlabel(x_axis_title if x_axis_title is not None else var_name, fontsize=14)
-            ax.set_ylabel('Frequency', fontsize=14)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.hist(vals, bins=bins, color="blue", edgecolor="black")
+            ax.set_title(
+                plot_title if plot_title else f"PDF of {var_name}",
+                fontsize=16,
+                fontweight="bold",
+            )
+            ax.set_xlabel(
+                x_axis_title if x_axis_title is not None else var_name, fontsize=14
+            )
+            ax.set_ylabel("Frequency", fontsize=14)
         elif method in kernal:
             vals = np.array(self.tradestudy.get_variable(var_name))
-            fig,ax=plt.subplots(figsize=(10,6))
+            fig, ax = plt.subplots(figsize=(10, 6))
             kde = stats.gaussian_kde(vals)
             x_range = np.linspace(vals.min(), vals.max(), 100)
-            ax.plot(x_range, kde(x_range), color='blue')
-            ax.set_title(plot_title if plot_title else f'PDF of {var_name}', fontsize=16,fontweight='bold')
-            ax.set_xlabel(x_axis_title if x_axis_title is not None else var_name, fontsize=14)
-            ax.set_ylabel('Density', fontsize=14)
+            ax.plot(x_range, kde(x_range), color="blue")
+            ax.set_title(
+                plot_title if plot_title else f"PDF of {var_name}",
+                fontsize=16,
+                fontweight="bold",
+            )
+            ax.set_xlabel(
+                x_axis_title if x_axis_title is not None else var_name, fontsize=14
+            )
+            ax.set_ylabel("Density", fontsize=14)
         else:
             raise ValueError()
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
 
         if save_dir is not None:
-            plt.savefig(f"{save_dir}/PDF_{var_name.replace(' ','_')}.png", dpi=300, bbox_inches='tight')
+            plt.savefig(
+                f"{save_dir}/PDF_{var_name.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
 
         return ax
 
-    def plot_cdf(self,var_name,x_axis_title=None,plot_title='',save_dir=None):
+    def plot_cdf(self, var_name, x_axis_title=None, plot_title="", save_dir=None):
         """Plot a CDF from previously generated surrogate samples.
 
         Parameters
@@ -801,27 +846,31 @@ class BasicStatsPost:
             Plot artifact (axes object or plotted data).
 
         """
-        vals=np.array(self.tradestudy.get_variable(var_name))
-        ecdf=stats.ecdf(vals)
-        quantiles=ecdf.cdf.quantiles
-        probabilities=ecdf.cdf.probabilities
-        fig,ax=plt.subplots(figsize=(10,6))
-        ax.plot(quantiles,probabilities,color='blue')
+        vals = np.array(self.tradestudy.get_variable(var_name))
+        ecdf = stats.ecdf(vals)
+        quantiles = ecdf.cdf.quantiles
+        probabilities = ecdf.cdf.probabilities
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(quantiles, probabilities, color="blue")
         if x_axis_title is None:
-            x_axis_title=var_name
-        if plot_title=='':
-            plot_title=f'CDF of {x_axis_title}'
-        ax.set_title(plot_title, fontsize=16,fontweight='bold')
+            x_axis_title = var_name
+        if plot_title == "":
+            plot_title = f"CDF of {x_axis_title}"
+        ax.set_title(plot_title, fontsize=16, fontweight="bold")
         ax.set_xlabel(x_axis_title, fontsize=14)
-        ax.set_ylabel('Probability', fontsize=14)
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        ax.set_ylabel("Probability", fontsize=14)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
 
         if save_dir is not None:
-            plt.savefig(f"{save_dir}/{plot_title.replace(' ','_')}.png", dpi=300, bbox_inches='tight')
+            plt.savefig(
+                f"{save_dir}/{plot_title.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
 
-        return np.hstack((quantiles,probabilities))
+        return np.hstack((quantiles, probabilities))
 
-    def get_cdf_function(self,var_name,method='empirical'):
+    def get_cdf_function(self, var_name, method="empirical"):
         """Return a callable CDF approximation for a variable.
 
         Parameters
@@ -837,11 +886,12 @@ class BasicStatsPost:
             Requested value.
 
         """
-        vals=np.array(self.tradestudy.get_variable(var_name))
-        ecdf=stats.ecdf(vals)
-        quantiles=ecdf.cdf.quantiles
-        probabilities=ecdf.cdf.probabilities
-        if method=='empirical':
+        vals = np.array(self.tradestudy.get_variable(var_name))
+        ecdf = stats.ecdf(vals)
+        quantiles = ecdf.cdf.quantiles
+        probabilities = ecdf.cdf.probabilities
+        if method == "empirical":
+
             def cdf(x):
                 """Execute cdf.
 
@@ -857,7 +907,9 @@ class BasicStatsPost:
 
                 """
                 return ecdf.cdf.evaluate(x)
-        elif method=='smooth':
+
+        elif method == "smooth":
+
             def cdf(x):
                 """Execute cdf.
 
@@ -872,12 +924,13 @@ class BasicStatsPost:
                     Return value produced by this operation.
 
                 """
-                return np.interp(x,quantiles,probabilities,left=0.0,right=1.0)
+                return np.interp(x, quantiles, probabilities, left=0.0, right=1.0)
+
         else:
             raise ValueError
         return cdf
 
-    def compute_cdf_value(self,var_name,value,method='empirical'):
+    def compute_cdf_value(self, var_name, value, method="empirical"):
         """Evaluate the CDF value at a specified point.
 
         Parameters
@@ -895,19 +948,18 @@ class BasicStatsPost:
             Computed statistic or metric.
 
         """
-        vals=np.array(self.tradestudy.get_variable(var_name))
-        ecdf=stats.ecdf(vals)
-        quantiles=ecdf.cdf.quantiles
-        probabilities=ecdf.cdf.probabilities
-        if method=='empirical':
+        vals = np.array(self.tradestudy.get_variable(var_name))
+        ecdf = stats.ecdf(vals)
+        quantiles = ecdf.cdf.quantiles
+        probabilities = ecdf.cdf.probabilities
+        if method == "empirical":
             return ecdf.cdf.evaluate(value)
-        elif method=='smooth':
-            return np.interp(value,quantiles,probabilities,left=0.0,right=1.0)
+        elif method == "smooth":
+            return np.interp(value, quantiles, probabilities, left=0.0, right=1.0)
         else:
             raise ValueError
 
-
-    def compute_quantile(self,var_name,quantile,method='inverted_cdf'):
+    def compute_quantile(self, var_name, quantile, method="inverted_cdf"):
         """Compute a quantile value for a variable distribution.
 
         Parameters
@@ -925,29 +977,29 @@ class BasicStatsPost:
             Computed statistic or metric.
 
         """
-        if quantile<0.0 or quantile>1.0:
+        if quantile < 0.0 or quantile > 1.0:
             raise ValueError()
-        methods=[
-            'inverted_cdf',
-            'averaged_inverted_cdf',
-            'closest_observation',
-            'interpolated_inverted_cdf',
-            'hazen',
-            'weibull',
-            'linear',
-            'median_unbiased',
-            'normal_unbiased'
+        methods = [
+            "inverted_cdf",
+            "averaged_inverted_cdf",
+            "closest_observation",
+            "interpolated_inverted_cdf",
+            "hazen",
+            "weibull",
+            "linear",
+            "median_unbiased",
+            "normal_unbiased",
         ]
 
         if method not in methods:
             raise ValueError
 
-        vals=np.array(self.tradestudy.get_variable(var_name))
+        vals = np.array(self.tradestudy.get_variable(var_name))
 
-        return np.quantile(vals,quantile,method=method)
+        return np.quantile(vals, quantile, method=method)
 
-    def compute_spearman_correlation(self,var_name1,var_name2):
-        #NEED TO DETERMINE NAN POLICY
+    def compute_spearman_correlation(self, var_name1, var_name2):
+        # NEED TO DETERMINE NAN POLICY
         """Compute Spearman rank correlation between two variables.
 
         Parameters
@@ -963,14 +1015,14 @@ class BasicStatsPost:
             Computed statistic or metric.
 
         """
-        var1_vals=np.array(self.tradestudy.get_variable(var_name1))
-        var2_vals=np.array(self.tradestudy.get_variable(var_name2))
-        significance_res,p_val=stats.spearmanr(var1_vals,var2_vals)
-        #SHOULD HANDLE >3 VARS REQUIRES MATRIX
-        return significance_res,p_val
+        var1_vals = np.array(self.tradestudy.get_variable(var_name1))
+        var2_vals = np.array(self.tradestudy.get_variable(var_name2))
+        significance_res, p_val = stats.spearmanr(var1_vals, var2_vals)
+        # SHOULD HANDLE >3 VARS REQUIRES MATRIX
+        return significance_res, p_val
 
-    def compute_pearson_correlation(self,var_name1,var_name2):
-        #NEED TO DETERMINE NAN POLICY
+    def compute_pearson_correlation(self, var_name1, var_name2):
+        # NEED TO DETERMINE NAN POLICY
         """Compute Pearson linear correlation between two variables.
 
         Parameters
@@ -986,12 +1038,11 @@ class BasicStatsPost:
             Computed statistic or metric.
 
         """
-        var1_vals=np.array(self.tradestudy.get_variable(var_name1))
-        var2_vals=np.array(self.tradestudy.get_variable(var_name2))
-        significance_res,p_val=stats.pearsonr(var1_vals,var2_vals)
-        #SHOULD HANDLE >3 VARS REQUIRES MATRIX
-        return significance_res,p_val
-
+        var1_vals = np.array(self.tradestudy.get_variable(var_name1))
+        var2_vals = np.array(self.tradestudy.get_variable(var_name2))
+        significance_res, p_val = stats.pearsonr(var1_vals, var2_vals)
+        # SHOULD HANDLE >3 VARS REQUIRES MATRIX
+        return significance_res, p_val
 
 
 class MixedBasicStatsPost(BasicStatsPost):
@@ -1002,7 +1053,8 @@ class MixedBasicStatsPost(BasicStatsPost):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,tradestudy:Tradestudy):
+
+    def __init__(self, tradestudy: Tradestudy):
         """Initialize object state and configuration.
 
         Parameters
@@ -1034,7 +1086,6 @@ class MixedBasicStatsPost(BasicStatsPost):
         pass
 
 
-
 @register_post_workflow
 class RegressionPCEPost(BasicStatsPost):
     """Represent the regressionpcepost component in the UAM4X workflow.
@@ -1044,7 +1095,8 @@ class RegressionPCEPost(BasicStatsPost):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,tradestudy:Tradestudy):
+
+    def __init__(self, tradestudy: Tradestudy):
         """Initialize object state and configuration.
 
         Parameters
@@ -1055,7 +1107,7 @@ class RegressionPCEPost(BasicStatsPost):
         """
         super().__init__(tradestudy)
 
-    def generate_surrogate(self,output_name):
+    def generate_surrogate(self, output_name):
         """Build and return a polynomial-chaos surrogate for one output variable.
 
         Parameters
@@ -1069,74 +1121,79 @@ class RegressionPCEPost(BasicStatsPost):
             Return value produced by this method.
 
         """
-        trade_name=self.tradestudy.trade_name
-        ts=self.tradestudy.study.control.trade_studies[trade_name]
-        num_samples=ts.UQ_workflow.num_samples
-        aleatory_var_to_dist=ts.aleatory_var_to_dist
-        poly_factories=[]
-        abscissas=np.zeros((num_samples,len(aleatory_var_to_dist)))
-        joint_list=[]
-        for i,(name,distribution) in enumerate(aleatory_var_to_dist.items()):
-            if isinstance(distribution,LogNormalDistribution):
-                #special transformation of log-->normal since no analytical
-                #polynomials for log (was getting error)
+        trade_name = self.tradestudy.trade_name
+        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        num_samples = ts.UQ_workflow.num_samples
+        aleatory_var_to_dist = ts.aleatory_var_to_dist
+        poly_factories = []
+        abscissas = np.zeros((num_samples, len(aleatory_var_to_dist)))
+        joint_list = []
+        for i, (name, distribution) in enumerate(aleatory_var_to_dist.items()):
+            if isinstance(distribution, LogNormalDistribution):
+                # special transformation of log-->normal since no analytical
+                # polynomials for log (was getting error)
 
-                #transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
-                #then this says the log of Y is normally distributed with mean mu and
+                # transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
+                # then this says the log of Y is normally distributed with mean mu and
                 # standard deviation sigma (the log distribution has different expectation)
-                #and variance
-                ot_dist=ot.Normal(distribution.mu_log,distribution.sigma_log)
-                #first center the log distribution by getting rid of the gamma shift
-                #then take the natural log, X=ln(Y-gamma)
-                x_phys=np.array(self.tradestudy.get_variable(name))
-                z=x_phys-distribution.gamma
-                if np.any(z)<=0.0:
+                # and variance
+                ot_dist = ot.Normal(distribution.mu_log, distribution.sigma_log)
+                # first center the log distribution by getting rid of the gamma shift
+                # then take the natural log, X=ln(Y-gamma)
+                x_phys = np.array(self.tradestudy.get_variable(name))
+                z = x_phys - distribution.gamma
+                if np.any(z) <= 0.0:
                     raise ValueError()
 
-                new_vals=np.log(z)
+                new_vals = np.log(z)
                 abscissas[:, i] = new_vals
                 poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
             else:
-                ot_dist=distribution._OT_Dist()
+                ot_dist = distribution._OT_Dist()
                 poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
-                abscissas[:,i]=np.array(self.tradestudy.get_variable(name))
-
+                abscissas[:, i] = np.array(self.tradestudy.get_variable(name))
 
             joint_list.append(ot_dist)
 
-
         # Data as OT samples
-        abscissas=ot.Sample(abscissas)
-        outputs=ot.Sample(np.array(self.tradestudy.get_variable(output_name))[:,None])
+        abscissas = ot.Sample(abscissas)
+        outputs = ot.Sample(
+            np.array(self.tradestudy.get_variable(output_name))[:, None]
+        )
 
         # Joint distribution based on independent input aleatory dists
-        joint=ot.JointDistribution(joint_list)
+        joint = ot.JointDistribution(joint_list)
 
-        #Enumeration function
-        enum=ot.LinearEnumerateFunction(len(aleatory_var_to_dist))
+        # Enumeration function
+        enum = ot.LinearEnumerateFunction(len(aleatory_var_to_dist))
 
         # Basis built from distributions (Normal-->Hermite, Uniform-->Legendre)
-        product_basis=ot.OrthogonalProductPolynomialFactory(poly_factories)
+        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
-        poly_order=ts.UQ_workflow.poly_order
-        basis_size=enum.getBasisSizeFromTotalDegree(poly_order)
-        if basis_size!=comb(poly_order+len(aleatory_var_to_dist),poly_order):
-            raise ValueError(f'Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(aleatory_var_to_dist)}')
+        poly_order = ts.UQ_workflow.poly_order
+        basis_size = enum.getBasisSizeFromTotalDegree(poly_order)
+        if basis_size != comb(poly_order + len(aleatory_var_to_dist), poly_order):
+            raise ValueError(
+                f"Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(aleatory_var_to_dist)}"
+            )
 
         # Selects first P elemens of the polynomial chaos basis according to enumeration function
-        truncation_strategy=ot.FixedStrategy(product_basis,basis_size)
+        truncation_strategy = ot.FixedStrategy(product_basis, basis_size)
 
         # This is regression based PCE, so projection is done via least squares minimization
-        projection_strategy=ot.LeastSquaresStrategy()
+        projection_strategy = ot.LeastSquaresStrategy()
 
-        algo=ot.FunctionalChaosAlgorithm(abscissas,outputs,joint,truncation_strategy,projection_strategy)
+        algo = ot.FunctionalChaosAlgorithm(
+            abscissas, outputs, joint, truncation_strategy, projection_strategy
+        )
         algo.run()
-        res=algo.getResult()
+        res = algo.getResult()
 
-        aleatory_var_to_dist=ts.aleatory_var_to_dist
+        aleatory_var_to_dist = ts.aleatory_var_to_dist
 
-        return Surrogate(aleatory_var_to_dist,res)
+        return Surrogate(aleatory_var_to_dist, res)
+
 
 @register_post_workflow
 class GaussQuadtraturePCEPost(BasicStatsPost):
@@ -1147,7 +1204,8 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,tradestudy:Tradestudy):
+
+    def __init__(self, tradestudy: Tradestudy):
         """Initialize object state and configuration.
 
         Parameters
@@ -1158,7 +1216,7 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
         """
         super().__init__(tradestudy)
 
-    def generate_surrogate(self,output_name):
+    def generate_surrogate(self, output_name):
         """Build and return a polynomial-chaos surrogate for one output variable.
 
         Parameters
@@ -1172,81 +1230,86 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
             Return value produced by this method.
 
         """
-        trade_name=self.tradestudy.trade_name
-        ts=self.tradestudy.study.control.trade_studies[trade_name]
-        aleatory_var_to_dist=ts.aleatory_var_to_dist
-        num_aleatory=len(aleatory_var_to_dist)
-        num_samples=(ts.UQ_workflow.poly_order+1)**num_aleatory
-        #get the weights:
-        weights=[]
+        trade_name = self.tradestudy.trade_name
+        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        aleatory_var_to_dist = ts.aleatory_var_to_dist
+        num_aleatory = len(aleatory_var_to_dist)
+        num_samples = (ts.UQ_workflow.poly_order + 1) ** num_aleatory
+        # get the weights:
+        weights = []
         for result in self.tradestudy._results:
-            weights.append(result.state['weight'])
-        weights=ot.Point(weights)
-        poly_factories=[]
+            weights.append(result.state["weight"])
+        weights = ot.Point(weights)
+        poly_factories = []
         # matrix of input values
-        abscissas=np.zeros((num_samples,len(aleatory_var_to_dist)))
-        joint_list=[]
-        for i,(name,distribution) in enumerate(aleatory_var_to_dist.items()):
-            if isinstance(distribution,LogNormalDistribution):
-                #special transformation of log-->normal since no analytical
-                #polynomials for log (was getting error)
+        abscissas = np.zeros((num_samples, len(aleatory_var_to_dist)))
+        joint_list = []
+        for i, (name, distribution) in enumerate(aleatory_var_to_dist.items()):
+            if isinstance(distribution, LogNormalDistribution):
+                # special transformation of log-->normal since no analytical
+                # polynomials for log (was getting error)
 
-                #transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
-                #then this says the log of Y is normally distributed with mean mu and
+                # transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
+                # then this says the log of Y is normally distributed with mean mu and
                 # standard deviation sigma (the log distribution has different expectation)
-                #and variance
-                ot_dist=ot.Normal(distribution.mu_log,distribution.sigma_log)
-                #first center the log distribution by getting rid of the gamma shift
-                #then take the natural log, X=ln(Y-gamma)
-                x_phys=np.array(self.tradestudy.get_variable(name))
-                z=x_phys-distribution.gamma
-                if np.any(z)<=0.0:
+                # and variance
+                ot_dist = ot.Normal(distribution.mu_log, distribution.sigma_log)
+                # first center the log distribution by getting rid of the gamma shift
+                # then take the natural log, X=ln(Y-gamma)
+                x_phys = np.array(self.tradestudy.get_variable(name))
+                z = x_phys - distribution.gamma
+                if np.any(z) <= 0.0:
                     raise ValueError()
 
-                new_vals=np.log(z)
+                new_vals = np.log(z)
                 abscissas[:, i] = new_vals
                 poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
             else:
-                ot_dist=distribution._OT_Dist()
+                ot_dist = distribution._OT_Dist()
                 poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
-                abscissas[:,i]=np.array(self.tradestudy.get_variable(name))
-
+                abscissas[:, i] = np.array(self.tradestudy.get_variable(name))
 
             joint_list.append(ot_dist)
 
         # Data as OT samples
-        abscissas=ot.Sample(abscissas)
-        outputs=ot.Sample(np.array(self.tradestudy.get_variable(output_name))[:,None])
+        abscissas = ot.Sample(abscissas)
+        outputs = ot.Sample(
+            np.array(self.tradestudy.get_variable(output_name))[:, None]
+        )
 
         # Joint distribution based on independent input aleatory dists
-        joint=ot.JointDistribution(joint_list)
+        joint = ot.JointDistribution(joint_list)
 
-
-        #Enumeration function
-        enum=ot.LinearEnumerateFunction(len(aleatory_var_to_dist))
+        # Enumeration function
+        enum = ot.LinearEnumerateFunction(len(aleatory_var_to_dist))
 
         # Basis built from distributions (Normal-->Hermite, Uniform-->Legendre)
-        product_basis=ot.OrthogonalProductPolynomialFactory(poly_factories)
+        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
-        poly_order=ts.UQ_workflow.poly_order
-        basis_size=enum.getBasisSizeFromTotalDegree(poly_order)
-        if basis_size!=comb(poly_order+len(aleatory_var_to_dist),poly_order):
-            raise ValueError(f'Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(aleatory_var_to_dist)}')
+        poly_order = ts.UQ_workflow.poly_order
+        basis_size = enum.getBasisSizeFromTotalDegree(poly_order)
+        if basis_size != comb(poly_order + len(aleatory_var_to_dist), poly_order):
+            raise ValueError(
+                f"Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(aleatory_var_to_dist)}"
+            )
 
         # Selects first P elemens of the polynomial chaos basis according to enumeration function
-        truncation_strategy=ot.FixedStrategy(product_basis,basis_size)
+        truncation_strategy = ot.FixedStrategy(product_basis, basis_size)
 
         # Gaussian PCE using integration
-        projection_strategy=ot.IntegrationStrategy()
+        projection_strategy = ot.IntegrationStrategy()
 
-        algo=ot.FunctionalChaosAlgorithm(abscissas,weights,outputs,joint,truncation_strategy,projection_strategy)
+        algo = ot.FunctionalChaosAlgorithm(
+            abscissas, weights, outputs, joint, truncation_strategy, projection_strategy
+        )
         algo.run()
-        res=algo.getResult()
+        res = algo.getResult()
 
-        aleatory_var_to_dist=ts.aleatory_var_to_dist
+        aleatory_var_to_dist = ts.aleatory_var_to_dist
 
-        return Surrogate(aleatory_var_to_dist,res)
+        return Surrogate(aleatory_var_to_dist, res)
+
 
 class Surrogate:
     """Represent the surrogate component in the UAM4X workflow.
@@ -1256,9 +1319,10 @@ class Surrogate:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    def __init__(self,aleatory_var_to_dist,result):
-        #NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
-        #FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
+
+    def __init__(self, aleatory_var_to_dist, result):
+        # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
+        # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
         """Initialize object state and configuration.
 
         Parameters
@@ -1269,15 +1333,14 @@ class Surrogate:
             OpenTurns functional-chaos result object.
 
         """
-        self.aleatory_var_to_dist=aleatory_var_to_dist
-        self._ot_res=result
-        self.new_sample_points=None
-        self.new_sample_values=None
+        self.aleatory_var_to_dist = aleatory_var_to_dist
+        self._ot_res = result
+        self.new_sample_points = None
+        self.new_sample_values = None
 
-
-    def predict(self,name_to_value_dict):
-        #Note, name_to_value_dict should be PHYSICAL inputs, not
-        #probabalistic based inputs
+    def predict(self, name_to_value_dict):
+        # Note, name_to_value_dict should be PHYSICAL inputs, not
+        # probabalistic based inputs
         """Evaluate the surrogate at one dictionary of input variable values.
 
         Parameters
@@ -1291,14 +1354,14 @@ class Surrogate:
             Return value produced by this method.
 
         """
-        vals=[]
-        for name,distribution in self.aleatory_var_to_dist.items():
-            if isinstance(distribution,LogNormalDistribution):
-                transformed_val=np.log(name_to_value_dict[name]-distribution.gamma)
+        vals = []
+        for name, distribution in self.aleatory_var_to_dist.items():
+            if isinstance(distribution, LogNormalDistribution):
+                transformed_val = np.log(name_to_value_dict[name] - distribution.gamma)
                 vals.append(transformed_val)
             else:
                 vals.append(name_to_value_dict[name])
-        point=ot.Point(vals)
+        point = ot.Point(vals)
         return self._ot_res.getMetaModel()(point)
 
     @property
@@ -1312,6 +1375,7 @@ class Surrogate:
 
         """
         return ot.FunctionalChaosRandomVector(self._ot_res).getMean()[0]
+
     @property
     def analytical_variance(self):
         """Execute analytical variance.
@@ -1322,13 +1386,16 @@ class Surrogate:
             Return value produced by this operation.
 
         """
-        ot_var=np.array(ot.FunctionalChaosRandomVector(self._ot_res).getCovariance())[0][0]
-        coeffs=np.array(self._ot_res.getCoefficients())
-        #skip first term which is mean
-        variance=np.sum(coeffs[1:]**2)
-        if np.abs(ot_var-variance)>10**-6:
+        ot_var = np.array(ot.FunctionalChaosRandomVector(self._ot_res).getCovariance())[
+            0
+        ][0]
+        coeffs = np.array(self._ot_res.getCoefficients())
+        # skip first term which is mean
+        variance = np.sum(coeffs[1:] ** 2)
+        if np.abs(ot_var - variance) > 10**-6:
             raise ValueError()
         return variance
+
     @property
     def analytical_std(self):
         """Execute analytical std.
@@ -1341,7 +1408,7 @@ class Surrogate:
         """
         return np.sqrt(self.analytical_variance)
 
-    def sample(self,num_samples,method='MC'):
+    def sample(self, num_samples, method="MC"):
         """Generate new surrogate samples using a selected sampling strategy.
 
         Parameters
@@ -1357,40 +1424,41 @@ class Surrogate:
             Return value produced by this method.
 
         """
-        model=self._ot_res.getMetaModel()
+        model = self._ot_res.getMetaModel()
         # need to add method here?
-        dist=self._ot_res.getDistribution()
-        if method=='MC':
-            experiment=ot.MonteCarloExperiment(dist,num_samples)
-            self.new_sample_points=np.array(experiment.generate())
-        elif method=='LHS':
-            experiment=ot.LHSExperiment(dist,num_samples)
-            self.new_sample_points=np.array(experiment.generate())
-        elif method=='Sobol':
-            sobolseq=ot.SobolSequence(dist.getDimension())
-            experiment=ot.LowDiscrepancyExperiment(sobolseq,dist,num_samples)
-            self.new_sample_points=np.array(experiment.generate())
-        elif method=='Halton':
-            haltonseq=ot.HaltonSequence(dist.getDimension())
-            experiment=ot.LowDiscrepancyExperiment(haltonseq,dist,num_samples)
-            self.new_sample_points=np.array(experiment.generate())
+        dist = self._ot_res.getDistribution()
+        if method == "MC":
+            experiment = ot.MonteCarloExperiment(dist, num_samples)
+            self.new_sample_points = np.array(experiment.generate())
+        elif method == "LHS":
+            experiment = ot.LHSExperiment(dist, num_samples)
+            self.new_sample_points = np.array(experiment.generate())
+        elif method == "Sobol":
+            sobolseq = ot.SobolSequence(dist.getDimension())
+            experiment = ot.LowDiscrepancyExperiment(sobolseq, dist, num_samples)
+            self.new_sample_points = np.array(experiment.generate())
+        elif method == "Halton":
+            haltonseq = ot.HaltonSequence(dist.getDimension())
+            experiment = ot.LowDiscrepancyExperiment(haltonseq, dist, num_samples)
+            self.new_sample_points = np.array(experiment.generate())
 
+        Y = model(self.new_sample_points)
 
-        Y=model(self.new_sample_points)
-
-        #NOTE, SAMPLE POINTS RETURNED ARE PHYSICAL POINTS, NOT Probability space points
+        # NOTE, SAMPLE POINTS RETURNED ARE PHYSICAL POINTS, NOT Probability space points
         # in the case of the lognormal distribution. Basic Uniform and Normal
-        #probability space is equal to the physical since no transformaton occurs.
-        for i,(name,distribution) in enumerate(self.aleatory_var_to_dist.items()):
-            if isinstance(distribution,LogNormalDistribution):
-                #points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
-                #where gamma is the shift
-                self.new_sample_points[:,i]=np.exp(self.new_sample_points[:,i])+distribution.gamma
+        # probability space is equal to the physical since no transformaton occurs.
+        for i, (name, distribution) in enumerate(self.aleatory_var_to_dist.items()):
+            if isinstance(distribution, LogNormalDistribution):
+                # points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
+                # where gamma is the shift
+                self.new_sample_points[:, i] = (
+                    np.exp(self.new_sample_points[:, i]) + distribution.gamma
+                )
 
-        self.new_sample_values=np.array(Y)
-        return np.array(self.new_sample_points),np.array(self.new_sample_values)
+        self.new_sample_values = np.array(Y)
+        return np.array(self.new_sample_points), np.array(self.new_sample_values)
 
-    def plot_cdf(self,save_dir=None):
+    def plot_cdf(self, save_dir=None):
         """Plot a CDF from previously generated surrogate samples.
 
         Parameters
@@ -1405,26 +1473,26 @@ class Surrogate:
 
         """
         if self.new_sample_values is None:
-            raise ValueError('Must generate samples before plotting cdf')
-        vals=self.new_sample_values.flatten()
-        ecdf=stats.ecdf(vals)
-        quantiles=ecdf.cdf.quantiles
-        probabilities=ecdf.cdf.probabilities
-        fig,ax=plt.subplots(figsize=(10,6))
-        ax.plot(quantiles,probabilities,color='blue')
-        ax.set_title(f'CDF of surrogate output', fontsize=16,fontweight='bold')
-        ax.set_xlabel('Output', fontsize=14)
-        ax.set_ylabel('Probability', fontsize=14)
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+            raise ValueError("Must generate samples before plotting cdf")
+        vals = self.new_sample_values.flatten()
+        ecdf = stats.ecdf(vals)
+        quantiles = ecdf.cdf.quantiles
+        probabilities = ecdf.cdf.probabilities
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(quantiles, probabilities, color="blue")
+        ax.set_title(f"CDF of surrogate output", fontsize=16, fontweight="bold")
+        ax.set_xlabel("Output", fontsize=14)
+        ax.set_ylabel("Probability", fontsize=14)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
 
         if save_dir is not None:
-            plt.savefig(f"{save_dir}/CDF_surrogate_output.png", dpi=300, bbox_inches='tight')
+            plt.savefig(
+                f"{save_dir}/CDF_surrogate_output.png", dpi=300, bbox_inches="tight"
+            )
 
-        return np.hstack((quantiles,probabilities))
+        return np.hstack((quantiles, probabilities))
 
-
-
-    def plot_pdf(self,bins=20,save_dir=None):
+    def plot_pdf(self, bins=20, save_dir=None):
         """Plot a PDF from previously generated surrogate samples.
 
         Parameters
@@ -1441,24 +1509,25 @@ class Surrogate:
 
         """
         if self.new_sample_values is None:
-            raise ValueError('Must generate samples before plotting pdf')
-        vals=self.new_sample_values.flatten()
-        fig,ax=plt.subplots(figsize=(10,6))
-        ax.hist(vals,bins=bins,color='blue',edgecolor='black')
-        ax.set_title(f'PDF of surrogate output', fontsize=16,fontweight='bold')
-        ax.set_xlabel('Output', fontsize=14)
-        ax.set_ylabel('Frequency', fontsize=14)
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+            raise ValueError("Must generate samples before plotting pdf")
+        vals = self.new_sample_values.flatten()
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.hist(vals, bins=bins, color="blue", edgecolor="black")
+        ax.set_title(f"PDF of surrogate output", fontsize=16, fontweight="bold")
+        ax.set_xlabel("Output", fontsize=14)
+        ax.set_ylabel("Frequency", fontsize=14)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
 
         if save_dir is not None:
-            plt.savefig(f"{save_dir}/PDF_surrogate_output.png", dpi=300, bbox_inches='tight')
+            plt.savefig(
+                f"{save_dir}/PDF_surrogate_output.png", dpi=300, bbox_inches="tight"
+            )
 
         return ax
 
 
 @register_post_workflow
 class SobolSensitivityPost(BasicStatsPost):
-
     """Represent the sobolsensitivitypost component in the UAM4X workflow.
 
     Notes
@@ -1466,15 +1535,15 @@ class SobolSensitivityPost(BasicStatsPost):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    _METHOD_TO_CLASS={
-        'Saltelli':ot.SaltelliSensitivityAlgorithm,
-        'Jansen':ot.JansenSensitivityAlgorithm,
-        'MauntzKucherenko':ot.MauntzKucherenkoSensitivityAlgorithm,
-        'Martinez':ot.MartinezSensitivityAlgorithm
-        }
 
+    _METHOD_TO_CLASS = {
+        "Saltelli": ot.SaltelliSensitivityAlgorithm,
+        "Jansen": ot.JansenSensitivityAlgorithm,
+        "MauntzKucherenko": ot.MauntzKucherenkoSensitivityAlgorithm,
+        "Martinez": ot.MartinezSensitivityAlgorithm,
+    }
 
-    def init(self,tradestudy):
+    def init(self, tradestudy):
         """Execute init.
 
         Parameters
@@ -1485,7 +1554,7 @@ class SobolSensitivityPost(BasicStatsPost):
         """
         super().init(tradestudy)
 
-    def generate_Sobol_indices(self,output_name,algo='Jansen'):
+    def generate_Sobol_indices(self, output_name, algo="Jansen"):
         # Output values
         """Compute Sobol indices for one model output.
 
@@ -1502,65 +1571,64 @@ class SobolSensitivityPost(BasicStatsPost):
             Return value produced by this method.
 
         """
-        outs=np.array(self.tradestudy.get_variable(output_name))[:,None]
+        outs = np.array(self.tradestudy.get_variable(output_name))[:, None]
 
         # Overarching UQ distributor class
-        UQ_Distrubutor=self.tradestudy.study.control.trade_studies[self.tradestudy.trade_name]
-        aleatory_dict=UQ_Distrubutor.aleatory_var_to_dist
+        UQ_Distrubutor = self.tradestudy.study.control.trade_studies[
+            self.tradestudy.trade_name
+        ]
+        aleatory_dict = UQ_Distrubutor.aleatory_var_to_dist
 
-        #Samples run
-        num_samples=UQ_Distrubutor.UQ_workflow.num_samples
+        # Samples run
+        num_samples = UQ_Distrubutor.UQ_workflow.num_samples
         # Number of aleatory vars
-        #Calculates the number of samples needed to preallocate array shape
-        second_order=UQ_Distrubutor.UQ_workflow.computeSecondOrder
-        num_aleatory=len(aleatory_dict)
-        if not second_order or num_aleatory==2:
-            num_sobol_samples=num_samples*(2+num_aleatory)
+        # Calculates the number of samples needed to preallocate array shape
+        second_order = UQ_Distrubutor.UQ_workflow.computeSecondOrder
+        num_aleatory = len(aleatory_dict)
+        if not second_order or num_aleatory == 2:
+            num_sobol_samples = num_samples * (2 + num_aleatory)
         else:
-            num_sobol_samples=num_samples*(2+2*num_aleatory)
+            num_sobol_samples = num_samples * (2 + 2 * num_aleatory)
 
-        input_matrix=np.zeros((num_sobol_samples,num_aleatory))
-        name_to_col={}
-        col_to_name={}
+        input_matrix = np.zeros((num_sobol_samples, num_aleatory))
+        name_to_col = {}
+        col_to_name = {}
         for col, aleatory_var_name in enumerate(aleatory_dict.keys()):
-            name_to_col[aleatory_var_name]=col
-            col_to_name[col]=aleatory_var_name
-            input_matrix[:,col]=self.tradestudy.get_variable(aleatory_var_name)
-        input_matrix=ot.Sample(input_matrix)
-        outs=ot.Sample(outs)
-        ot_algo=self._METHOD_TO_CLASS[algo]
-        otSobol=ot_algo(input_matrix,outs,num_samples)
+            name_to_col[aleatory_var_name] = col
+            col_to_name[col] = aleatory_var_name
+            input_matrix[:, col] = self.tradestudy.get_variable(aleatory_var_name)
+        input_matrix = ot.Sample(input_matrix)
+        outs = ot.Sample(outs)
+        ot_algo = self._METHOD_TO_CLASS[algo]
+        otSobol = ot_algo(input_matrix, outs, num_samples)
 
-        results={
-            'first_order':{},
-            'second_order':{},
-            'total_order':{}
-            }
+        results = {"first_order": {}, "second_order": {}, "total_order": {}}
 
-        #First order indices, one output per input distribution
-        first_order=otSobol.getFirstOrderIndices()
-        for name,col in name_to_col.items():
-            results['first_order'][name]=first_order[col]
-
+        # First order indices, one output per input distribution
+        first_order = otSobol.getFirstOrderIndices()
+        for name, col in name_to_col.items():
+            results["first_order"][name] = first_order[col]
 
         # Returns symmetric matrix (A=A^t) of all S(i,j) pairs
         if second_order:
-            second_order=otSobol.getSecondOrderIndices()
+            second_order = otSobol.getSecondOrderIndices()
             for i in range(num_aleatory):
-                for j in range(i+1, num_aleatory):
+                for j in range(i + 1, num_aleatory):
                     name_i = col_to_name[i]
                     name_j = col_to_name[j]
-                    results["second_order"][(name_i, name_j)] = float(second_order[i, j])
+                    results["second_order"][(name_i, name_j)] = float(
+                        second_order[i, j]
+                    )
 
-        #Total: Si+Sum(j,d)(Si,j)(j!=i)+Sum(j<=k)(Si,j,k)(i!=j<k)+...
+        # Total: Si+Sum(j,d)(Si,j)(j!=i)+Sum(j<=k)(Si,j,k)(i!=j<k)+...
         # one variable per input distribution
-        total_order=otSobol.getTotalOrderIndices()
-        for name,col in name_to_col.items():
-            results['total_order'][name]=total_order[col]
+        total_order = otSobol.getTotalOrderIndices()
+        for name, col in name_to_col.items():
+            results["total_order"][name] = total_order[col]
 
-        return results,otSobol
+        return results, otSobol
 
-    def get_first_order_indices(self,output_name,algo='Jansen'):
+    def get_first_order_indices(self, output_name, algo="Jansen"):
         """Return first-order Sobol indices for one output.
 
         Parameters
@@ -1576,10 +1644,10 @@ class SobolSensitivityPost(BasicStatsPost):
             Requested value.
 
         """
-        results,_=self.generate_Sobol_indices(output_name,algo)
-        return results['first_order']
+        results, _ = self.generate_Sobol_indices(output_name, algo)
+        return results["first_order"]
 
-    def get_second_order_indices(self,output_name,algo='Jansen'):
+    def get_second_order_indices(self, output_name, algo="Jansen"):
         """Return second-order Sobol indices for one output.
 
         Parameters
@@ -1595,15 +1663,17 @@ class SobolSensitivityPost(BasicStatsPost):
             Requested value.
 
         """
-        UQ_Distrubutor=self.tradestudy.study.control.trade_studies[self.tradestudy.trade_name]
+        UQ_Distrubutor = self.tradestudy.study.control.trade_studies[
+            self.tradestudy.trade_name
+        ]
         if not UQ_Distrubutor.UQ_workflow.computeSecondOrder:
-            raise ValueError(f'This run did not support second order Sobol')
+            raise ValueError(f"This run did not support second order Sobol")
 
-        results,_=self.generate_Sobol_indices(output_name,algo)
+        results, _ = self.generate_Sobol_indices(output_name, algo)
 
-        return results['second_order']
+        return results["second_order"]
 
-    def get_total_order_indices(self,output_name,algo='Jansen'):
+    def get_total_order_indices(self, output_name, algo="Jansen"):
         """Return total-order Sobol indices for one output.
 
         Parameters
@@ -1619,13 +1689,12 @@ class SobolSensitivityPost(BasicStatsPost):
             Requested value.
 
         """
-        results,_=self.generate_Sobol_indices(output_name,algo)
-        return results['total_order']
-
-
+        results, _ = self.generate_Sobol_indices(output_name, algo)
+        return results["total_order"]
 
 
 # Define various sampling methods
+
 
 class BaseSampler:
     """Define a base interface for basesampler.
@@ -1635,6 +1704,7 @@ class BaseSampler:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
+
     @staticmethod
     def sample():
         """Generate new surrogate samples using a selected sampling strategy.
@@ -1646,9 +1716,9 @@ class BaseSampler:
         """
         pass
 
+
 @register_sampler
 class MonteCarloSampler(BaseSampler):
-
     """Provide montecarlosampler behavior for uncertainty workflows.
 
     Notes
@@ -1656,7 +1726,8 @@ class MonteCarloSampler(BaseSampler):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    _OT_ResourceMapName='MonteCarlo'
+
+    _OT_ResourceMapName = "MonteCarlo"
 
     @staticmethod
     def sample(aleatory_to_dist, num_samples):
@@ -1675,26 +1746,25 @@ class MonteCarloSampler(BaseSampler):
             Return value produced by this method.
 
         """
-        if len(aleatory_to_dist)==1:
-            (name,dist),=aleatory_to_dist.items()
-            var_name_to_col={name:0}
-            dist=dist._OT_Dist()
+        if len(aleatory_to_dist) == 1:
+            ((name, dist),) = aleatory_to_dist.items()
+            var_name_to_col = {name: 0}
+            dist = dist._OT_Dist()
         else:
-            joint=[]
-            var_name_to_col={}
-            for i,(name, dist) in enumerate(aleatory_to_dist.items()):
+            joint = []
+            var_name_to_col = {}
+            for i, (name, dist) in enumerate(aleatory_to_dist.items()):
                 joint.append(dist._OT_Dist())
-                var_name_to_col[name]=i
-            dist=ot.JointDistribution(joint)
-        experiment=ot.MonteCarloExperiment(dist,num_samples)
-        samples=np.array(experiment.generate())
+                var_name_to_col[name] = i
+            dist = ot.JointDistribution(joint)
+        experiment = ot.MonteCarloExperiment(dist, num_samples)
+        samples = np.array(experiment.generate())
 
+        return samples, var_name_to_col
 
-        return samples,var_name_to_col
 
 @register_sampler
 class LatinHypercubeSampler(BaseSampler):
-
     """Provide latinhypercubesampler behavior for uncertainty workflows.
 
     Notes
@@ -1702,12 +1772,12 @@ class LatinHypercubeSampler(BaseSampler):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    _OT_ResourceMapName='LHS'
 
+    _OT_ResourceMapName = "LHS"
 
     @staticmethod
-    def sample(aleatory_to_dist,num_samples):
-        #first generate the evenly spaced values on [0,1]
+    def sample(aleatory_to_dist, num_samples):
+        # first generate the evenly spaced values on [0,1]
         """Generate new surrogate samples using a selected sampling strategy.
 
         Parameters
@@ -1723,28 +1793,28 @@ class LatinHypercubeSampler(BaseSampler):
             Return value produced by this method.
 
         """
-        if len(aleatory_to_dist)==1:
-            (name,dist),=aleatory_to_dist.items()
-            var_name_to_col={name:0}
-            dist=dist._OT_Dist()
+        if len(aleatory_to_dist) == 1:
+            ((name, dist),) = aleatory_to_dist.items()
+            var_name_to_col = {name: 0}
+            dist = dist._OT_Dist()
         else:
-            joint=[]
-            var_name_to_col={}
-            for i,(name, dist) in enumerate(aleatory_to_dist.items()):
+            joint = []
+            var_name_to_col = {}
+            for i, (name, dist) in enumerate(aleatory_to_dist.items()):
                 joint.append(dist._OT_Dist())
-                var_name_to_col[name]=i
-            dist=ot.JointDistribution(joint)
-        experiment=ot.LHSExperiment(dist,num_samples)
-        samples=np.array(experiment.generate())
+                var_name_to_col[name] = i
+            dist = ot.JointDistribution(joint)
+        experiment = ot.LHSExperiment(dist, num_samples)
+        samples = np.array(experiment.generate())
 
+        return samples, var_name_to_col
 
-        return samples,var_name_to_col
 
 @register_sampler
 class SobolSampler(BaseSampler):
 
-    #Note this use here is for SobolExperiment, where the
-    #Quasi monte carlo uses the Sobol sampler
+    # Note this use here is for SobolExperiment, where the
+    # Quasi monte carlo uses the Sobol sampler
     """Provide sobolsampler behavior for uncertainty workflows.
 
     Notes
@@ -1752,12 +1822,10 @@ class SobolSampler(BaseSampler):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
-    _OT_ResourceMapName='QMC'
-
-
+    _OT_ResourceMapName = "QMC"
 
     @staticmethod
-    def sample(aleatory_to_dist,num_samples):
+    def sample(aleatory_to_dist, num_samples):
         """Generate new surrogate samples using a selected sampling strategy.
 
         Parameters
@@ -1773,22 +1841,22 @@ class SobolSampler(BaseSampler):
             Return value produced by this method.
 
         """
-        if len(aleatory_to_dist)==1:
-            (name,dist),=aleatory_to_dist.items()
-            var_name_to_col={name:0}
-            dist=dist._OT_Dist()
+        if len(aleatory_to_dist) == 1:
+            ((name, dist),) = aleatory_to_dist.items()
+            var_name_to_col = {name: 0}
+            dist = dist._OT_Dist()
         else:
-            joint=[]
-            var_name_to_col={}
-            for i,(name, dist) in enumerate(aleatory_to_dist.items()):
+            joint = []
+            var_name_to_col = {}
+            for i, (name, dist) in enumerate(aleatory_to_dist.items()):
                 joint.append(dist._OT_Dist())
-                var_name_to_col[name]=i
-            dist=ot.JointDistribution(joint)
-        sobolseq=ot.SobolSequence(dist.getDimension())
-        experiment=ot.LowDiscrepancyExperiment(sobolseq,dist,num_samples)
-        samples=np.array(experiment.generate())
+                var_name_to_col[name] = i
+            dist = ot.JointDistribution(joint)
+        sobolseq = ot.SobolSequence(dist.getDimension())
+        experiment = ot.LowDiscrepancyExperiment(sobolseq, dist, num_samples)
+        samples = np.array(experiment.generate())
 
-        return samples,var_name_to_col
+        return samples, var_name_to_col
 
 
 @register_sampler
@@ -1800,8 +1868,9 @@ class HaltonSampler(BaseSampler):
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
+
     @staticmethod
-    def sample(aleatory_to_dist,num_samples):
+    def sample(aleatory_to_dist, num_samples):
         """Generate new surrogate samples using a selected sampling strategy.
 
         Parameters
@@ -1817,22 +1886,23 @@ class HaltonSampler(BaseSampler):
             Return value produced by this method.
 
         """
-        if len(aleatory_to_dist)==1:
-            (name,dist),=aleatory_to_dist.items()
-            var_name_to_col={name:0}
-            dist=dist._OT_Dist()
+        if len(aleatory_to_dist) == 1:
+            ((name, dist),) = aleatory_to_dist.items()
+            var_name_to_col = {name: 0}
+            dist = dist._OT_Dist()
         else:
-            joint=[]
-            var_name_to_col={}
-            for i,(name, dist) in enumerate(aleatory_to_dist.items()):
+            joint = []
+            var_name_to_col = {}
+            for i, (name, dist) in enumerate(aleatory_to_dist.items()):
                 joint.append(dist._OT_Dist())
-                var_name_to_col[name]=i
-            dist=ot.JointDistribution(joint)
-        haltonseq=ot.HaltonSequence(dist.getDimension())
-        experiment=ot.LowDiscrepancyExperiment(haltonseq,dist,num_samples)
-        samples=np.array(experiment.generate())
+                var_name_to_col[name] = i
+            dist = ot.JointDistribution(joint)
+        haltonseq = ot.HaltonSequence(dist.getDimension())
+        experiment = ot.LowDiscrepancyExperiment(haltonseq, dist, num_samples)
+        samples = np.array(experiment.generate())
 
-        return samples,var_name_to_col
+        return samples, var_name_to_col
+
 
 # Define various continuous distribution classes
 @register_distribution
@@ -1844,6 +1914,7 @@ class NormalDistribution:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
+
     def __init__(self, mean, std):
         """Initialize object state and configuration.
 
@@ -1867,7 +1938,7 @@ class NormalDistribution:
             Return value produced by this method.
 
         """
-        return ot.Normal(self.mean,self.std)
+        return ot.Normal(self.mean, self.std)
 
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
@@ -1878,14 +1949,10 @@ class NormalDistribution:
             JSON-serializable representation.
 
         """
-        return {
-            'name':self.__class__.__name__,
-            'mean':self.mean,
-            'std':self.std
-        }
+        return {"name": self.__class__.__name__, "mean": self.mean, "std": self.std}
 
     @classmethod
-    def _from_dict(cls,data):
+    def _from_dict(cls, data):
         """Reconstruct this object from serialized dictionary data.
 
         Parameters
@@ -1899,7 +1966,7 @@ class NormalDistribution:
             Reconstructed object instance.
 
         """
-        return cls(data['mean'],data['std'])
+        return cls(data["mean"], data["std"])
 
 
 @register_distribution
@@ -1911,6 +1978,7 @@ class UniformDistribution:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
+
     def __init__(self, low, high):
         """Initialize object state and configuration.
 
@@ -1923,8 +1991,8 @@ class UniformDistribution:
 
         """
         self.low = low
-        self.high=high
-        self.scale = self.high-self.low
+        self.high = high
+        self.scale = self.high - self.low
 
     def _OT_Dist(self):
         """Return the equivalent OpenTurns distribution object.
@@ -1935,7 +2003,7 @@ class UniformDistribution:
             Return value produced by this method.
 
         """
-        return ot.Uniform(self.low,self.high)
+        return ot.Uniform(self.low, self.high)
 
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
@@ -1946,13 +2014,10 @@ class UniformDistribution:
             JSON-serializable representation.
 
         """
-        return {
-            'name':self.__class__.__name__,
-            'low':self.low,
-            'high':self.high}
+        return {"name": self.__class__.__name__, "low": self.low, "high": self.high}
 
     @classmethod
-    def _from_dict(cls,data):
+    def _from_dict(cls, data):
         """Reconstruct this object from serialized dictionary data.
 
         Parameters
@@ -1966,7 +2031,7 @@ class UniformDistribution:
             Reconstructed object instance.
 
         """
-        return cls(data['low'],data['high'])
+        return cls(data["low"], data["high"])
 
 
 @register_distribution
@@ -1978,6 +2043,7 @@ class LogNormalDistribution:
     This class encapsulates related state and behavior used by UAM4X workflows.
 
     """
+
     def __init__(self, mu_log, sigma_log, gamma=0.0):
         """Initialize object state and configuration.
 
@@ -2016,10 +2082,10 @@ class LogNormalDistribution:
 
         """
         return {
-            'name': self.__class__.__name__,
-            'mu': self.mu_log,
-            'sigma': self.sigma_log,
-            'gamma': self.gamma,
+            "name": self.__class__.__name__,
+            "mu": self.mu_log,
+            "sigma": self.sigma_log,
+            "gamma": self.gamma,
         }
 
     @classmethod
@@ -2037,25 +2103,26 @@ class LogNormalDistribution:
             Reconstructed object instance.
 
         """
-        return cls(data['mu'], data['sigma'], data.get('gamma', 0.0))
+        return cls(data["mu"], data["sigma"], data.get("gamma", 0.0))
+
 
 # Pair all workflow classes with their post process classes
-pre_to_post_workflow_registry={
-    'BasicStats':BasicStatsPost,
-    'RegressionPCE':RegressionPCEPost,
-    'SobolSensitivity':SobolSensitivityPost,
-    'GaussQuadraturePCE':GaussQuadtraturePCEPost
+pre_to_post_workflow_registry = {
+    "BasicStats": BasicStatsPost,
+    "RegressionPCE": RegressionPCEPost,
+    "SobolSensitivity": SobolSensitivityPost,
+    "GaussQuadraturePCE": GaussQuadtraturePCEPost,
 }
 if __name__ == "__main__":
 
-    #Test the LHS functionality:
-    uni=UniformDistribution(0.0,10.0)
-    norm=NormalDistribution(50.0,25.0)
+    # Test the LHS functionality:
+    uni = UniformDistribution(0.0, 10.0)
+    norm = NormalDistribution(50.0, 25.0)
 
-    sample_alteatory={'var1':uni,'var2':norm}
-    sample_single={'var':uni}
-    n=500
-    x=LatinHypercubeSampler.sample(sample_alteatory,n)
+    sample_alteatory = {"var1": uni, "var2": norm}
+    sample_single = {"var": uni}
+    n = 500
+    x = LatinHypercubeSampler.sample(sample_alteatory, n)
 
-    j=ot.JointDistribution([uni._OT_Dist(),norm._OT_Dist()])
-    print('hello')
+    j = ot.JointDistribution([uni._OT_Dist(), norm._OT_Dist()])
+    print("hello")
