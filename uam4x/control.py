@@ -218,26 +218,26 @@ class Optimization:
             Input value for `indices`.
 
         """
-        if lower is  None and  upper is  None and  const_or_dv == 'constraint':
+        if lower is None and upper is None and const_or_dv == 'constraint':
             raise ValueError(f'At least one constraint must be declared. The constraint {name}\n'
                              f'does not have at least a lower or upper bound declared.')
 
         # Check continuity within our paradigm (here user would not be able to declare constraints as lists, ints etc.)
         #without, relies on MDAO to consolidate mismatch e.g declared as array but some weird list is provided.
-        if lower is not None and  not is_continuous_type_or_value(lower):
+        if lower is not None and not is_continuous_type_or_value(lower):
             raise TypeError(f'The lower bound for {name} is not continuos.\n'
                             f'Only floats and floating point arrays are accepted.')
-        if upper is not None and  not is_continuous_type_or_value(upper):
+        if upper is not None and not is_continuous_type_or_value(upper):
             raise TypeError(f'The upper bound for {name} is not continuos.\n'
                             f'Only floats and floating point arrays are accepted.')
 
-        elif lower is not None and  upper is  not None:
+        elif lower is not None and upper is not None:
             if type(lower) != type(upper):
                 raise TypeError(f'Upper and lower bounds must be of the same type. The {const_or_dv}:{name}\n'
                                 f'has a lower bound of type {value_to_type_name(lower)} and an upper bound of type {value_to_type_name(upper)}\n')
 
             # Note, if one is an np.ndarray the other must be as well
-            if is_numpy_array(lower) and  is_numpy_array(upper):
+            if is_numpy_array(lower) and is_numpy_array(upper):
                 if lower.shape != upper.shape:
                     raise ValueError(f'{const_or_dv} shapes must match.The {const_or_dv} {name}\n'
                                      f'has lower shape: {lower.shape} and upper shape {upper.shape}.')
@@ -386,7 +386,7 @@ class ParameterSweep:
                 # for for every in child).
                 child_states = self.child.get_states()
                 states_to_add = []
-                for child_state in  child_states:
+                for child_state in child_states:
                     sample_state = copy.deepcopy(state)
                     sample_state.update(child_state)
                     states_to_add.append(sample_state)

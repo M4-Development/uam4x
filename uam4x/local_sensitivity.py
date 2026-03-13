@@ -44,7 +44,7 @@ class LocalSensitivity:
         self.step_size=step_size
         self.variable_to_sensitivity_data={}
         self.post_spec=post_workflow_name_to_class_registry['LocalSensitivityPost']
-            
+
     def add_perturbation_var(self,name,evaluation_point,step_size=None):
         """Add perturbation var.
 
@@ -80,7 +80,7 @@ class LocalSensitivity:
         states=[baseline_state]
         b_states=[]
         f_states=[]
-        
+
         for name,sensitivity_data in self.variable_to_sensitivity_data.items():
             local_b_state=copy.deepcopy(baseline_state)
             local_f_state=copy.deepcopy(baseline_state)
@@ -88,9 +88,9 @@ class LocalSensitivity:
             local_f_state[name]=sensitivity_data['evaluation_point']+sensitivity_data['step_size']
 
             b_states.append(local_b_state)
-            f_states.append(local_f_state)  
+            f_states.append(local_f_state)
 
-        states+=b_states+f_states  
+        states+=b_states+f_states
 
         return states
 
@@ -138,7 +138,7 @@ class LocalSensitivity:
 
         return sensitivity_obj
 
-    
+
 
 @register_post_workflow
 class LocalSensitivityPost:
@@ -201,7 +201,7 @@ class LocalSensitivityPost:
                 sensitivity=(out_up-out_down)/(pert_up-pert_down)
             else:
                 raise ValueError(f"Method {method} not recognized. Use 'forward', 'backward', or 'central'.")
-            
+
             if abs(sensitivity)>max_sense:
                 max_sense=abs(sensitivity)
                 max_sense_var=var_name
@@ -213,7 +213,6 @@ class LocalSensitivityPost:
             'sensitivity':max_sense
         }
 
-        
-        
+
+
         return var_to_sens,max_dict
-    

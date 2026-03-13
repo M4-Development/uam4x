@@ -113,10 +113,10 @@ class Engine:
 
         plugins=self.study.solution.generate_plugins()
 
-            
-        # May need to refactor this, but def want a check here. 
+
+        # May need to refactor this, but def want a check here.
         self.check_model(plugins, sample_state)
-        
+
         cwd = os.getcwd()
         os.chdir(out_dir)
         opt = Optimization(self.study, sample_state, plugins, out_dir, check_partials=True)
@@ -158,18 +158,18 @@ class Engine:
         os.makedirs(out_dir, exist_ok=True)
 
         plugins=self.study.solution.generate_plugins()
-        
+
         #since parallelism rebuilds the study, need to re sort
         if resort_steps:
             self.study.solution.sort_steps()
-        
+
         if state.get('optimization',False):
             result=self._run_optimization(state, plugins, out_dir)
         else:
             result=self._run_single_point(state, plugins, out_dir)
 
         return result
-    
+
     @staticmethod
     def _run_state_parallel(study_dict, state, iteration=None, work_dir=None,create_step_work_dirs=True):
         """
@@ -197,7 +197,7 @@ class Engine:
         """
 
         study = Study._from_dict(study_dict, work_dir)
-        engine = Engine(study, work_dir)    
+        engine = Engine(study, work_dir)
         engine.create_step_work_dirs=create_step_work_dirs
         result = engine._run_state(state, iteration=iteration,resort_steps=True)
         return result
@@ -278,22 +278,22 @@ class Engine:
                 if var_name in temp_state:
                     self.log.warning(f'Plugin {step_name} returned output {var_name} which overwrites an existing state variable.')
                 temp_state[var_name] = result
-            
+
 
 
         result=Result(state=state)
 
         for tracked_output in self.study.solution.tracked_outputs:
-            temp_output_name='solution.'+tracked_output
-            if '[' in  tracked_output:
+            temp_output_name = 'solution.' + tracked_output
+            if '[' in tracked_output:
                 no_ind_tracked_output, inds = split_dotted_path_and_indices(tracked_output)
                 var_value = temp_state[no_ind_tracked_output][inds]
             else:
                 var_value = temp_state[temp_output_name]
-            result._add_result(tracked_output, var_value)        
+            result._add_result(tracked_output, var_value)
 
-        return result   
-                
+        return result
+
 
 
     def run_solution(self):
@@ -319,14 +319,14 @@ class Engine:
         ts=Tradestudy(trade_name)
         ts._results.append(result)
         ts._hash_to_result[result.state_hash] = result
-        
+
         study_result.add_tradestudy(trade_name,ts)
         #add time to results metadata
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
         self.add_end_time_meta_data(trade_name,elapsed_time)
 
-        
+
     def add_end_time_meta_data(self,trade_name,elapsed_time):
         """Add end time meta data.
 
@@ -339,7 +339,7 @@ class Engine:
 
         """
         self.study._runtime_meta_data[trade_name]['time_info']['Elapsed_Time'] = f'Analysis took {elapsed_time} seconds'
-        
+
         dt=datetime.now(tz=ZoneInfo("America/Los_Angeles"))
 
         message=f'Completed on'
@@ -353,7 +353,7 @@ class Engine:
                 message+=','
             if keyword=='Y':
                 message+=' at'
-            
+
         message+=' Pacific Time'
         self.study._runtime_meta_data[trade_name]['time_info']['Completion_Time'] = message
 
@@ -386,9 +386,9 @@ class Engine:
             #NEED TO UPDATE TO REFLECT NEW STRUCTURE FOR COMPARISON
             if reference_plugin_hash != plug_hash:
                 log.warning(f"Plugin '{plugin_class.__name__}' contains a different checksum from the one generated at branching script. Check plugin code for changes")
-#
+
             #NEED TO UPDATE THIS TO ALIGN WITH GROUPS, MAYBE NEED A MORE CENTRALIZED
-            #SET UP TO MINIMIZE REPETITION 
+            #SET UP TO MINIMIZE REPETITION
             plugin = plugin_class()
             plugin.setup_plugin(plugin_options)
             if plugin._executable_to_data and not 'step_external_executable_data' in self.study._runtime_meta_data:
@@ -396,8 +396,8 @@ class Engine:
                 external_executable_to_versioning_data[plugin_name] = copy.deepcopy(plugin._executable_to_data)
 
         if external_executable_to_versioning_data:
-            self.study._add_runtime_external_executable_data(trade_name,external_executable_to_versioning_data)        
-        
+            self.study._add_runtime_external_executable_data(trade_name,external_executable_to_versioning_data)
+
         self.study._add_runtime_plugin_checksums(trade_name,plugin_name_to_hash)
 
     def run_tradestudy(self, trade_name,num_processors=None,check=True,create_step_work_dirs=True):
@@ -407,13 +407,13 @@ class Engine:
         or an optimization. Sorts solution steps, captures execution data,
         and manages parallel execution if specified.
         Parameters
-        ----------      
+        ----------
 
         trade_name : str
             Name of the trade study to run.
         num_processors : int, optional
             Number of processors for parallel execution, by default None.
-        check : bool, optional  
+        check : bool, optional
             Whether to perform model validation checks, by default True.
         """
         self.create_step_work_dirs=create_step_work_dirs
@@ -427,7 +427,7 @@ class Engine:
 
         import uam4x
         os.environ['UAM4X_DISABLE_REGISTRY_WRITES'] = '1'
-        
+
         self.capture_execution_data(trade_name)
         if isinstance(tradestudy,UAM4XOptimization) and num_processors is not None:
             log.warning('num_processors is ignored for single point optimizations')
@@ -462,7 +462,7 @@ class Engine:
         elapsed_time = end_time - start_time
         self.add_end_time_meta_data(trade_name,elapsed_time)
 
-    
+
     def _run_parameter_sweep(self,trade_name,trade_states,num_processors=None):
         """Run parameter sweep.
 
@@ -487,7 +487,7 @@ class Engine:
             if num_processors > os.cpu_count():
                 log.warning(f'num_processors {num_processors} is greater than available CPU count {os.cpu_count()}. Setting num_processors to {os.cpu_count()}')
                 num_processors = os.cpu_count()
-            max_workers = num_processors 
+            max_workers = num_processors
             outputs=[]
             study_dict=self.study._to_dict()
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
@@ -507,7 +507,7 @@ class Engine:
                         self.log.error(f"{type(e).__name__}: state failed - {states[j]}")
                         states[j]["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
                         failed_states.append(states[j])
-                        outputs.append(Result(state=states[j]))  
+                        outputs.append(Result(state=states[j]))
 
                     except Exception as e:
                         tb = e.__traceback__
@@ -520,7 +520,7 @@ class Engine:
         elif num_processors ==1 or not num_processors:
             outputs=[]
             for i, state in enumerate(states):
-#
+
                 try:
                     outputs.append(self._run_state(state, iteration=i))
                     self.log.info(f'state successful: {state}')
@@ -533,14 +533,14 @@ class Engine:
                     filename = tb.tb_frame.f_code.co_filename
                     self.log.error(f"{type(e).__name__}: state failed - {state}")
                     state["Failure Message"]=f"{type(e).__name__}: An error occurred: {e}. Called in file {filename} in line {lineno}"
-                    outputs.append(Result(state=state))  
+                    outputs.append(Result(state=state))
                     failed_states.append(state)
-                    
+
                 except Exception as e:
                     tb = e.__traceback__  # get traceback object from exception
                     while tb.tb_next:
                         tb = tb.tb_next  # go to the last traceback frame (where error originated)
-#
+
                     lineno = tb.tb_lineno
                     filename = tb.tb_frame.f_code.co_filename
                     self.log.error(f"An error occurred: {e}. Called in file {filename} in line {lineno}")
@@ -633,7 +633,7 @@ class Engine:
         """
         self.log.debug('check link types')
         self.study.solution._check_link_types(plugins,self.study)
-                
+
     def check_link_indices(self, plugins):
         """Validate link indices.
 
@@ -668,7 +668,7 @@ class Engine:
                 'shape': None,
             }
         return self.study.solution.get_var_data(var_name, plugins)
-                    
+
     def check_desvars(self, plugins, state):
         """
         Validate design variables for optimization.
@@ -689,7 +689,7 @@ class Engine:
             If any design variable is not of continuous type.
         """
         # add desvars
-        for name,data in  state['des_vars'].items():
+        for name, data in state['des_vars'].items():
             var_data = self._get_analysis_var_data(name, plugins)
             des_var_type = var_data['type']
             if not is_continuous_type_or_value(des_var_type):
@@ -697,8 +697,8 @@ class Engine:
                 raise TypeError(f'The design variable: {name} is of type {des_var_type}\n'
                                 f'Only floats allowed as design variables')
             self.check_upper_lower(des_var_type, data['lower'], data['upper'], 'Design Variable', name, var_data)
-            
-            
+
+
     def check_constraints(self, plugins, state):
         """Validate constraints.
 
@@ -710,14 +710,14 @@ class Engine:
             Input value for `state`.
 
         """
-        for name,data in  state['constraints'].items():
+        for name, data in state['constraints'].items():
             var_data = self._get_analysis_var_data(name, plugins)
             constraint_type = var_data['type']
             if not is_continuous_type_or_value(constraint_type):
                 raise TypeError(f'The constraint: {name} is of type {constraint_type}\n'
                                 f'Only floats allowed as constraints')
             self.check_upper_lower(constraint_type, data['lower'], data['upper'], 'Constraint', name, var_data)
- 
+
 
     def check_upper_lower(self, var_type, data_lower, data_upper, dv_or_const, var_name, var_data):
         """Validate upper lower.
@@ -740,15 +740,15 @@ class Engine:
         """
         var_value = var_data['value']
         var_shape = var_data['shape']
-        # Checks on allowables for arrays        
-        if var_type is  np.ndarray:
+        # Checks on allowables for arrays
+        if var_type is np.ndarray:
             # If the type has been declared as an ndarray, then
             # ndarrays and scalars (broadcasting) are okay
             # if both are None, this is fine (unbounded)
-            
-            if data_lower is not None and data_upper is  not None:
+
+            if data_lower is not None and data_upper is not None:
                 #if the upper and lower are declared as scalars, this is fine
-                
+
                 if is_scalar_type_or_value(data_lower) and is_scalar_type_or_value(data_upper):
                     return
                 # Mixed types already checked upon constraint/DV declaration
@@ -756,15 +756,15 @@ class Engine:
                     raise ValueError(f'{dv_or_const} shapes must match\n'
                                f'The {dv_or_const} lower has shape: {data_lower.shape}\n'
                                f'The {dv_or_const} upper has shape: {data_upper.shape}')
-                
+
             # Check declared constraint shapes match intended (via plugin or parameter)
-            
+
             # For plugin inputs/outputs, shape vs. declared value (when applicable) already checked
             # First check here is if value is declared
-            if data_lower is not None and  not is_scalar_type_or_value(data_lower):
+            if data_lower is not None and not is_scalar_type_or_value(data_lower):
                 #scalars allowed for broadcasting
                 if not is_scalar_type_or_value(var_value) and var_value is not None:
-                    
+
                     if data_lower.shape != var_value.shape:
                         raise ValueError(f'If arrays are declared as bounds for {dv_or_const}\n'
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
@@ -779,12 +779,12 @@ class Engine:
                                          f'the value/declared shape in the vehicle component parameter or \n'
                                          f'plugin input output is accepted.\n'
                                          f'The {dv_or_const} {var_name} lower has shape {data_lower.shape} but must have shape {var_shape}')
-                    
+
             # For plugin inputs/outputs, shape vs. declared value (when applicable) already checked
             # First check here is if value is declared
-            if data_upper is not None and  not is_scalar_type_or_value(data_upper):
+            if data_upper is not None and not is_scalar_type_or_value(data_upper):
                 #scalars allowed for broadcasting
-                if not is_scalar_type_or_value(var_value) and  var_value is  not None:
+                if not is_scalar_type_or_value(var_value) and var_value is not None:
                     if data_upper.shape != var_value.shape:
                         raise ValueError(f'If arrays are declared as bounds for {dv_or_const}\n'
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
@@ -797,19 +797,19 @@ class Engine:
                                          f'Then either a scalar (broadcasting) or an array matching the shape of\n'
                                          f'the value/declared shape in the vehicle component parameter or \n'
                                          f'plugin input output is accepted.\n'
-                                         f'The {dv_or_const} {var_name} upper has shape {data_upper.shape} but must have shape {var_shape}')                                    
+                                         f'The {dv_or_const} {var_name} upper has shape {data_upper.shape} but must have shape {var_shape}')
         else:
             # now since is_continuous_type_or_value has been run, we know
             # values are already acceptable types in theory but
             # need to check for scalars being declared as arrays or some
             # other unwanted type
-            if data_lower is not None and data_upper is  not None:
-                if not (is_scalar_type_or_value(data_lower) or  is_scalar_type_or_value(data_upper)):
+            if data_lower is not None and data_upper is not None:
+                if not (is_scalar_type_or_value(data_lower) or is_scalar_type_or_value(data_upper)):
                     raise ValueError(f'{dv_or_const} was declared as {var_type} which is a scalar\n'
                                  f'but {dv_or_const} upper is {data_upper}\n'
                                  f'and {dv_or_const} lower is {data_lower}\n')
-            
-            
+
+
     def check_objective(self, plugins, state):
         """
         Validate objective function for optimization.
@@ -861,4 +861,3 @@ class Engine:
         self.log.debug('Check for discrete I/O passing')
         # Check for discrete I/O passing
         self.study.solution._check_optimization_discrete(plugins)
-#

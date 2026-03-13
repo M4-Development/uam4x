@@ -93,7 +93,7 @@ class Optimization:
                     shutil.rmtree(work_dir)
                 os.makedirs(work_dir)
                 comp.options["step_name"] = step_name
-                
+
             elif isinstance(data,Group):
                 group=problem.model.add_subsystem(step_name,UniversalOpenMDAOGroup(),promotes=['*'])
                 group.options['group']=data
@@ -108,50 +108,50 @@ class Optimization:
 
         # Add connections
         for independent, dependent in self.study.solution.links:
-            
+
             # parse slices where applicable here:
             inds = None
-            if '[' in  independent:
+            if '[' in independent:
                 independent, inds = split_dotted_path_and_indices(independent)
             problem.model.connect(independent.replace(".", "~"), dependent.replace(".", "~"), src_indices=inds)
 
         # add desvars
-        for name, data in  self.state['des_vars'].items():
+        for name, data in self.state['des_vars'].items():
             dv_type = self.study.get_param_type(name)
             lower, upper = data['lower'], data['upper']
             indices = data['indices']
-            
+
             # additional array wrapping here for floats, lists already wrapped
             if dv_type == np.ndarray:
-                if lower is  not None:
+                if lower is not None:
                     lower = np.array(lower)
-                if upper is  not None:
+                if upper is not None:
                     upper = np.array(upper)
             else:
-                if lower is  not None:
+                if lower is not None:
                     lower = dv_type(lower)
-                if upper is  not None:
+                if upper is not None:
                     upper = dv_type(upper)
             problem.model.add_design_var(name.replace(".", "~"), lower=lower, upper=upper, indices=indices)
 
         # add constraints
-        for name, data in  self.state['constraints'].items():
+        for name, data in self.state['constraints'].items():
 
             const_type = self.study.solution.get_var_type(name,self.plugins)
             lower,upper = data['lower'], data['upper']
             indices = data['indices']
-            
-            # additional array wrapping here for floats, lists already wrapped            
+
+            # additional array wrapping here for floats, lists already wrapped
             if const_type == np.ndarray:
                 if lower is not None:
                     lower = np.array(lower)
-                if upper is  not None:
+                if upper is not None:
                     upper = np.array(upper)
             else:
-                if lower is  not None:
+                if lower is not None:
                     lower = const_type(lower)
-                if upper is  not None:
-                    upper = const_type(upper)            
+                if upper is not None:
+                    upper = const_type(upper)
             problem.model.add_constraint(name.replace(".", "~"), lower=lower, upper=upper, indices=indices)
 
 
@@ -159,7 +159,7 @@ class Optimization:
         #add template hashes to results before template files are run in optimization
         for plug_name,plug in self.study.solution.recurse_generated_plugins(self.plugins).items():
             if plug._template_to_checksum:
-                for path, checksum in  plug._template_to_checksum.items():
+                for path, checksum in plug._template_to_checksum.items():
                     result._add_template_checksum(path, checksum)
         # add objectives
         problem.model.add_objective(self.state['objective_name'].replace(".", "~"))
@@ -175,21 +175,21 @@ class Optimization:
 
         problem.setup()
         problem.run_driver()
-        
-        
 
-        
+
+
+
         if problem.driver.fail:
             result._add_convergence_status(False)
         else:
             result._add_convergence_status(True)
 
         for tracked_output in self.study.solution.tracked_outputs + list(self.state['des_vars'].keys()):
-            if '[' in  tracked_output:
+            if '[' in tracked_output:
                 no_ind_tracked_output, inds = split_dotted_path_and_indices(tracked_output)
-                
+
                 result._add_result(tracked_output, problem.get_val(no_ind_tracked_output.replace(".", "~"))[inds])
-            else:  
+            else:
                 name_start=tracked_output.split('.')[0]
                 if name_start=='vehicles':
                     var_type=self.study.get_param_type(tracked_output)
@@ -206,7 +206,7 @@ class Optimization:
                         value=var_type(value)
 
                 result._add_result(tracked_output, value)
-                    
+
         return result
 
 class OpenmdaoPreComp(om.IndepVarComp):
@@ -316,7 +316,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             name = '.'.join(output_name.split('.')[start_ind:])
             output_type = self.plugin.plugin_output_names[name]['type']
             output_shape = self.plugin.plugin_output_names[name]['shape']
-            
+
             if not is_continuous_type_or_value(output_type):
                 if output_type is int:
                     temp = 1
@@ -330,7 +330,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         if cont_input and cont_output:
             partials = self.plugin.build_partials(self.input_names, self.output_names,self.step_name)
             self.plugin.categorize_partials()
-            for pair,data in  partials.items():
+            for pair,data in partials.items():
                 #note since strings are immutable
                 # self.step_name.replace does not modify original step name attribute
                 of = self.step_name.replace('.','~') + '~' + pair[0].replace('.', '~')
@@ -402,18 +402,18 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             return
         else:
             results = self.plugin.compute_partials_plugin(self.plugin_dict)
-            for name, value in  results.items():
+            for name, value in results.items():
                 output_name = self.step_name + '.' + name[0]
                 input_name = self.step_name + '.' + name[1]
 
-                if output_name in self.output_names and  input_name in  self.input_names:
+                if output_name in self.output_names and input_name in self.input_names:
                     output_name_with_plugin = output_name.replace('.', '~')
                     input_name_with_plugin = input_name.replace('.', '~')
                     partials[output_name_with_plugin, input_name_with_plugin] = value
                 else:
                     self.log.error('Missing links somewhere')
                     raise ValueError('Missing links somewhere')
-                
+
 
 class UniversalOpenMDAOGroup(om.Group):
     """Represent the universalopenmdaogroup component in the UAM4X workflow.
@@ -438,7 +438,7 @@ class UniversalOpenMDAOGroup(om.Group):
         self.options.declare("links")
 
     def setup(self):
-        
+
         """Define OpenMDAO variables, subsystems, and derivative declarations.
 
         Notes
@@ -476,10 +476,10 @@ class UniversalOpenMDAOGroup(om.Group):
                     group.options['sub_plugins']=None
 
         for independent, dependent in self.options['links']:
-            
+
             # parse slices where applicable here:
             inds = None
-            if '[' in  independent:
+            if '[' in independent:
                 independent, inds = split_dotted_path_and_indices(independent)
             independent=group_name+'.'+independent
             dependent=group_name+'.'+dependent
@@ -489,7 +489,7 @@ class UniversalOpenMDAOGroup(om.Group):
         approx_totals_dict=group._approx_totals
         if approx_totals_dict['compute']:
             method=approx_totals_dict['method']
-            form=approx_totals_dict['form'] 
-            step=approx_totals_dict['step']            
+            form=approx_totals_dict['form']
+            step=approx_totals_dict['step']
             self.approx_totals(method=method,form=form,step=step)
 

@@ -319,8 +319,8 @@ class Tradestudy:
                     #log as missing.
             return values
 
-        inds=None
-        if '[' in  variable_name:
+        inds = None
+        if '[' in variable_name:
             #Functionality exists that checks for brackets in: step name (plugins)
             # vehicles names, component names, mode names, and parameter names. which [ is not allowed
             # are all not allowed.
@@ -502,7 +502,7 @@ class Result:
         if self.template_hashes:
             d['template_checksums'] = self.template_hashes
 
-        if self.convergence_status is  not None:
+        if self.convergence_status is not None:
             d['converged'] = self.convergence_status
 
         return d
@@ -526,7 +526,7 @@ class Result:
         result.outputs = copy.deepcopy(results_dict.get("outputs", {}))
         result.template_hashes = copy.deepcopy(results_dict.get("template_checksums", {}))
 
-        if 'converged' in  results_dict:
+        if 'converged' in results_dict:
             result._add_convergence_status(results_dict['converged'])
 
         return result

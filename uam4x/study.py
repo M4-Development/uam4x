@@ -6,11 +6,11 @@ import os
 import copy
 from uam4x.log import get_log
 from uam4x.utils import convert_numpy_to_python, log, split_dotted_path_and_indices, replace_none_with_empty_quotes
-from operator import  attrgetter
-import  sys
+from operator import attrgetter
+import sys
 import platform
 from importlib.metadata import distributions
-from pathlib import  Path
+from pathlib import Path
 import subprocess
 import pygit2
 from uam4x.results import Results
@@ -312,7 +312,7 @@ class Study:
         except KeyError:
             repo_path = None
 
-        if repo_path is  None:
+        if repo_path is None:
             raise ValueError('No repository found with provided path')
 
 
@@ -407,7 +407,7 @@ class Study:
         """
         self.log.debug(f'get the value of {dotted_path}')
         inds = None
-        if '[' in  dotted_path:
+        if '[' in dotted_path:
             #Functionality exists that checks for brackets in: step name (plugins)
             # vehicles names, component names, mode names, and parameter names. which [ is not allowed
             # are all not allowed.
@@ -500,12 +500,12 @@ class Study:
                 for mode_name, mode in component._modes.items():
                     for param_name in mode._parameters.keys():
                         vehicle_names.append(f"vehicles.{vehicle_name}.{component.name}.{mode_name}.{param_name}")
-        
+
         # Remove duplicates and sort
         vehicle_names = sorted(list(set(vehicle_names)))
 
         return vehicle_names
-    
+
 
 class Variants:
     """Represent the variants component in the UAM4X workflow.

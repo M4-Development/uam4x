@@ -363,7 +363,7 @@ class Subsystem:
 
         """
         self.name = name
-        if '[' in  name:
+        if '[' in name:
             self.log.error(f'components cannot have the character "[" in them')
             raise ValueError(f'components cannot have the character "[" in them')
         self._parameters = {}
@@ -409,7 +409,7 @@ class Subsystem:
         if not self._is_setup:
             self.log.error("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
             raise RuntimeError("Cannot add parameters outside of setup().\nAdd them in the setup() method or use SetParameter() after setup.")
-        if '[' in  name or ']' in  name:
+        if '[' in name or ']' in name:
             self.log.error(f'parameters cannot have the character "[" or "]" in them')
             raise ValueError(f'parameters cannot have the character "[" or "]" in them')
         self._parameters[name] = Parameter(name, default_value, dtype, unit_type=unit_type, unit=unit, description=description)
@@ -650,7 +650,7 @@ def register_subsystem(cls):
     _config = check_and_get_config(config_path)
 
 
-    if subsystem  in _config['SUBSYSTEMS'] and _config['SUBSYSTEMS'][subsystem] != importlib.util.find_spec(cls.__module__).origin:
+    if subsystem in _config['SUBSYSTEMS'] and _config['SUBSYSTEMS'][subsystem] != importlib.util.find_spec(cls.__module__).origin:
         log.warning(f"WARNING: Subsystem '{subsystem }' already registered\nOverwritting existing data")
     if not "uam4x.subsystems" in cls.__module__.replace('.', '/'):
         _config['SUBSYSTEMS'][subsystem] = importlib.util.find_spec(cls.__module__).origin
@@ -673,13 +673,13 @@ def _update_consts(subsystem , subsystem_class):
         Input value for `subsystem_class`.
 
     """
-    if not subsystem  in _subsystem_names:
+    if not subsystem in _subsystem_names:
         _subsystem_names.append(subsystem)
     dummy = subsystem_class('dummy')
     params = list(dummy.get_param_dict().keys())
     _subsystem_to_param_name_type_list[subsystem] = []
-    for param  in params:
-        _subsystem_to_param_name_type_list[subsystem ].append((param, dummy._parameters[param].dtype.__name__))
+    for param in params:
+        _subsystem_to_param_name_type_list[subsystem].append((param, dummy._parameters[param].dtype.__name__))
 
 def get_subsystem_class(subsystem_class_name):
     """Return subsystem class.
@@ -712,7 +712,7 @@ def get_subsystem_names():
         Requested value.
 
     """
-    return  _subsystem_names
+    return _subsystem_names
 
 def get_param_name_and_type_list(subsystem):
     """Return parameter name/type metadata for a subsystem class.

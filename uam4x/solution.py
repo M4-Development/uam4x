@@ -5,8 +5,8 @@ import json
 import importlib.util
 from uam4x.utils import check_and_get_config, check_numpy_shape, is_scalar_type_or_value, is_numpy_array, normalize_shape,is_main_process,registry_writes_enabled,is_continuous_type_or_value,split_dotted_path_and_indices
 from collections.abc import Sequence
-from numbers import  Real
-from itertools import  product
+from numbers import Real
+from itertools import product
 from uam4x.log import get_log
 from uam4x.utils import log
 import numpy as np
@@ -84,7 +84,7 @@ class Group:
         """
         self.log.debug(f'add link. independent link: {independent}, dependent link: {dependent}')
         # need slicing here dependent cannot
-        if  '[' in dependent:
+        if '[' in dependent:
             raise ValueError(rf'Only independent variables can have indices specified. The independent variable {dependent}\n'
                              rf'has slices indices specified.')
         link = [independent, dependent]
@@ -150,13 +150,13 @@ class Group:
                 "plugin_options": plugin_options,
                 "plugin_hash": plugin_hash,
             }
-        
+
         elif isinstance(step,Group):
             return step
-        
-        else: 
+
+        else:
             raise TypeError(f'Only plugin classes and group objects are allowed')
-        
+
 
     def add_step(self, step, step_name=None, plugin_options:dict=None):
         """Add step.
@@ -177,7 +177,7 @@ class Group:
         if isinstance(step,type) and not issubclass(step, Plugin):
             self.log.error("add_step: plugin_class should be a callable (class).")
             raise TypeError("plugin_class should be a callable (class).")
-        if step_name is  not None and  ('[' in  step_name or  ']' in  step_name):
+        if step_name is not None and ('[' in step_name or ']' in step_name):
             self.log.error(f'steps cannot have the character "[" or "]" in them')
             raise ValueError(f'steps cannot have the character "[" or "]" in them')
         # plugin_name should be a string, not a class
@@ -228,7 +228,7 @@ class Group:
                 step['plugin_options'] = {}
         else:
             raise KeyError(f'The step {step_name} is not a step')
-    
+
     def add_plugin_option(self, step_name:str, option_name:str, option_value):
         """Add plugin option.
 
@@ -248,12 +248,12 @@ class Group:
            if isinstance(step,Group):
                 raise ValueError(f'Only plugins are editable at the Group level, sub groups'
                                 'must be edited in their respective groups')
-           if option_name in  step['plugin_options']:
+           if option_name in step['plugin_options']:
                print(f'{option_name} already a plugin option. Overwriting value: {step["plugin_options"][option_name]}')
            step["plugin_options"][option_name] = option_value
         else:
             raise KeyError(f'The step {step_name} is not a step')
-    
+
     def remove_plugin_option(self, step_name:str, option_name:str):
         """Remove plugin option.
 
@@ -274,7 +274,7 @@ class Group:
             step["plugin_options"].pop(option_name)
         else:
             raise KeyError(f'The step {step_name} is not a step')
-    
+
     def _to_dict(self) -> dict:
         # Serialize steps, converting plugin class to its name
         """Serialize group configuration to a dictionary.
@@ -301,7 +301,7 @@ class Group:
                 #if its a group instead
                 steps_serialized[step_name]=step_info._to_dict()
                 steps_serialized[step_name]['specification']='group'
-        
+
         return {
             "steps": steps_serialized,
             "links": self.links,
@@ -350,7 +350,7 @@ class Group:
         group.group_name=data["group_name"]
         group.cycle_declared_step_order=data['cycle_declared_step_order']
         return group
-    
+
     def generate_plugins(self):
         """Generate plugins.
 
@@ -371,7 +371,7 @@ class Group:
                 plugins[step_name]=group_plugs
 
         return plugins
-    
+
     def _recurse_generated_plugins(self,plugins,plugin_dict):
         """Flatten nested generated plugin mappings into a single dictionary.
 
@@ -396,8 +396,8 @@ class Group:
                 plugin_dict[step_name]=data
             elif isinstance(data,dict):
                 self._recurse_generated_plugins(data,plugin_dict)
-        
-             
+
+
 
     def _get_all_plugin_names_to_data(self,head_dict,group_name):
         """Return all plugin names to data.
@@ -432,8 +432,8 @@ class Group:
         for name,data in self.steps.items():
             if isinstance(data,Group):
                 data.sort_steps()
-        #may want to handle the case where there is a single plugin/group 
-        #within a  group (either a raise or do nothing?)
+        #may want to handle the case where there is a single plugin/group
+        #within a group (either a raise or do nothing?)
         reduced_links=[]
         counter=0
         step_to_location={}
@@ -457,16 +457,16 @@ class Group:
                 counter+=1
 
         adj = [[] for _ in range(len(steps))]
-        in_degree = [0]*len(steps) 
+        in_degree = [0]*len(steps)
         for independent,dependent in reduced_links:
             adj[step_to_location[independent]].append(step_to_location[dependent])
             in_degree[step_to_location[dependent]]+=1
-        
+
         sources=[]
         for loc in step_to_location.values():
             if in_degree[loc]==0:
                 sources.append(loc)
-        
+
         sorted_steps=[]
         while sources:
             source=sources.pop()
@@ -475,7 +475,7 @@ class Group:
                 in_degree[check_node]-=1
                 if in_degree[check_node]==0:
                     sources.append(check_node)
-            
+
         if len(sorted_steps) != len(steps):
             print(f"Cycle detected in group {self.group_name}, using declared step order in that group")
             self._execution_steps=copy.deepcopy(self.steps)
@@ -496,10 +496,10 @@ class Group:
                 step=location_to_step[step_order]
                 if step!='vehicles':
                     self._execution_steps[step]=self.steps[step]
-            
-        
+
+
     def _check_links_to_plugins(self,plugins):
-        
+
         """Validate links to plugins.
 
         Parameters
@@ -513,28 +513,28 @@ class Group:
             if isinstance(self._execution_steps[step_name],dict):
                 input_names,output_names=self.get_plugin_input_and_output_names(step_name)
                 #check coherance of declared I/O from plugin and from branching script
-                for input_name in  input_names:
+                for input_name in input_names:
                     name = '.'.join(input_name.split('.')[1:])
-                    if name not  in plugins[step_name].plugin_input_names:
+                    if name not in plugins[step_name].plugin_input_names:
                         self.log.error(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                          f"Check your plugin's setup() step for I/O declaration")
                         raise ValueError(f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                          f"Check your plugin's setup() step for I/O declaration")
-                for output_name in  output_names:
+                for output_name in output_names:
                     name = '.'.join(output_name.split('.')[1:])
-                    if '[' in  name:
+                    if '[' in name:
                         #any time where indexes are specified in the link, this is required to be
-                        # an index specification, nothing to do with the variable name. 
-                        name, _ = split_dotted_path_and_indices(name)                
-                    if name not  in plugins[step_name].plugin_output_names:
+                        # an index specification, nothing to do with the variable name.
+                        name, _ = split_dotted_path_and_indices(name)
+                    if name not in plugins[step_name].plugin_output_names:
                         self.log.error(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                          f"Check your plugin's setup() step for I/O declaration")
                         raise ValueError(f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
                                          f"Check your plugin's setup() step for I/O declaration")
-                    
+
             elif isinstance(self._execution_steps[step_name],Group):
                 self._execution_steps[step_name]._check_links_to_plugins(plugins[step_name])
-        
+
 
     def get_plugin_input_and_output_names(self,step_name):
         """Return plugin input and output names.
@@ -554,15 +554,15 @@ class Group:
         output_names=[]
         for (independent, dependent) in self.links:
             # remove indices from index based links
-            if '[' in  independent:
+            if '[' in independent:
                 independent, _ = split_dotted_path_and_indices(independent)
             if dependent.split('.')[0] == step_name:
                 input_names.append(dependent)
             if independent.split('.')[0] == step_name:
                 output_names.append(independent)
         return set(input_names), set(output_names)
-    
-            
+
+
     def get_all_groups(self,name_to_group,parent_name):
         """Return all groups.
 
@@ -585,7 +585,7 @@ class Group:
                 name_to_group[full_name]=step
                 step.get_all_groups(name_to_group,full_name)
         return name_to_group
-    
+
     def get_var_type(self,name,plugins):
         """Return var type.
 
@@ -603,7 +603,7 @@ class Group:
 
         """
         return self.get_var_data(name,plugins)['type']
-        
+
     def get_var_value(self,name,plugins):
         """Return var value.
 
@@ -621,7 +621,7 @@ class Group:
 
         """
         return self.get_var_data(name,plugins)['value']
-    
+
     def get_var_shape(self,name,plugins):
         """Return var shape.
 
@@ -639,7 +639,7 @@ class Group:
 
         """
         return self.get_var_data(name,plugins)['shape']
-        
+
     def get_var_data(self,name,plugins):
         """Return var data.
 
@@ -680,7 +680,7 @@ class Group:
         elif isinstance(step,dict):
             local_plugins=plugins[step_name]
             return self.get_var_data(rest_name,local_plugins)
-        
+
     def _get_global_execution_order_plugins(self,sol_name,plugins,global_name_to_plugin):
         """Return global execution order plugins.
 
@@ -727,7 +727,7 @@ class Group:
                 new_base_name=base_name+'.'+name
                 global_links+=step._build_links(new_base_name)
         return global_links
-    
+
     def declare_cycle_step_order(self,names):
         """Declare explicit step order for cyclic group execution.
 
@@ -738,7 +738,7 @@ class Group:
 
         """
         self.cycle_declared_step_order=names
-            
+
 
 class Solution(Group):
     """Represent the solution component in the UAM4X workflow.
@@ -788,7 +788,7 @@ class Solution(Group):
 
         """
         self.log.debug(f'remove tracked output: {output}')
-        if output in  self.tracked_outputs:
+        if output in self.tracked_outputs:
             self.tracked_outputs.remove(output)
 
 
@@ -818,7 +818,7 @@ class Solution(Group):
                 #if its a group instead
                 steps_serialized[step_name]=step_info._to_dict()
                 steps_serialized[step_name]['specification']='group'
-        
+
         return {
             "steps": steps_serialized,
             "links": self.links,
@@ -861,7 +861,7 @@ class Solution(Group):
         sol.tracked_outputs = data["tracked_outputs"]
         sol.links = data["links"]
         return sol
-    
+
     def get_all_plugin_names_to_hashes(self):
         """Return all plugin names to hashes.
 
@@ -926,7 +926,7 @@ class Solution(Group):
                 data._get_all_plugin_names_to_data(plugins_name_to_data,name)
 
         return plugins_name_to_data
-    
+
 
     def get_plugin_input_and_output_names(self,step_name):
         """Return plugin input and output names.
@@ -946,7 +946,7 @@ class Solution(Group):
         output_names=[]
         for (independent, dependent) in self.links:
             # remove indices from index based links
-            if '[' in  independent:
+            if '[' in independent:
                 independent, _ = split_dotted_path_and_indices(independent)
             if dependent.split('.')[0] == step_name:
                 input_names.append(dependent)
@@ -956,7 +956,7 @@ class Solution(Group):
             if independent.split('.')[0] == step_name:
                 output_names.append(independent)
         return set(input_names), set(output_names)
-    
+
     def get_all_groups(self):
         """Return all groups.
 
@@ -973,7 +973,7 @@ class Solution(Group):
                 name_to_group[full_name]=step
                 step.get_all_groups(name_to_group,full_name)
         return name_to_group
-    
+
     def get_group(self,dotted_path):
         """Return group.
 
@@ -993,7 +993,7 @@ class Solution(Group):
         if split_path[0]!='solution':
             dotted_path='solution.'+dotted_path
         return groups[dotted_path]
-    
+
     def recurse_generated_plugins(self,plugins):
         """Return a flat mapping of generated plugin instances by step name.
 
@@ -1019,10 +1019,10 @@ class Solution(Group):
             if isinstance(data,Plugin):
                 plugin_name_to_plugin_object[step_name]=data
             elif isinstance(data,dict):
-                self._recurse_generated_plugins(data,plugin_name_to_plugin_object) 
+                self._recurse_generated_plugins(data,plugin_name_to_plugin_object)
 
         return plugin_name_to_plugin_object
-    
+
     def recurse_plugin_dict(self,split_name,plugins):
 
         """Resolve nested plugin mappings from a split path.
@@ -1048,7 +1048,7 @@ class Solution(Group):
             start=split_name[0]
             local_plug=plugins[start]
             return self.recurse_plugin_dict(split_name[1:],local_plug)
-        
+
     def _check_link_types(self,plugins,study):
         """Validate link types.
 
@@ -1072,27 +1072,27 @@ class Solution(Group):
             for output_link,input_link in group.links:
                 indexes_specified = False
 
-                if '[' in  output_link:
+                if '[' in output_link:
                     output_link, _ = split_dotted_path_and_indices(output_link)
                     indexes_specified = True
                 if output_link.split('.')[0]=='vehicles':
                     output_type=study.get_param_type(output_link)
                 else:
                     output_type=self.get_var_type(output_link,local_plugins)
-                
+
                 input_type=self.get_var_type(input_link,local_plugins)
                 if indexes_specified and output_type != np.ndarray:
                     raise ValueError(f'Indexes may only be specified for arrays. The link: {input_link} is not valid')
-                if indexes_specified and  output_type == np.ndarray and  is_continuous_type_or_value(input_type) and input_type != np.ndarray:
+                if indexes_specified and output_type == np.ndarray and is_continuous_type_or_value(input_type) and input_type != np.ndarray:
                     pass
                 elif output_type != input_type:
                     bad_links.append((output_link,output_type, input_link, input_type))
 
         if bad_links:
-            msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for  out_,out_type, in_,in_type in  bad_links)
+            msg = f'Link types must match, the following links have different types:\n' + "\n".join(f"{out_}:{out_type}->{in_}:{in_type}" for out_, out_type, in_, in_type in bad_links)
             self.log.error(msg)
             raise TypeError(msg)
-        
+
     def get_all_used_vehicle_params(self):
         """Return all used vehicle params.
 
@@ -1112,7 +1112,7 @@ class Solution(Group):
         return all_used_vehicle_params
 
 
-                
+
     def _check_optimization_discrete(self,plugins):
         """Validate optimization discrete.
 
@@ -1135,11 +1135,11 @@ class Solution(Group):
                 if output_link.split('.')[0]=='vehicles':
                     continue
 
-                
 
-                if '[' in  output_link:
+
+                if '[' in output_link:
                     output_link, _ = split_dotted_path_and_indices(output_link)
-                
+
                 output_type=self.get_var_type(output_link,local_plugins)
 
                 if not is_continuous_type_or_value(output_type):
@@ -1154,7 +1154,7 @@ class Solution(Group):
                 )
             self.log.error(msg)
             raise TypeError(msg)
-        
+
 
     def get_global_execution_order_plugins(self,plugins):
         """Return global execution order plugins.
@@ -1181,7 +1181,7 @@ class Solution(Group):
                 global_plugin_name_to_plugin[sol_name+'.'+name]=plugins[name]
 
         return global_plugin_name_to_plugin
-    
+
     def _build_global_links(self):
         """Build global links.
 
@@ -1203,7 +1203,7 @@ class Solution(Group):
                 child_name=base_name+'.'+name
                 global_links+=step._build_links(child_name)
         return global_links
-    
+
     def _check_link_indices(self,plugins,study):
         """Validate link indices.
 
@@ -1226,7 +1226,7 @@ class Solution(Group):
             for output_link,input_link in group.links:
                 indexes_specified = False
 
-                if '[' in  output_link:
+                if '[' in output_link:
                     cleaned_output_name, inds = split_dotted_path_and_indices(output_link)
                     if output_link.split('.')[0]=='vehicles':
                         try:
@@ -1243,7 +1243,7 @@ class Solution(Group):
                                 src_shape = a[inds].shape
                             except:
                                 raise ValueError(f'Invalid indices or array. Array: {a} and inds: {inds}')
-                        elif a_shape is  not None:
+                        elif a_shape is not None:
                             try:
                                 src_shape = np.ones(shape=a_shape)[inds].shape
                             except:
@@ -1258,14 +1258,14 @@ class Solution(Group):
 
                     src_size = 1 if src_shape == () else int(np.prod(src_shape))
                     #float case
-                    if src_size ==1  and  b_type == float:
+                    if src_size == 1 and b_type == float:
                             pass
                     elif b is not None:
                         if src_shape != b.shape:
                             raise ValueError(f'The source indices must match the target shape. The input {output_link} with indices.\n'
-                                             f'The size of the source indices is {src_shape} and the destination has shape {b.shape}')                    
+                                             f'The size of the source indices is {src_shape} and the destination has shape {b.shape}')
 
-                    elif b_shape is  not None:
+                    elif b_shape is not None:
                         if src_shape != b_shape:
                             raise ValueError(f'The source indices must match the target shape. The input {output_link} with indices.\n'
                                              f'The size of the source indices is {src_shape} and the destination has shape {b_shape}')
@@ -1374,7 +1374,7 @@ class Plugin():
             raise ValueError(f'Cannot use methods other than exact or fd, user used method: {method}')
 
         if method == 'fd':
-            if step is  not None:
+            if step is not None:
                 if not isinstance(step, Real):
                     self.log.error(f'Step size must be a real number. The step size {step} is not valid')
                     raise ValueError(f'Step size must be a real number. The step size {step} is not valid')
@@ -1388,12 +1388,12 @@ class Plugin():
                     raise ValueError('Only allowed finite difference forms are: forward,\n'
                                      f'backward, and central. The form: {form} is not valid')
         else:
-            if step is  not None:
+            if step is not None:
                 self.log.error(f'User specified {method} method, which does not take in a step.\n'
                                  f'Instead, leave step blank or set it equal to None')
                 raise ValueError(f'User specified {method} method, which does not take in a step.\n'
                                  f'Instead, leave step blank or set it equal to None')
-            if form is  not None:
+            if form is not None:
                 self.log.error(f'User specified {method} method, which does not take in a form.\n'
                                  f'Instead, leave step blank or set it equal to None')
                 raise ValueError(f'User specified {method} method, which does not take in a form.\n'
@@ -1429,9 +1429,9 @@ class Plugin():
         # Collect declared names
         partial_ins = set()
         partial_outs = set()
-        for data in  self.initial_partials:
+        for data in self.initial_partials:
             if data['wrt'] != ['*']:
-                for inp in  data['wrt']:
+                for inp in data['wrt']:
                     partial_ins.add(inp)
                     if inp in self.plugin_input_names:
                         input_type=self.plugin_input_names[inp]['type']
@@ -1441,7 +1441,7 @@ class Plugin():
                         raise TypeError(f'Variables with declared partials must be continuous the variable:\n'
                                f'{inp} is not continuous and has type {input_type}')
             if data['of'] != ['*']:
-                for out in  data['of']:
+                for out in data['of']:
                     partial_outs.add(out)
                     if out in self.plugin_output_names:
                         output_type=self.plugin_output_names[out]['type']
@@ -1457,15 +1457,15 @@ class Plugin():
         start_ind=len(step_name.split('.'))
 
         out_vio=[]
-        for output_name in  output_names:
+        for output_name in output_names:
             local_output_name = '.'.join(output_name.split('.')[start_ind:])
             local_output_names.add(local_output_name)
             output_type=self.plugin_output_names[local_output_name]['type']
-            
+
             if not is_continuous_type_or_value(output_type):
                 out_vio.append(output_name)
         in_vio=[]
-        for input_name in  input_names:
+        for input_name in input_names:
             local_input_name = '.'.join(input_name.split('.')[start_ind:])
             local_input_names.add(local_input_name)
             input_type=self.plugin_input_names[local_input_name]['type']
@@ -1492,7 +1492,7 @@ class Plugin():
 
         #overwrites so declared partials order is last out
         self.comprehensive_partials_dict = {}
-        for data in  self.initial_partials:
+        for data in self.initial_partials:
             if data['of'] == ['*']:
                 ofs = local_output_names
                 if out_vio:
@@ -1510,7 +1510,7 @@ class Plugin():
                 wrts = data['wrt']
 
             for in_name, out_name in product(ofs, wrts):
-                self.comprehensive_partials_dict[(in_name, out_name)] =  {'method': data['method'],
+                self.comprehensive_partials_dict[(in_name, out_name)] = {'method': data['method'],
                                                                                      'form': data['form'],
                                                                                      'step':data['step'] ,
                                                                                      'rows': data['rows'],
@@ -1529,7 +1529,7 @@ class Plugin():
         """
         self.log.debug('catagorize partials')
         method_to_partial = {'fd': [],'exact': []}
-        for pair, data in  self.comprehensive_partials_dict.items():
+        for pair, data in self.comprehensive_partials_dict.items():
             if data['method'] == 'fd':
                 method_to_partial['fd'].append(pair)
             elif data['method'] == 'exact':
@@ -1595,11 +1595,11 @@ class Plugin():
             raise TypeError(f'Declared type must be a type. {name} has declared type {var_type} which is not a type.')
 
 
-        if '~' in  name or  '[' in  name or  ']' in  name:
+        if '~' in name or '[' in name or ']' in name:
             raise ValueError(f'Tildes (~), square brackets "[","]" are not allowed in variable names\n'
                              f'The following name is not allowed: {name}')
 
-        if shape is  not None:
+        if shape is not None:
 
             if var_type is not np.ndarray:
                 raise ValueError(f'{name} has declared type: {var_type} but a shape argument was provided\n'
@@ -1610,7 +1610,7 @@ class Plugin():
                                  f'single integer or as NoneType. The shape of {name} is {shape} which is invalid')
 
                 shape = normalize_shape(shape)
-                if value is  not None:
+                if value is not None:
                     if is_scalar_type_or_value(value):
                         pass
                     elif value.shape != shape:
@@ -1618,10 +1618,10 @@ class Plugin():
                                          f'the declared shape. The variable {name} has declared shape {shape} and actual shape {value.shape}')
         else:
 
-            if value is  None and  var_type is np.ndarray:
+            if value is None and var_type is np.ndarray:
                 raise ValueError(f'Arrays must have either the shape or value defined (or both). The variable\n'
                                  f'{name} has no shape or value.')
-            if value is not None and is_scalar_type_or_value(value) and var_type is  np.ndarray:
+            if value is not None and is_scalar_type_or_value(value) and var_type is np.ndarray:
                 raise ValueError(f'If array value is declared with scalar, shape must be declared for broadcasting.\n'
                                  f'The variable {name} has value: {value} and type: {var_type} but no shape declared.')
             elif value is not None and isinstance(value,np.ndarray) and var_type is np.ndarray:
@@ -1679,11 +1679,11 @@ class Plugin():
             Input value for `path`.
 
         """
-        if path in  self._template_to_checksum:
+        if path in self._template_to_checksum:
             raise KeyError(f'The path: {path} is already in the template dictionary')
         self._plugin_templates.append(path)
         if os.path.exists(path):
-            with open(path, 'rb') as  f:
+            with open(path, 'rb') as f:
                 data = f.read()
                 h = hashlib.sha256(data).hexdigest()
         else:

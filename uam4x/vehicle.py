@@ -1,7 +1,7 @@
 from uam4x.subsystems import Subsystem
 from uam4x.log import get_log
 from uam4x.utils import log
-from collections import  Counter
+from collections import Counter
 
 class VehicleManager():
     """Manage vehiclemanager entities and related operations.
@@ -56,7 +56,7 @@ class VehicleManager():
 
         """
         self.log.debug(f'get vehicle: {name}')
-        for vehicle in  self._vehicles:
+        for vehicle in self._vehicles:
             if vehicle.name == name:
                 return vehicle
 
@@ -130,7 +130,7 @@ class VehicleManager():
             Return value produced by this operation.
 
         """
-        names = [v.name for  v in  self._vehicles]
+        names = [v.name for v in self._vehicles]
         return f"VehicleManager(vehicles={names})"
 
 
@@ -157,7 +157,7 @@ class Vehicle:
         """
         self.log = Vehicle.log
         self.name = name
-        if components is  not None:
+        if components is not None:
             self.check_component_names(components)
         self._components = components if components is not None else []
         self.log.debug(f'initialize')
@@ -172,11 +172,11 @@ class Vehicle:
             Input value for `components_list`.
 
         """
-        c_dict = Counter([c.name for  c in  components_list])
-        vio = {name: instances for name, instances in  c_dict.items() if instances > 1}
+        c_dict = Counter([c.name for c in components_list])
+        vio = {name: instances for name, instances in c_dict.items() if instances > 1}
         msg ='Different components belonging to a vehicle must have different names. The following are in violation:\n'
         if vio:
-            for name, instances in  vio.items():
+            for name, instances in vio.items():
                 msg += f'{name}, number of occurences: {instances}\n'
         if vio:
             raise NameError(msg)
@@ -205,7 +205,7 @@ class Vehicle:
         if not isinstance(value, str):
             self.log.error(f"Name must be a string. The name {value} is invalid")
             raise ValueError(f"Name must be a string. The name {value} is invalid")
-        if '[' in  value or  ']' in  value:
+        if '[' in value or ']' in value:
             self.log.error(f'vehicles cannot have the character "[" or "]" in them. '
                            f'The name: {value} is invalid')
             raise ValueError(f'vehicles cannot have the character "[" or "]" in them. '
@@ -234,7 +234,7 @@ class Vehicle:
 
         """
         parent = getattr(component, '_parent')
-        if parent is  not None:
+        if parent is not None:
             raise ValueError(f'A particular component may only belong to one vehicle at maximum.\n'
                              f'The component {str(component)} belongs to {str(parent)}')
         self._components.append(component)

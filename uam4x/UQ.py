@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from math import comb
 
 
-# Global registry 
+# Global registry
 workflow_name_to_class_registry={}
 sampler_name_to_class_registry={}
 distribution_name_to_class_registry={}
@@ -65,7 +65,7 @@ def register_distribution(Distribution):
 
     """
     distribution_name_to_class_registry[Distribution.__name__]=Distribution
-    return Distribution 
+    return Distribution
 
 def register_post_workflow(PostWorkflow):
     """Register a post-processing workflow class in the global post registry.
@@ -87,8 +87,8 @@ def register_post_workflow(PostWorkflow):
 
 
 class UQAnalysis:
-    #MIGHT CHANGE THIS TO ALEATORYANALYSIS, 
-    #THEN MAYBE HAVE A MIXED ANALYSIS 
+    #MIGHT CHANGE THIS TO ALEATORYANALYSIS,
+    #THEN MAYBE HAVE A MIXED ANALYSIS
     # AND PURE EPISTEMIC ALL ESSENTIALLY AT PARAMETERSWEEP/OPTIMIZATION level
     """Represent the uqanalysis component in the UAM4X workflow.
 
@@ -109,7 +109,7 @@ class UQAnalysis:
 
         """
         self.UQ_workflow = UQ_workflow
-        self.seed=seed if seed is not None else 42        
+        self.seed=seed if seed is not None else 42
         self.aleatory_var_to_dist = {}
         self.post_spec=pre_to_post_workflow_registry[UQ_workflow.__class__.__name__]
 
@@ -124,7 +124,7 @@ class UQAnalysis:
         """
         if hasattr(self.UQ_workflow,'_check_analysis'):
             self.UQ_workflow._check_analysis(self)
-    
+
 
     def add_aleatory_variable(self, var_name, PDFObject):
         """Associate one aleatory variable name with a probability distribution.
@@ -150,7 +150,7 @@ class UQAnalysis:
         """
         ot.RandomGenerator.SetSeed(self.seed)
         return self.UQ_workflow._get_states(self.aleatory_var_to_dist)
-    
+
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
 
@@ -167,10 +167,10 @@ class UQAnalysis:
             'analysis_workflow':self.UQ_workflow._to_dict(),
             'post_processing':self.post_spec.__name__ if self.post_spec else None
         }
-    
+
     @classmethod
     def _from_dict(cls,UQdict):
-        
+
         #load in the workflow from dictionary
         """Reconstruct this object from serialized dictionary data.
 
@@ -199,7 +199,7 @@ class UQAnalysis:
             UQanalysis.post_spec=post_workflow_name_to_class_registry[UQdict['post_processing']]
         return UQanalysis
 
-        
+
 
 #Analysis workflow pre classes
 @register_workflow
@@ -249,7 +249,7 @@ class BasicStats:
                 local_state[name]=sample_points[row,col]
             states.append(local_state)
         return states
-    
+
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
 
@@ -264,7 +264,7 @@ class BasicStats:
             'sampler': self.SamplingClass.__name__,
             'num_samples':self.num_samples
         }
-    
+
     @classmethod
     def _from_dict(cls,workflow_dict):
         """Reconstruct this object from serialized dictionary data.
@@ -283,7 +283,7 @@ class BasicStats:
         sampler=sampler_name_to_class_registry[workflow_dict['sampler']]
         num_samples=workflow_dict['num_samples']
         return cls(num_samples,sampler)
-    
+
 @register_workflow
 class RegressionPCE(BasicStats):
     """Represent the regressionpce component in the UAM4X workflow.
@@ -327,7 +327,7 @@ class RegressionPCE(BasicStats):
             raise ValueError(f'Insufficient terms for polynomial chaos expansion of degree {self.poly_order} for {num_aleatory} random variables')
         elif min_terms*3>self.num_samples:
             print('Warning')
-        
+
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
 
@@ -343,7 +343,7 @@ class RegressionPCE(BasicStats):
             'num_samples':self.num_samples,
             'polynomial_order':self.poly_order
         }
-    
+
     @classmethod
     def _from_dict(cls,workflow_dict):
         """Reconstruct this object from serialized dictionary data.
@@ -425,10 +425,10 @@ class GaussQuadraturePCE:
                 joint.append(dist._OT_Dist())
                 var_name_to_col[name]=i
             dist=ot.JointDistribution(joint)
-            
+
         # Experiment with joint distribution with k marginals
         # the points per var is poly deg+1, the total number of points is
-        # (deg+1)^k for full tensor implementation (used here) 
+        # (deg+1)^k for full tensor implementation (used here)
         points_per_var=[self.poly_order+1]*num_aleatory
         experiment=ot.GaussProductExperiment(dist,points_per_var)
         nodes,weights=experiment.generateWithWeights()
@@ -442,7 +442,7 @@ class GaussQuadraturePCE:
             states.append(local_state)
 
         return states
-                
+
 
 
     def _to_dict(self):
@@ -458,7 +458,7 @@ class GaussQuadraturePCE:
             'name': self.__class__.__name__,
             'polynomial_order':self.poly_order
         }
-    
+
     @classmethod
     def _from_dict(cls,workflow_dict):
         """Reconstruct this object from serialized dictionary data.
@@ -501,7 +501,7 @@ class SobolSensitivity(BasicStats):
         """
         super().__init__(num_samples,SamplingClass)
         self.computeSecondOrder=computeSecondOrder
-    
+
 
     def _get_states(self, aleatory_to_distribution):
         """Generate analysis state dictionaries from configured distributions.
@@ -529,11 +529,11 @@ class SobolSensitivity(BasicStats):
                 joint.append(dist._OT_Dist())
                 var_name_to_col[name]=i
             dist=ot.JointDistribution(joint)
-        
+
         experiment=ot.SobolIndicesExperiment(dist,self.num_samples,self.computeSecondOrder)
         results=np.array(experiment.generate())
 
-        # check matrix size: 
+        # check matrix size:
         # from OpenTurns documentation: if computeSecondOrder is false, number of rows is N(2+nx) where N is num
         # samples and nx is number of marginals (distributions/aleatory vars)
         # if computeSecondOrder is true and nx=2, same as above
@@ -551,11 +551,11 @@ class SobolSensitivity(BasicStats):
             for name,col in var_name_to_col.items():
                 local_state[name]=results[row,col]
             states.append(local_state)
-            
+
 
         return states
-    
-    
+
+
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
 
@@ -571,7 +571,7 @@ class SobolSensitivity(BasicStats):
             'num_samples':self.num_samples,
             'second_order_sobol':self.computeSecondOrder,
         }
-    
+
     @classmethod
     def _from_dict(cls,workflow_dict):
         """Reconstruct this object from serialized dictionary data.
@@ -594,7 +594,7 @@ class SobolSensitivity(BasicStats):
         sobol_workflow=cls(num_samples,sampler,second_order_sobol)
 
         return sobol_workflow
-    
+
 
 # Define post process classes:
 @register_post_workflow
@@ -634,7 +634,7 @@ class BasicStatsPost:
         vals=self.tradestudy.get_variable(var_name)
         return np.average(vals)
 
-    def compute_variance(self, var_name,method='sample'):        
+    def compute_variance(self, var_name,method='sample'):
         """Compute the sample or population variance for a variable.
 
         Parameters
@@ -659,7 +659,7 @@ class BasicStatsPost:
             return float(np.var(vals, ddof=0))
         else:
             raise ValueError()
-                 
+
     def compute_std(self, var_name,method='sample'):
         """Compute the sample or population standard deviation for a variable.
 
@@ -685,7 +685,7 @@ class BasicStatsPost:
             return float(np.std(vals, ddof=0))
         else:
             raise ValueError()
-        
+
 
     def compute_skewness(self,var_name,bias=True):
 
@@ -780,7 +780,7 @@ class BasicStatsPost:
             plt.savefig(f"{save_dir}/PDF_{var_name.replace(' ','_')}.png", dpi=300, bbox_inches='tight')
 
         return ax
-        
+
     def plot_cdf(self,var_name,x_axis_title=None,plot_title='',save_dir=None):
         """Plot a CDF from previously generated surrogate samples.
 
@@ -808,7 +808,7 @@ class BasicStatsPost:
         fig,ax=plt.subplots(figsize=(10,6))
         ax.plot(quantiles,probabilities,color='blue')
         if x_axis_title is None:
-            x_axis_title=var_name    
+            x_axis_title=var_name
         if plot_title=='':
             plot_title=f'CDF of {x_axis_title}'
         ax.set_title(plot_title, fontsize=16,fontweight='bold')
@@ -817,7 +817,7 @@ class BasicStatsPost:
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
 
         if save_dir is not None:
-            plt.savefig(f"{save_dir}/{plot_title.replace(' ','_')}.png", dpi=300, bbox_inches='tight')  
+            plt.savefig(f"{save_dir}/{plot_title.replace(' ','_')}.png", dpi=300, bbox_inches='tight')
 
         return np.hstack((quantiles,probabilities))
 
@@ -856,7 +856,7 @@ class BasicStatsPost:
                     Return value produced by this operation.
 
                 """
-                return ecdf.cdf.evaluate(x) 
+                return ecdf.cdf.evaluate(x)
         elif method=='smooth':
             def cdf(x):
                 """Execute cdf.
@@ -876,7 +876,7 @@ class BasicStatsPost:
         else:
             raise ValueError
         return cdf
-    
+
     def compute_cdf_value(self,var_name,value,method='empirical'):
         """Evaluate the CDF value at a specified point.
 
@@ -900,13 +900,13 @@ class BasicStatsPost:
         quantiles=ecdf.cdf.quantiles
         probabilities=ecdf.cdf.probabilities
         if method=='empirical':
-            return ecdf.cdf.evaluate(value) 
+            return ecdf.cdf.evaluate(value)
         elif method=='smooth':
             return np.interp(value,quantiles,probabilities,left=0.0,right=1.0)
         else:
             raise ValueError
 
-    
+
     def compute_quantile(self,var_name,quantile,method='inverted_cdf'):
         """Compute a quantile value for a variable distribution.
 
@@ -941,10 +941,10 @@ class BasicStatsPost:
 
         if method not in methods:
             raise ValueError
-        
+
         vals=np.array(self.tradestudy.get_variable(var_name))
 
-        return np.quantile(vals,quantile,method=method)                
+        return np.quantile(vals,quantile,method=method)
 
     def compute_spearman_correlation(self,var_name1,var_name2):
         #NEED TO DETERMINE NAN POLICY
@@ -1078,9 +1078,9 @@ class RegressionPCEPost(BasicStatsPost):
         joint_list=[]
         for i,(name,distribution) in enumerate(aleatory_var_to_dist.items()):
             if isinstance(distribution,LogNormalDistribution):
-                #special transformation of log-->normal since no analytical 
+                #special transformation of log-->normal since no analytical
                 #polynomials for log (was getting error)
-                
+
                 #transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
                 #then this says the log of Y is normally distributed with mean mu and
                 # standard deviation sigma (the log distribution has different expectation)
@@ -1092,7 +1092,7 @@ class RegressionPCEPost(BasicStatsPost):
                 z=x_phys-distribution.gamma
                 if np.any(z)<=0.0:
                     raise ValueError()
-                
+
                 new_vals=np.log(z)
                 abscissas[:, i] = new_vals
                 poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
@@ -1104,7 +1104,7 @@ class RegressionPCEPost(BasicStatsPost):
 
             joint_list.append(ot_dist)
 
-        
+
         # Data as OT samples
         abscissas=ot.Sample(abscissas)
         outputs=ot.Sample(np.array(self.tradestudy.get_variable(output_name))[:,None])
@@ -1123,7 +1123,7 @@ class RegressionPCEPost(BasicStatsPost):
         basis_size=enum.getBasisSizeFromTotalDegree(poly_order)
         if basis_size!=comb(poly_order+len(aleatory_var_to_dist),poly_order):
             raise ValueError(f'Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(aleatory_var_to_dist)}')
-            
+
         # Selects first P elemens of the polynomial chaos basis according to enumeration function
         truncation_strategy=ot.FixedStrategy(product_basis,basis_size)
 
@@ -1135,10 +1135,10 @@ class RegressionPCEPost(BasicStatsPost):
         res=algo.getResult()
 
         aleatory_var_to_dist=ts.aleatory_var_to_dist
-        
+
         return Surrogate(aleatory_var_to_dist,res)
-    
-@register_post_workflow    
+
+@register_post_workflow
 class GaussQuadtraturePCEPost(BasicStatsPost):
     """Represent the gaussquadtraturepcepost component in the UAM4X workflow.
 
@@ -1188,9 +1188,9 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
         joint_list=[]
         for i,(name,distribution) in enumerate(aleatory_var_to_dist.items()):
             if isinstance(distribution,LogNormalDistribution):
-                #special transformation of log-->normal since no analytical 
+                #special transformation of log-->normal since no analytical
                 #polynomials for log (was getting error)
-                
+
                 #transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
                 #then this says the log of Y is normally distributed with mean mu and
                 # standard deviation sigma (the log distribution has different expectation)
@@ -1202,7 +1202,7 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
                 z=x_phys-distribution.gamma
                 if np.any(z)<=0.0:
                     raise ValueError()
-                
+
                 new_vals=np.log(z)
                 abscissas[:, i] = new_vals
                 poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
@@ -1233,11 +1233,11 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
         basis_size=enum.getBasisSizeFromTotalDegree(poly_order)
         if basis_size!=comb(poly_order+len(aleatory_var_to_dist),poly_order):
             raise ValueError(f'Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(aleatory_var_to_dist)}')
-            
+
         # Selects first P elemens of the polynomial chaos basis according to enumeration function
         truncation_strategy=ot.FixedStrategy(product_basis,basis_size)
 
-        # Gaussian PCE using integration 
+        # Gaussian PCE using integration
         projection_strategy=ot.IntegrationStrategy()
 
         algo=ot.FunctionalChaosAlgorithm(abscissas,weights,outputs,joint,truncation_strategy,projection_strategy)
@@ -1273,11 +1273,11 @@ class Surrogate:
         self._ot_res=result
         self.new_sample_points=None
         self.new_sample_values=None
-        
-    
+
+
     def predict(self,name_to_value_dict):
-        #Note, name_to_value_dict should be PHYSICAL inputs, not 
-        #probabalistic based inputs 
+        #Note, name_to_value_dict should be PHYSICAL inputs, not
+        #probabalistic based inputs
         """Evaluate the surrogate at one dictionary of input variable values.
 
         Parameters
@@ -1296,11 +1296,11 @@ class Surrogate:
             if isinstance(distribution,LogNormalDistribution):
                 transformed_val=np.log(name_to_value_dict[name]-distribution.gamma)
                 vals.append(transformed_val)
-            else:    
+            else:
                 vals.append(name_to_value_dict[name])
         point=ot.Point(vals)
         return self._ot_res.getMetaModel()(point)
-    
+
     @property
     def analytical_mean(self):
         """Execute analytical mean.
@@ -1340,7 +1340,7 @@ class Surrogate:
 
         """
         return np.sqrt(self.analytical_variance)
-    
+
     def sample(self,num_samples,method='MC'):
         """Generate new surrogate samples using a selected sampling strategy.
 
@@ -1358,7 +1358,7 @@ class Surrogate:
 
         """
         model=self._ot_res.getMetaModel()
-        # need to add method here? 
+        # need to add method here?
         dist=self._ot_res.getDistribution()
         if method=='MC':
             experiment=ot.MonteCarloExperiment(dist,num_samples)
@@ -1374,22 +1374,22 @@ class Surrogate:
             haltonseq=ot.HaltonSequence(dist.getDimension())
             experiment=ot.LowDiscrepancyExperiment(haltonseq,dist,num_samples)
             self.new_sample_points=np.array(experiment.generate())
-        
+
 
         Y=model(self.new_sample_points)
 
         #NOTE, SAMPLE POINTS RETURNED ARE PHYSICAL POINTS, NOT Probability space points
         # in the case of the lognormal distribution. Basic Uniform and Normal
-        #probability space is equal to the physical since no transformaton occurs. 
+        #probability space is equal to the physical since no transformaton occurs.
         for i,(name,distribution) in enumerate(self.aleatory_var_to_dist.items()):
             if isinstance(distribution,LogNormalDistribution):
                 #points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
                 #where gamma is the shift
                 self.new_sample_points[:,i]=np.exp(self.new_sample_points[:,i])+distribution.gamma
-                
-        self.new_sample_values=np.array(Y) 
+
+        self.new_sample_values=np.array(Y)
         return np.array(self.new_sample_points),np.array(self.new_sample_values)
-    
+
     def plot_cdf(self,save_dir=None):
         """Plot a CDF from previously generated surrogate samples.
 
@@ -1411,7 +1411,7 @@ class Surrogate:
         quantiles=ecdf.cdf.quantiles
         probabilities=ecdf.cdf.probabilities
         fig,ax=plt.subplots(figsize=(10,6))
-        ax.plot(quantiles,probabilities,color='blue')   
+        ax.plot(quantiles,probabilities,color='blue')
         ax.set_title(f'CDF of surrogate output', fontsize=16,fontweight='bold')
         ax.set_xlabel('Output', fontsize=14)
         ax.set_ylabel('Probability', fontsize=14)
@@ -1471,7 +1471,7 @@ class SobolSensitivityPost(BasicStatsPost):
         'Jansen':ot.JansenSensitivityAlgorithm,
         'MauntzKucherenko':ot.MauntzKucherenkoSensitivityAlgorithm,
         'Martinez':ot.MartinezSensitivityAlgorithm
-        }    
+        }
 
 
     def init(self,tradestudy):
@@ -1484,7 +1484,7 @@ class SobolSensitivityPost(BasicStatsPost):
 
         """
         super().init(tradestudy)
-    
+
     def generate_Sobol_indices(self,output_name,algo='Jansen'):
         # Output values
         """Compute Sobol indices for one model output.
@@ -1536,7 +1536,7 @@ class SobolSensitivityPost(BasicStatsPost):
             'second_order':{},
             'total_order':{}
             }
-        
+
         #First order indices, one output per input distribution
         first_order=otSobol.getFirstOrderIndices()
         for name,col in name_to_col.items():
@@ -1598,11 +1598,11 @@ class SobolSensitivityPost(BasicStatsPost):
         UQ_Distrubutor=self.tradestudy.study.control.trade_studies[self.tradestudy.trade_name]
         if not UQ_Distrubutor.UQ_workflow.computeSecondOrder:
             raise ValueError(f'This run did not support second order Sobol')
-        
+
         results,_=self.generate_Sobol_indices(output_name,algo)
 
         return results['second_order']
-    
+
     def get_total_order_indices(self,output_name,algo='Jansen'):
         """Return total-order Sobol indices for one output.
 
@@ -1623,8 +1623,8 @@ class SobolSensitivityPost(BasicStatsPost):
         return results['total_order']
 
 
-    
-    
+
+
 # Define various sampling methods
 
 class BaseSampler:
@@ -1691,7 +1691,7 @@ class MonteCarloSampler(BaseSampler):
 
 
         return samples,var_name_to_col
-    
+
 @register_sampler
 class LatinHypercubeSampler(BaseSampler):
 
@@ -1704,7 +1704,7 @@ class LatinHypercubeSampler(BaseSampler):
     """
     _OT_ResourceMapName='LHS'
 
-    
+
     @staticmethod
     def sample(aleatory_to_dist,num_samples):
         #first generate the evenly spaced values on [0,1]
@@ -1739,7 +1739,7 @@ class LatinHypercubeSampler(BaseSampler):
 
 
         return samples,var_name_to_col
-    
+
 @register_sampler
 class SobolSampler(BaseSampler):
 
@@ -1787,9 +1787,9 @@ class SobolSampler(BaseSampler):
         sobolseq=ot.SobolSequence(dist.getDimension())
         experiment=ot.LowDiscrepancyExperiment(sobolseq,dist,num_samples)
         samples=np.array(experiment.generate())
-        
+
         return samples,var_name_to_col
-        
+
 
 @register_sampler
 class HaltonSampler(BaseSampler):
@@ -1831,9 +1831,9 @@ class HaltonSampler(BaseSampler):
         haltonseq=ot.HaltonSequence(dist.getDimension())
         experiment=ot.LowDiscrepancyExperiment(haltonseq,dist,num_samples)
         samples=np.array(experiment.generate())
-        
+
         return samples,var_name_to_col
-    
+
 # Define various continuous distribution classes
 @register_distribution
 class NormalDistribution:
@@ -1868,7 +1868,7 @@ class NormalDistribution:
 
         """
         return ot.Normal(self.mean,self.std)
-    
+
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
 
@@ -1883,7 +1883,7 @@ class NormalDistribution:
             'mean':self.mean,
             'std':self.std
         }
-    
+
     @classmethod
     def _from_dict(cls,data):
         """Reconstruct this object from serialized dictionary data.
@@ -1900,7 +1900,7 @@ class NormalDistribution:
 
         """
         return cls(data['mean'],data['std'])
-        
+
 
 @register_distribution
 class UniformDistribution:
@@ -1936,7 +1936,7 @@ class UniformDistribution:
 
         """
         return ot.Uniform(self.low,self.high)
-    
+
     def _to_dict(self):
         """Serialize this object to a JSON-compatible dictionary.
 
@@ -1950,7 +1950,7 @@ class UniformDistribution:
             'name':self.__class__.__name__,
             'low':self.low,
             'high':self.high}
-    
+
     @classmethod
     def _from_dict(cls,data):
         """Reconstruct this object from serialized dictionary data.
@@ -2038,8 +2038,8 @@ class LogNormalDistribution:
 
         """
         return cls(data['mu'], data['sigma'], data.get('gamma', 0.0))
-    
-# Pair all workflow classes with their post process classes    
+
+# Pair all workflow classes with their post process classes
 pre_to_post_workflow_registry={
     'BasicStats':BasicStatsPost,
     'RegressionPCE':RegressionPCEPost,
@@ -2047,7 +2047,7 @@ pre_to_post_workflow_registry={
     'GaussQuadraturePCE':GaussQuadtraturePCEPost
 }
 if __name__ == "__main__":
-    
+
     #Test the LHS functionality:
     uni=UniformDistribution(0.0,10.0)
     norm=NormalDistribution(50.0,25.0)
