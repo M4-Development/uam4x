@@ -550,6 +550,18 @@ class Variants:
 
         self.log = Variants.log
 
+    def set_repo_root(self, repo_dir: str) -> None:
+        """Set the repository root used to generate variant artifacts.
+
+        Parameters
+        ----------
+        repo_dir : str
+            Path to the repository root. Relative paths are resolved against
+            the current working directory and stored as an absolute path.
+
+        """
+        self.dir = os.path.abspath(os.path.expanduser(repo_dir))
+
     def add_variant(self, name, func_list: list):
         """Add variant.
 
@@ -595,10 +607,10 @@ class Variants:
             for func in func_list:
                 func(study)
 
+            study.control._set_repo_root(self.dir)
             study.control._set_variant_name(name)
             json_path = os.path.join(this_variant_dir, "data.json")
             study.save_model_to_json(json_path, commit=commit)
-            study._save_to_json(json_path)
             studies.append(study)
         return studies
 

@@ -522,6 +522,18 @@ class Control:
         self.log = Control.log
         self.variant_name = ""
 
+    def _set_repo_root(self, repo_root: str) -> None:
+        """Set the Git repository root directory for the study object.
+
+        Parameters
+        ----------
+        repo_root : str
+            Absolute path to the root of the Git repository used
+            for study data, variant generation, and version-controlled outputs.
+
+        """
+        self.repo_root = repo_root
+
     def _set_variant_name(self, variant_name: str) -> None:
         """Set variant name.
 
