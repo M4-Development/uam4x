@@ -1,9 +1,10 @@
 import numpy as np
 from uam4x.utils import *
+from uam4x.utils import _is_valid_square_brackets, _is_valid_index, _is_simple, _is_slice, _is_fancy, _parse_simple, _parse_fancy, _parse_slice, _parse_complicated, _parse_index
 import pytest
 import os
 import json
-from uam4x.study import  Study
+from uam4x.study import Study
 from uam4x.solution import Plugin, register_plugin
 from uam4x.subsystems import Subsystem, Wing, register_subsystem, Rotor, RotorBladeRegion, Aircraft
 from uam4x.vehicle import Vehicle
@@ -251,7 +252,7 @@ def test_value_to_type_name(value, expected):
     ('[[6,7],3:-4:2,4]')
 ])
 def test_is_valid_square_brackets_positive(value):
-    assert is_valid_square_brackets(value) == True
+    assert _is_valid_square_brackets(value) == True
 
 
 @pytest.mark.parametrize('value', [
@@ -262,7 +263,7 @@ def test_is_valid_square_brackets_positive(value):
     ('[[6,7],3:-4:2,4]')
 ])
 def test_is_valid_index_positive(value):
-    assert is_valid_index(value) == True
+    assert _is_valid_index(value) == True
 
 
 @pytest.mark.parametrize("value, expected_output", [
@@ -287,7 +288,7 @@ def test_is_valid_index_positive(value):
     ("1, 0, -5, 12", True),
 ])
 def test_is_simple(value, expected_output):
-    assert is_simple(value) is expected_output
+    assert _is_simple(value) is expected_output
 
 
 @pytest.mark.parametrize("value, expected_output", [
@@ -309,7 +310,7 @@ def test_is_simple(value, expected_output):
     ("3,-4:2", True),
 ])
 def test_is_slice(value, expected_output):
-    assert is_slice(value) is expected_output
+    assert _is_slice(value) is expected_output
 
 @pytest.mark.parametrize("value, expected_output", [
     # No brackets -> not fancy
@@ -329,7 +330,7 @@ def test_is_slice(value, expected_output):
     ("1,2,3]", False),
 ])
 def test_is_fancy(value, expected_output):
-    assert is_fancy(value) is expected_output
+    assert _is_fancy(value) is expected_output
 
 
 @pytest.mark.parametrize("value, expected_output", [
@@ -348,7 +349,7 @@ def test_is_fancy(value, expected_output):
     ("-1, -2, -3", (-1, -2, -3)),
 ])
 def test_parse_simple(value, expected_output):
-    assert parse_simple(value) == expected_output
+    assert _parse_simple(value) == expected_output
 
 
 @pytest.mark.parametrize("value, expected_output", [
@@ -367,7 +368,7 @@ def test_parse_simple(value, expected_output):
     ("[  -1 ,2 ,  3 ]", [-1, 2, 3]),
 ])
 def test_parse_fancy(value, expected_output):
-    assert parse_fancy(value) == expected_output
+    assert _parse_fancy(value) == expected_output
 
 @pytest.mark.parametrize("value, expected_output", [
     ("[1]", [1]),
@@ -378,7 +379,7 @@ def test_parse_fancy(value, expected_output):
     ("[-1,-2,-3]", [-1, -2, -3]),
 ])
 def test_parse_fancy(value, expected_output):
-    assert parse_fancy(value) == expected_output
+    assert _parse_fancy(value) == expected_output
 
 
 
@@ -417,7 +418,7 @@ def test_parse_fancy(value, expected_output):
     ("-3::",   (-3, None, None)),
 ])
 def test_parse_slice_valid(value, expected):
-    s = parse_slice(value)
+    s = _parse_slice(value)
     assert isinstance(s, slice)
     assert (s.start, s.stop, s.step) == expected
 
@@ -461,7 +462,7 @@ def test_parse_slice_valid(value, expected):
      (slice(-1, -5, -2), [1, -2])),
 ])
 def test_parse_complicated_valid(value, expected):
-    result = parse_complicated(value)
+    result = _parse_complicated(value)
     assert isinstance(result, tuple)
     assert result == expected
 
@@ -500,7 +501,7 @@ def test_parse_complicated_valid(value, expected):
      (slice(None, None, None), slice(None, None, None))),
 ])
 def test_parse_index_positive(value, expected):
-    assert parse_index(value) == expected
+    assert _parse_index(value) == expected
 
 
 @pytest.mark.parametrize("dotted_path, expected_path, expected_inds", [
@@ -798,7 +799,7 @@ def test_type_string_to_type_bad():
 ])
 def test_is_valid_square_brackets_vio(value):
     with  pytest.raises(ValueError):
-        is_valid_square_brackets(value)
+        _is_valid_square_brackets(value)
 
 
 @pytest.mark.parametrize('value', [
@@ -817,7 +818,7 @@ def test_is_valid_square_brackets_vio(value):
 ])
 def test_is_valid_index_vio(value):
     with pytest.raises(ValueError):
-        is_valid_index(value)
+        _is_valid_index(value)
 
 @pytest.mark.parametrize("value", [
     "[1:5]",
@@ -828,7 +829,7 @@ def test_is_valid_index_vio(value):
 ])
 def test_is_fancy_vio(value):
     with pytest.raises(ValueError):
-        is_fancy(value)
+        _is_fancy(value)
 
 
 
@@ -839,7 +840,7 @@ def test_is_fancy_vio(value):
 ])
 def test_parse_slice_vio(value):
     with pytest.raises(ValueError):
-        parse_slice(value)
+        _parse_slice(value)
 
 
 
@@ -850,7 +851,7 @@ def test_parse_slice_vio(value):
 ])
 def test_parse_complicated_fancy_slice_violation(value):
     with pytest.raises(ValueError, match="Slicing not allowed in fancy indexing"):
-        parse_complicated(value)
+        _parse_complicated(value)
 
 
 @pytest.mark.parametrize("value", [
@@ -884,7 +885,7 @@ def test_parse_complicated_fancy_slice_violation(value):
 ])
 def test_parse_index_negative(value):
     with pytest.raises(ValueError):
-        parse_index(value)
+        _parse_index(value)
 
 
 

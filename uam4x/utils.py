@@ -2,11 +2,11 @@ from dataclasses import replace
 import os
 import json
 import multiprocessing as mp
-import numpy as  np
+import numpy as np
 import re
 from uam4x.log import FileLogger
 from numbers import Real
-from operator import  itemgetter, attrgetter
+from operator import itemgetter, attrgetter
 import hashlib
 import sys
 
@@ -175,7 +175,7 @@ def convert_numpy_to_python(value):
     if isinstance(value, list):
         return [convert_numpy_to_python(x) for x in value]
     if isinstance(value, dict):
-        return {k: convert_numpy_to_python(x) for  k, x in value.items()}
+        return {k: convert_numpy_to_python(x) for k, x in value.items()}
 
     return value
 
@@ -200,7 +200,7 @@ def check_numpy_shape(shape):
     elif is_integer(shape):
         return shape >= 0
     elif is_tuple(shape):
-        for dim in  shape:
+        for dim in shape:
             if is_bool(dim):
                 return False
             if not is_integer(dim):
@@ -337,7 +337,7 @@ def value_to_type_name(value):
         return None
 
 
-def canonicalize_state(x):
+def _canonicalize_state(x):
     """Execute canonicalize state.
 
     Parameters
@@ -352,13 +352,13 @@ def canonicalize_state(x):
 
     """
     if isinstance(x, dict):
-        return {k: canonicalize_state(x[k]) for k in sorted(x.keys())}
+        return {k: _canonicalize_state(x[k]) for k in sorted(x.keys())}
 
     if isinstance(x, list):
-        return [canonicalize_state(v) for v in x]
+        return [_canonicalize_state(v) for v in x]
 
     if isinstance(x, np.ndarray):
-        return canonicalize_state(x.tolist())
+        return _canonicalize_state(x.tolist())
 
     if isinstance(x, float):
         return round(x, 12)
@@ -382,7 +382,7 @@ def hash_state(state):
         Return value produced by this operation.
 
     """
-    canon = canonicalize_state(state)
+    canon = _canonicalize_state(state)
 
     data = json.dumps(
         canon,
@@ -395,7 +395,7 @@ def hash_state(state):
     return hashlib.sha256(data).hexdigest()
 
 
-def is_valid_square_brackets(string):
+def _is_valid_square_brackets(string):
     """Check whether valid square brackets.
 
     Parameters
@@ -410,7 +410,7 @@ def is_valid_square_brackets(string):
 
     """
     stack = []
-    for letter in  string:
+    for letter in string:
         if letter == "[":
             stack.append(letter)
         if letter == "]" and not stack:
@@ -422,7 +422,7 @@ def is_valid_square_brackets(string):
     else:
         raise ValueError(f'Brackets are inalid in indexing string: {string}')
 
-def is_valid_index(string: str):
+def _is_valid_index(string: str):
     """Check whether valid index.
 
     Parameters
@@ -443,26 +443,26 @@ def is_valid_index(string: str):
         raise ValueError('At most 2 consecutive colons allowed when specifying indices. The string:\n'
                          f'{string} has invalid indexes.')
 
-    if not (string.startswith('[') and  string.endswith(']')):
+    if not (string.startswith('[') and string.endswith(']')):
         raise ValueError(f'Indexes must be surrounded with [] the string: {string} does not have this')
 
-    for i, letter in  enumerate(string[1:-1]):
+    for i, letter in enumerate(string[1:-1]):
         loc = i + 1
         # letter must be in the valid characters or an integer
         if not (letter in valid_characters or letter.isdigit()):
             raise ValueError(f'The string: {string} is not a valid array index')
         # number must come after minus sign
-        if letter == '-' and  not string[loc+1].isdigit():
+        if letter == '-' and not string[loc+1].isdigit():
             raise ValueError(f'A minus sign must be proceeded with an integer index. The string: {string} is not valid.')
         # commas must be proceeded by -, : or int or opening bracket
-        if letter == ',' and  not (string[loc+1].isdigit() or  string[loc+1] in valid_characters[1:-1]):
+        if letter == ',' and not (string[loc+1].isdigit() or string[loc+1] in valid_characters[1:-1]):
             raise ValueError(f'A comma must be proceeded with a colon, integer, or opening bracket. The string: {string}\n'
                              f'is not valid. ')
         # check for leading zeros which occur after commas, colons or open brackets
-        if letter == '0' and  string[loc-1] in itemgetter(0, 2, 3)(valid_characters) and  string[loc+1].isdigit():
+        if letter == '0' and string[loc-1] in itemgetter(0, 2, 3)(valid_characters) and string[loc+1].isdigit():
             raise ValueError(f'Leading zeros are not allowed, the string {string} is not valid. ')
         # handle [
-        if letter == '[' and not (string[loc+1].isdigit() or  string[loc+1] == ':'):
+        if letter == '[' and not (string[loc+1].isdigit() or string[loc+1] == ':'):
             raise ValueError(f'Internal brackets must be proceeded with a colon or an integer slice. The string {string} is not valid')
         # handle ]
         if letter == ']' and loc != len(string)-2 and string[loc+1] != ',':
@@ -471,7 +471,7 @@ def is_valid_index(string: str):
     return True
 
 
-def is_simple(string):
+def _is_simple(string):
     """Check whether simple.
 
     Parameters
@@ -485,14 +485,14 @@ def is_simple(string):
         Boolean status for the requested check.
 
     """
-    for letter in  string:
+    for letter in string:
         if letter == '[':
             return False
         if letter == ':':
             return False
     return True
 
-def is_slice(string):
+def _is_slice(string):
     """Check whether slice.
 
     Parameters
@@ -506,11 +506,11 @@ def is_slice(string):
         Boolean status for the requested check.
 
     """
-    if ':' in  string:
+    if ':' in string:
         return True
     return False
 
-def is_fancy(string):
+def _is_fancy(string):
     """Check whether fancy.
 
     Parameters
@@ -524,15 +524,15 @@ def is_fancy(string):
         Boolean status for the requested check.
 
     """
-    if '[' in  string and ']' in string:
-        if ':' in  string:
+    if '[' in string and ']' in string:
+        if ':' in string:
             raise ValueError(f'Slicing not allowed in fancy indexing')
         else:
             return True
     return False
 
 
-def parse_simple(string):
+def _parse_simple(string):
     """Parse simple.
 
     Parameters
@@ -547,13 +547,13 @@ def parse_simple(string):
 
     """
     indices = re.findall(r'[-]?\d+', string)
-    indices = [int(num) for  num in  indices]
+    indices = [int(num) for num in indices]
     if len(indices) == 1:
         return indices[0]
 
     return tuple(indices)
 
-def parse_fancy(string):
+def _parse_fancy(string):
 
     """Parse fancy.
 
@@ -569,9 +569,9 @@ def parse_fancy(string):
 
     """
     indices = re.findall(r'[-]?\d+', string)
-    return [int(num) for  num in  indices]
+    return [int(num) for num in indices]
 
-def parse_slice(string):
+def _parse_slice(string):
 
     """Parse slice.
 
@@ -612,7 +612,7 @@ def parse_slice(string):
             return None
         return int(ex_string)
 
-    start, stop, step = [empty_to_none(letter) for  letter in  s]
+    start, stop, step = [empty_to_none(letter) for letter in s]
 
     if step == 0:
         raise ValueError(f'Step size cannot be zero. Slice: {string} in violation')
@@ -620,7 +620,7 @@ def parse_slice(string):
     return slice(start, stop, step)
 
 
-def parse_complicated(string):
+def _parse_complicated(string):
     """Parse complicated.
 
     Parameters
@@ -636,7 +636,7 @@ def parse_complicated(string):
     """
     comma_inds = []
     depth = 0
-    for i, letter in  enumerate(string[1:-1]):
+    for i, letter in enumerate(string[1:-1]):
         loc = i + 1
         if letter == '[':
             depth +=1
@@ -645,11 +645,11 @@ def parse_complicated(string):
         if letter == ',' and depth == 0:
             comma_inds.append(loc)
 
-    lower_list = [1] + [comma_ind + 1 for  comma_ind in  comma_inds]
+    lower_list = [1] + [comma_ind + 1 for comma_ind in comma_inds]
     upper_list = [comma_ind for comma_ind in comma_inds] + [-1]
 
     slice_list = []
-    for lower, upper in  zip(lower_list, upper_list):
+    for lower, upper in zip(lower_list, upper_list):
         slice_list.append(slice(lower, upper))
 
     index_groups = []
@@ -657,20 +657,20 @@ def parse_complicated(string):
         index_groups.append(string[slice_inds])
 
     full_index = []
-    for group in  index_groups:
-        if is_simple(group):
-            full_index.append(parse_simple(group))
-        elif is_fancy(group):
-            full_index.append(parse_fancy(group))
-        elif is_slice(group):
-            full_index.append(parse_slice(group))
+    for group in index_groups:
+        if _is_simple(group):
+            full_index.append(_parse_simple(group))
+        elif _is_fancy(group):
+            full_index.append(_parse_fancy(group))
+        elif _is_slice(group):
+            full_index.append(_parse_slice(group))
         else:
             raise ValueError(f'Issue')
 
     return tuple(full_index)
 
 
-def parse_index(string):
+def _parse_index(string):
     """Parse index.
 
     Parameters
@@ -684,13 +684,13 @@ def parse_index(string):
         Return value produced by this operation.
 
     """
-    is_valid_square_brackets(string)
-    is_valid_index(string)
+    _is_valid_square_brackets(string)
+    _is_valid_index(string)
     #Try first form:
-    if is_simple(string[1:-1]):
-        return parse_simple(string)
+    if _is_simple(string[1:-1]):
+        return _parse_simple(string)
     else:
-        return parse_complicated(string)
+        return _parse_complicated(string)
 
 
 def split_dotted_path_and_indices(dotted_path):
@@ -708,7 +708,7 @@ def split_dotted_path_and_indices(dotted_path):
 
     """
     bracket_ind = dotted_path.find('[')
-    inds = parse_index(dotted_path[bracket_ind:])
+    inds = _parse_index(dotted_path[bracket_ind:])
     dotted_path = dotted_path[:bracket_ind]
 
     return dotted_path, inds
@@ -734,7 +734,7 @@ def replace_none_with_empty_quotes(value):
     if isinstance(value, list):
         return [replace_none_with_empty_quotes(x) for x in value]
     if isinstance(value, dict):
-        return {k: replace_none_with_empty_quotes(x) for  k, x in value.items()}
+        return {k: replace_none_with_empty_quotes(x) for k, x in value.items()}
 
     return value
 
@@ -759,6 +759,6 @@ def replace_empty_quotes_with_none(value):
     if isinstance(value, list):
         return [replace_empty_quotes_with_none(x) for x in value]
     if isinstance(value, dict):
-        return {k: replace_empty_quotes_with_none(x) for  k, x in value.items()}
+        return {k: replace_empty_quotes_with_none(x) for k, x in value.items()}
 
     return value
