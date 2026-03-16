@@ -105,7 +105,8 @@ def test_study_to_dict_from_dict_roundtrip(monkeypatch, demo_study):
 
 
 def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
-    path = tmp_path / "study.json"
+    path = tmp_path / "study_variant"
+    path.mkdir()
 
     demo_study.save_model_to_json(str(path), commit=False)
     loaded = Study.from_json(str(path))
@@ -116,7 +117,8 @@ def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
 
 
 def test_study_from_json_loads_study(tmp_path, demo_study):
-    path = tmp_path / "study_load.json"
+    path = tmp_path / "study_load_variant"
+    path.mkdir()
     demo_study.save_model_to_json(str(path), commit=False)
 
     fresh = Study.from_json(str(path))
@@ -153,7 +155,7 @@ def test_variants_generate_variants(tmp_path):
     variants.add_variant("v1", [add_vehicle_func, add_solution_func])
     studies = variants.generate_variants(commit=False)
 
-    expected_json = root / "variants" / "v1" / "data.json"
+    expected_json = root / "variants" / "v1" / "model.json"
     assert len(studies) == 1
     assert expected_json.exists()
     assert studies[0].control.variant_name == "v1"
@@ -180,12 +182,13 @@ def test_study_capture_environment_existing_trade_branch(monkeypatch):
 
 
 def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkeypatch):
-    out = tmp_path / "results.json"
+    out = tmp_path / "variant"
+    out.mkdir()
     calls = {}
 
-    def fake_commit(json_path, msg):
-        calls["path"] = json_path
-        calls["msg"] = msg
+    def fake_commit(json_paths, commit_message):
+        calls["paths"] = json_paths
+        calls["msg"] = commit_message
 
     # save+reload to initialize model hash for results-only save path
     demo_study.save_model_to_json(str(out), commit=False)
@@ -198,15 +201,15 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
 
     loaded.save_results_to_json(str(out), commit=True)
 
-    assert out.exists()
-    assert calls["path"] == str(out)
+    assert (out / "results.json").exists()
+    assert calls["paths"] == [str(out / "results.json")]
     assert "Writing results for variant" in calls["msg"]
 
 
 def test_study_commit_json_to_branch_errors_no_dir(demo_study):
     demo_study.control.repo_root = "/definitely/not/a/repo"
     with pytest.raises(NotADirectoryError):
-        demo_study._commit_json_to_branch("dummy.json", "msg")
+        demo_study._commit_json_to_branch(["dummy.json"], "msg")
 
 
 def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, monkeypatch):
@@ -217,7 +220,7 @@ def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, m
 
     monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: None)
     with pytest.raises(ValueError, match="No repository found"):
-        demo_study._commit_json_to_branch(str(repo_root / "data.json"), "msg")
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
 
 
 def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_study, monkeypatch):
@@ -228,7 +231,7 @@ def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_st
 
     monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: str(tmp_path / "other" / ".git"))
     with pytest.raises(ValueError, match="does not have a repo"):
-        demo_study._commit_json_to_branch(str(repo_root / "data.json"), "msg")
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
 
 
 def test_study_commit_json_to_branch_detached_head(tmp_path, demo_study, monkeypatch):
@@ -242,7 +245,7 @@ def test_study_commit_json_to_branch_detached_head(tmp_path, demo_study, monkeyp
     monkeypatch.setattr(study_module.pygit2, "Repository", lambda *_: fake_repo)
 
     with pytest.raises(RuntimeError, match="detached HEAD"):
-        demo_study._commit_json_to_branch(str(repo_root / "data.json"), "msg")
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
 
 
 def test_study_get_plugin_link_inputs_current_behavior_raises(demo_study):

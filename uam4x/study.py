@@ -242,49 +242,53 @@ class Study:
             study.add_vehicle(Vehicle._from_dict(vdata))
         study.solution = Solution._from_dict(data["solution"])
         study.control = Control._from_dict(data["control"])
-        study.results = Results._from_dict(data["results"], study)
-        study._runtime_meta_data = data["execution_meta_data"]
+        if "results" in data:
+            study.results = Results._from_dict(data["results"], study)
+            study._runtime_meta_data = data["execution_meta_data"]
 
         return study
 
     def _save_to_json(self,data, json_path: str, commit=False, commit_message=""):
-        """Save the study to a JSON file.
+        """Write serializable data to a JSON file.
 
         Parameters
         ----------
+        data : Any
+            JSON-serializable data payload to write.
         json_path : str
-            Path to the JSON file to read or write.
-        commit : Any, optional
-            Input value for `commit`.
-        commit_message : Any, optional
-            Input value for `commit_message`.
+            Output path for the JSON file.
 
         """
         self.log.debug("save to json")
 
         with open(json_path, "w") as f:
             json.dump(data, f, indent=4)
-        if commit:
-            self._commit_json_to_branch(json_path, commit_message)
 
-    def save_to_json(self,json_path:str,commit=False):
-        """_summary_
+
+    def save_to_json(self,variant_dir:str,commit=False):
+        """Write model and optional results JSON files for a variant.
 
         Parameters
         ----------
-        json_path : str
-            _description_
+        variant_dir : str
+            Variant directory where `model.json` and `results.json` are written.
         commit : bool, optional
-            _description_, by default False
+            If `True`, commit the written JSON file(s) in a single git commit.
         """
+
+        #Paths
+        model_path=os.path.join(variant_dir,'model.json')
+        result_path=os.path.join(variant_dir,'results.json')
+
+        #Full study dictionary
         study_dict=replace_none_with_empty_quotes(self._to_dict())
         model_dict={
             "control":study_dict["control"],
             "vehicles":study_dict["vehicles"],
             "solution":study_dict["solution"],
-            "results":{},
-            "execution_meta_data":{}
         }
+
+        #hash current model for comparison
         payload = json.dumps(
         model_dict,
         sort_keys=True,
@@ -292,26 +296,39 @@ class Study:
         ).encode("utf-8")
 
         model_hash=hashlib.sha256(payload).hexdigest()
+
         msg = f"AutoCommit: Writing study to json for variant {self.control.variant_name}"
         if self._study_dict_hash:
             if self._study_dict_hash!=model_hash:
-                self._save_to_json(
-                    model_dict,json_path, commit=commit, commit_message=msg if commit else None
-                )
+                self._save_to_json(model_dict,model_path)
                 print(f'New model does not match loaded model, discarding results and saving')
+                if commit:
+                    self._commit_json_to_branch(json_paths=[model_path],commit_message=msg)
                 return
-        self._save_to_json(
-                study_dict,json_path, commit=commit, commit_message=msg if commit else None
-        )
+
+        self._save_to_json(model_dict,model_path)
+        written=[model_path]
+        #save the results
+        if study_dict['results']:
+            result_dict={
+                'results':study_dict['results'],
+                'execution_meta_data':study_dict['execution_meta_data']
+                }
+            self._save_to_json(result_dict,result_path)
+            written.append(result_path)
+        if commit:
+            self._commit_json_to_branch(written,commit_message=msg)
 
 
-    def save_model_to_json(self, json_path: str, commit=False):
+
+
+    def save_model_to_json(self, variant_dir: str, commit=False):
         """Write model configuration data to JSON.
 
         Parameters
         ----------
-        json_path : str
-            Path to the JSON file to read or write.
+        variant_dir : str
+            Variant directory where `model.json` is written.
         commit : Any, optional
             If `True`, create a git commit for the generated JSON artifact.
 
@@ -322,45 +339,44 @@ class Study:
             "control":study_dict["control"],
             "vehicles":study_dict["vehicles"],
             "solution":study_dict["solution"],
-            "results":{},
-            "execution_meta_data":{}
         }
-        if study_dict["results"]:
-            print(f'Study saved without results')
-        self._save_to_json(
-            model_dict,json_path, commit=commit, commit_message=msg if commit else None
-        )
 
-    def save_results_to_json(self, json_path: str, commit=False):
+        model_path=os.path.join(variant_dir,'model.json')
+        self._save_to_json(model_dict,model_path)
+        if commit:
+            self._commit_json_to_branch(json_paths=[model_path],commit_message=msg)
+
+    def save_results_to_json(self, variant_path: str, commit=False):
         """Write current results data to JSON.
 
         Parameters
         ----------
-        json_path : str
-            Path to the JSON file to read or write.
+        variant_path : str
+            Variant directory where `results.json` is written.
         commit : Any, optional
             If `True`, create a git commit for the generated JSON artifact.
 
         """
         msg = f"AutoCommit: Writing results for variant {self.control.variant_name}"
+        results_path=os.path.join(variant_path,'results.json')
         study_dict=replace_none_with_empty_quotes(self._to_dict())
+        model_path=os.path.join(variant_path,'model.json')
         if not study_dict['results']:
             raise ValueError(f'Attempted to save results to json but no results exist for study')
-        if not os.path.exists(json_path):
-            raise ValueError(f'data.json file must exist before saving results to json')
+        if not os.path.exists(model_path):
+            raise ValueError(f'model.json file must exist before saving results to json')
+
         model_dict={
             "control":study_dict["control"],
             "vehicles":study_dict["vehicles"],
             "solution":study_dict["solution"],
-            "results":{},
-            "execution_meta_data":{}
         }
-        payload = json.dumps(
-        model_dict,
-        sort_keys=True,
-        separators=(",", ":"),   # remove whitespace for stable bytes
-        ).encode("utf-8")
-        model_hash=hashlib.sha256(payload).hexdigest()
+        model_hash= Study.generate_model_hash(model_dict)
+
+        results_dict={
+            "results":study_dict["results"],
+            "execution_meta_data":study_dict["execution_meta_data"]
+        }
         if not self._study_dict_hash:
             raise AttributeError(f'Study must be loaded from json before run'
                                  'if results are to be saved')
@@ -368,17 +384,19 @@ class Study:
             if self._study_dict_hash!=model_hash:
                 raise ValueError(f"Study's loaded in hash does not match current model"
                                  "hash.")
-        self._save_to_json(
-                study_dict,json_path, commit=commit, commit_message=msg if commit else None
-        )
 
-    def _commit_json_to_branch(self, json_path, commit_message):
-        """Commit a JSON artifact into the configured git repository.
+        self._save_to_json(results_dict,results_path)
+
+        if commit:
+            self._commit_json_to_branch([results_path],commit_message=msg)
+
+    def _commit_json_to_branch(self, json_paths, commit_message):
+        """Commit one or more JSON artifacts into the configured git repository.
 
         Parameters
         ----------
-        json_path : Any
-            Path to the JSON file to read or write.
+        json_paths : Iterable[str]
+            Paths to JSON file(s) to stage and commit.
         commit_message : Any
             Git commit message used when committing JSON output.
 
@@ -416,21 +434,31 @@ class Study:
             raise RuntimeError("Cannot commit: repo is in detached HEAD state.")
         if repo.head_is_unborn:
             parents = []
+            unborn=True
         else:
             parents = [repo.head.target]
-
-        # stage the JSON file
+            unborn=False
         index = repo.index
 
-        # rel path
-        rel_path = os.path.relpath(json_path, repo.workdir)
-        rel_path = rel_path.replace(os.sep, "/")
-        # same as git add path
-        index.add(rel_path)
+        for json_path in json_paths:
+            # stage the JSON file
+
+            # rel path
+            rel_path = os.path.relpath(json_path, repo.workdir)
+            rel_path = rel_path.replace(os.sep, "/")
+            # same as git add path
+            index.add(rel_path)
         index.write()
 
         # this is the snapshot of your repo as a hash
         tree = index.write_tree()
+        if not unborn:
+            head_commit=repo[repo.head.target]
+            if tree==head_commit.tree_id:
+                self.log.debug("No JSON changes detected; skipping commit.")
+                print("No JSON changes detected; skipping commit.")
+                return
+
 
         author = pygit2.Signature(self.control.author, "fake@email")
         committer = pygit2.Signature(self.control.author, "fake@email")
@@ -438,7 +466,7 @@ class Study:
 
 
     @classmethod
-    def from_json(cls, json_path: str) -> "Study":
+    def from_json(cls, variant_dir: str) -> "Study":
         """Create a Study instance from a JSON file.
 
         Parameters
@@ -453,28 +481,43 @@ class Study:
 
         """
         cls.log.debug("create study from json")
-        work_dir = os.path.dirname(json_path)
-        with open(json_path, "r") as f:
-            data = json.load(f)
-        study=cls._from_dict(data, work_dir)
-        data=replace_none_with_empty_quotes(study._to_dict())
-        #hash the study upon loading from_dict
-        model_dict={
-            "control":data["control"],
-            "vehicles":data["vehicles"],
-            "solution":data["solution"],
-            "results":{},
-            "execution_meta_data":{}
+        model_path=os.path.join(variant_dir,'model.json')
+        with open(model_path, "r") as f:
+            model_data = json.load(f)
+
+        #initially loads in model
+        total_dict={
+            "control":model_data["control"],
+            "vehicles":model_data["vehicles"],
+            "solution":model_data["solution"],
         }
+
+        model_hash=Study.generate_model_hash(total_dict)
+
+
+        results_path=os.path.join(variant_dir,'results.json')
+        if os.path.exists(results_path):
+            with open(results_path,'r') as f:
+                result_data=json.load(f)
+
+            total_dict["results"]=result_data["results"]
+            total_dict["execution_meta_data"]=result_data["execution_meta_data"]
+
+        study=cls._from_dict(total_dict,work_dir=variant_dir)
+        study._study_dict_hash=model_hash
+
+        return study
+
+
+    @staticmethod
+    def generate_model_hash(model_dict):
         payload = json.dumps(
         model_dict,
         sort_keys=True,
         separators=(",", ":"),   # remove whitespace for stable bytes
         ).encode("utf-8")
-
-        study._study_dict_hash=hashlib.sha256(payload).hexdigest()
-
-        return study
+        model_hash=hashlib.sha256(payload).hexdigest()
+        return model_hash
 
 
     def get_value(self, dotted_path: str):
@@ -686,8 +729,7 @@ class Variants:
 
             study.control._set_repo_root(self.dir)
             study.control._set_variant_name(name)
-            json_path = os.path.join(this_variant_dir, "data.json")
-            study.save_model_to_json(json_path, commit=commit)
+            study.save_model_to_json(this_variant_dir, commit=commit)
             studies.append(study)
         return studies
 
