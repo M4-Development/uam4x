@@ -115,12 +115,11 @@ def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
     assert loaded.solution.tracked_outputs == ["step1.y"]
 
 
-def test_study_load_from_json_mutates_current_instance(tmp_path, demo_study):
+def test_study_from_json_loads_study(tmp_path, demo_study):
     path = tmp_path / "study_load.json"
     demo_study.save_model_to_json(str(path), commit=False)
 
-    fresh = Study()
-    fresh.load_from_json(str(path))
+    fresh = Study.from_json(str(path))
 
     assert fresh.get_vehicle("demo_vehicle").wing.span == 12.0
     assert fresh.solution.links == demo_study.solution.links
@@ -188,8 +187,16 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
         calls["path"] = json_path
         calls["msg"] = msg
 
-    monkeypatch.setattr(demo_study, "_commit_json_to_branch", fake_commit)
-    demo_study.save_results_to_json(str(out), commit=True)
+    # save+reload to initialize model hash for results-only save path
+    demo_study.save_model_to_json(str(out), commit=False)
+    loaded = Study.from_json(str(out))
+
+    data_with_results = loaded._to_dict()
+    data_with_results["results"] = {"trade_a": {"points": [{"x": 1.0, "y": 6.0}]}}
+    monkeypatch.setattr(loaded, "_to_dict", lambda: data_with_results)
+    monkeypatch.setattr(loaded, "_commit_json_to_branch", fake_commit)
+
+    loaded.save_results_to_json(str(out), commit=True)
 
     assert out.exists()
     assert calls["path"] == str(out)

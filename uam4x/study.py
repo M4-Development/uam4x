@@ -22,6 +22,7 @@ from uam4x.results import Results
 from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import hashlib
 
 
 class Study:
@@ -56,6 +57,7 @@ class Study:
         self.control = Control()
         self.results = Results(self)
         self._runtime_meta_data = defaultdict(dict)
+        self._study_dict_hash=''
 
     def _add_runtime_plugin_checksums(self, trade_name, plugin_to_checksum):
         """Store runtime plugin checksums for a trade execution.
@@ -245,7 +247,7 @@ class Study:
 
         return study
 
-    def _save_to_json(self, json_path: str, commit=False, commit_message=""):
+    def _save_to_json(self,data, json_path: str, commit=False, commit_message=""):
         """Save the study to a JSON file.
 
         Parameters
@@ -259,12 +261,49 @@ class Study:
 
         """
         self.log.debug("save to json")
-        data = replace_none_with_empty_quotes(self._to_dict())
 
         with open(json_path, "w") as f:
             json.dump(data, f, indent=4)
         if commit:
             self._commit_json_to_branch(json_path, commit_message)
+
+    def save_to_json(self,json_path:str,commit=False):
+        """_summary_
+
+        Parameters
+        ----------
+        json_path : str
+            _description_
+        commit : bool, optional
+            _description_, by default False
+        """
+        study_dict=replace_none_with_empty_quotes(self._to_dict())
+        model_dict={
+            "control":study_dict["control"],
+            "vehicles":study_dict["vehicles"],
+            "solution":study_dict["solution"],
+            "results":{},
+            "execution_meta_data":{}
+        }
+        payload = json.dumps(
+        model_dict,
+        sort_keys=True,
+        separators=(",", ":"),   # remove whitespace for stable bytes
+        ).encode("utf-8")
+
+        model_hash=hashlib.sha256(payload).hexdigest()
+        msg = f"AutoCommit: Writing study to json for variant {self.control.variant_name}"
+        if self._study_dict_hash:
+            if self._study_dict_hash!=model_hash:
+                self._save_to_json(
+                    model_dict,json_path, commit=commit, commit_message=msg if commit else None
+                )
+                print(f'New model does not match loaded model, discarding results and saving')
+                return
+        self._save_to_json(
+                study_dict,json_path, commit=commit, commit_message=msg if commit else None
+        )
+
 
     def save_model_to_json(self, json_path: str, commit=False):
         """Write model configuration data to JSON.
@@ -278,8 +317,18 @@ class Study:
 
         """
         msg = f"AutoCommit: Created data for variant {self.control.variant_name}"
+        study_dict=replace_none_with_empty_quotes(self._to_dict())
+        model_dict={
+            "control":study_dict["control"],
+            "vehicles":study_dict["vehicles"],
+            "solution":study_dict["solution"],
+            "results":{},
+            "execution_meta_data":{}
+        }
+        if study_dict["results"]:
+            print(f'Study saved without results')
         self._save_to_json(
-            json_path, commit=commit, commit_message=msg if commit else None
+            model_dict,json_path, commit=commit, commit_message=msg if commit else None
         )
 
     def save_results_to_json(self, json_path: str, commit=False):
@@ -294,8 +343,33 @@ class Study:
 
         """
         msg = f"AutoCommit: Writing results for variant {self.control.variant_name}"
+        study_dict=replace_none_with_empty_quotes(self._to_dict())
+        if not study_dict['results']:
+            raise ValueError(f'Attempted to save results to json but no results exist for study')
+        if not os.path.exists(json_path):
+            raise ValueError(f'data.json file must exist before saving results to json')
+        model_dict={
+            "control":study_dict["control"],
+            "vehicles":study_dict["vehicles"],
+            "solution":study_dict["solution"],
+            "results":{},
+            "execution_meta_data":{}
+        }
+        payload = json.dumps(
+        model_dict,
+        sort_keys=True,
+        separators=(",", ":"),   # remove whitespace for stable bytes
+        ).encode("utf-8")
+        model_hash=hashlib.sha256(payload).hexdigest()
+        if not self._study_dict_hash:
+            raise AttributeError(f'Study must be loaded from json before run'
+                                 'if results are to be saved')
+        else:
+            if self._study_dict_hash!=model_hash:
+                raise ValueError(f"Study's loaded in hash does not match current model"
+                                 "hash.")
         self._save_to_json(
-            json_path, commit=commit, commit_message=msg if commit else None
+                study_dict,json_path, commit=commit, commit_message=msg if commit else None
         )
 
     def _commit_json_to_branch(self, json_path, commit_message):
@@ -362,22 +436,6 @@ class Study:
         committer = pygit2.Signature(self.control.author, "fake@email")
         repo.create_commit("HEAD", author, committer, commit_message, tree, parents)
 
-    def load_from_json(self, json_path: str):
-        """Load the study from a JSON file.
-
-        Parameters
-        ----------
-        json_path : str
-            Path to the JSON file to read or write.
-
-        """
-        self.log.debug("load from json")
-        with open(json_path, "r") as f:
-            data = json.load(f)
-        study = self._from_dict(data)
-        self.control = study.control
-        self.vehicles = study.vehicles
-        self.solution = study.solution
 
     @classmethod
     def from_json(cls, json_path: str) -> "Study":
@@ -398,7 +456,26 @@ class Study:
         work_dir = os.path.dirname(json_path)
         with open(json_path, "r") as f:
             data = json.load(f)
-        return cls._from_dict(data, work_dir)
+        study=cls._from_dict(data, work_dir)
+        data=replace_none_with_empty_quotes(study._to_dict())
+        #hash the study upon loading from_dict
+        model_dict={
+            "control":data["control"],
+            "vehicles":data["vehicles"],
+            "solution":data["solution"],
+            "results":{},
+            "execution_meta_data":{}
+        }
+        payload = json.dumps(
+        model_dict,
+        sort_keys=True,
+        separators=(",", ":"),   # remove whitespace for stable bytes
+        ).encode("utf-8")
+
+        study._study_dict_hash=hashlib.sha256(payload).hexdigest()
+
+        return study
+
 
     def get_value(self, dotted_path: str):
         """Retrieve a value from the study using a dotted path string, e.g.:.
