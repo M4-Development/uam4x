@@ -315,7 +315,7 @@ class Tradestudy:
 
         # get UQ variable names if applicable
         aleatory_vars_to_pdf = getattr(trade, "aleatory_var_to_dist", None) or {}
-
+        epistemic_vars_to_intervals=getattr(trade,"epistemic_var_to_vals",None) or {}
         # get sensitivity variable names if applicable
         sensitivity_vars_to_values = (
             getattr(trade, "variable_to_sensitivity_data", None) or {}
@@ -360,6 +360,7 @@ class Tradestudy:
             variable_name in param_names
             or variable_name in aleatory_vars_to_pdf
             or variable_name in sensitivity_vars_to_values
+            or variable_name in epistemic_vars_to_intervals
         ):
             for result in self._results:
                 if inds is not None:

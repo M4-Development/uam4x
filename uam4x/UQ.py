@@ -6,6 +6,7 @@ from numpy.random import default_rng
 import openturns as ot
 import matplotlib.pyplot as plt
 from math import comb
+import copy
 
 # Global registry
 workflow_name_to_class_registry = {}
@@ -210,7 +211,137 @@ class UQAnalysis:
         return UQanalysis
 
 
-# Analysis workflow pre classes
+@register_workflow
+class IVPAnalysis:
+    _META_STATE_NAME = "__IVP__STATE__META"
+
+    def __init__(self,AleatorySamplingClass,EpistemicSamplingClass,
+                 num_epistemic_samples,num_aleatory_samples,seed=None):
+        self.AleatorySamplingClass=AleatorySamplingClass
+        if EpistemicSamplingClass not in [LatinHypercubeSampler,
+                                          SobolSampler,HaltonSampler]:
+            raise ValueError(f'Sampler must be low discrepancy sampler')
+
+        self.EpistemicSamplingClass=EpistemicSamplingClass
+        self.aleatory_var_to_dist={}
+        self.num_aleatory_samples=num_aleatory_samples
+        self.epistemic_var_to_vals={}
+        self.num_epistemic_samples=num_epistemic_samples
+        self._epistemic_var_to_dist={}
+        self.seed = seed if seed is not None else 42
+        self.post_spec=IVPAnalysisPost
+
+    def add_aleatory_variable(self,name,PDFObject):
+        if name == self._META_STATE_NAME:
+            raise ValueError(
+                f"'{self._META_STATE_NAME}' is reserved for IVP internal metadata. "
+                "Choose a different aleatory variable name."
+            )
+        self.aleatory_var_to_dist[name]=PDFObject
+
+    def add_epistemic_variable(self,name,interval):
+        if name == self._META_STATE_NAME:
+            raise ValueError(
+                f"'{self._META_STATE_NAME}' is reserved for IVP internal metadata. "
+                "Choose a different epistemic variable name."
+            )
+        if not isinstance(interval,np.ndarray):
+            raise ValueError("Epistemic interval must be a numpy array with shape (2,).")
+        if interval.shape != (2,):
+            raise ValueError("Epistemic interval must have shape (2,), i.e. [low, high].")
+        if not np.issubdtype(interval.dtype, np.number):
+            raise ValueError("Epistemic interval entries must be numeric.")
+        if not np.all(np.isfinite(interval)):
+            raise ValueError("Epistemic interval entries must be finite values.")
+        if interval[0] > interval[1]:
+            raise ValueError("Epistemic interval must satisfy low <= high.")
+        self.epistemic_var_to_vals[name]=interval
+        self._epistemic_var_to_dist[name]=UniformDistribution(0,1)
+
+
+    def get_states(self):
+        ot.RandomGenerator.SetSeed(self.seed)
+        #first generate epistemic outerloop
+
+        epistemic_samples, epistemic_var_name_to_col =self.EpistemicSamplingClass.sample(
+            self._epistemic_var_to_dist,self.num_epistemic_samples
+            )
+
+        for name,col in epistemic_var_name_to_col.items():
+            interval_min=self.epistemic_var_to_vals[name][0]
+            interval_max=self.epistemic_var_to_vals[name][1]
+            epistemic_samples[:,col]=epistemic_samples[:,col]*(interval_max-interval_min)+interval_min
+
+        epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
+        #then generate aleatory inner loop
+        aleatory_samples, aleatory_var_name_to_col=self.AleatorySamplingClass.sample(
+            self.aleatory_var_to_dist,self.num_aleatory_samples
+        )
+
+        all_vars_to_col={self._META_STATE_NAME:0}
+        for name,col in epistemic_var_name_to_col.items():
+            all_vars_to_col[name]=col+1
+
+        for name,col in aleatory_var_name_to_col.items():
+            #account for meta offset
+            all_vars_to_col[name]=col+(len(epistemic_var_name_to_col)+1)
+
+        epistemic_states=np.repeat(epistemic_with_meta,aleatory_samples.shape[0],axis=0)
+        aleatory_states=np.tile(aleatory_samples, (epistemic_with_meta.shape[0], 1))
+        full_states_arr=np.hstack((epistemic_states,aleatory_states))
+        #then aggregate states
+        all_states=[]
+        for row in full_states_arr:
+            state_dict={}
+            for name,col in all_vars_to_col.items():
+                state_dict[name]=row[col]
+            all_states.append(state_dict)
+
+        return all_states
+
+    def _to_dict(self):
+
+        return {
+            "type":self.__class__.__name__,
+            "seed":self.seed,
+            "aleatory_sampling_class_name":self.AleatorySamplingClass.__name__,
+            "epistemic_sampling_class_name":self.EpistemicSamplingClass.__name__,
+            "num_aleatory_samples":self.num_aleatory_samples,
+            "num_epistemic_samples":self.num_epistemic_samples,
+            "aleatory_variables":{name:dist._to_dict()
+                                  for name,dist in self.aleatory_var_to_dist.items()},
+
+            "epistemic_variables":{name:interval
+                                   for name,interval in self.epistemic_var_to_vals.items()},
+        }
+
+    @classmethod
+    def _from_dict(cls,IVPdict):
+        seed = IVPdict["seed"]
+        aleatory_sampling_class=sampler_name_to_class_registry[IVPdict["aleatory_sampling_class_name"]]
+        epistemic_sampling_class=sampler_name_to_class_registry[IVPdict["epistemic_sampling_class_name"]]
+        num_epistemic_samples=IVPdict["num_epistemic_samples"]
+        num_aleatory_samples=IVPdict["num_aleatory_samples"]
+        ivp_analysis=cls(aleatory_sampling_class,epistemic_sampling_class,
+                         num_epistemic_samples,num_aleatory_samples,seed)
+        for name,distribution_data in IVPdict["aleatory_variables"].items():
+            dist=distribution_name_to_class_registry[
+                distribution_data["name"]
+            ]._from_dict(distribution_data)
+
+            ivp_analysis.add_aleatory_variable(name,dist)
+
+        for name,interval_data in IVPdict["epistemic_variables"].items():
+            ivp_analysis.add_epistemic_variable(name,np.array(interval_data))
+
+        return ivp_analysis
+
+
+@register_workflow
+class SecondOrderAnalysis:
+    pass
+
+
 @register_workflow
 class BasicStats:
     """Represent the basicstats component in the UAM4X workflow.
@@ -1626,6 +1757,8 @@ class SobolSensitivityPost(BasicStatsPost):
         for name, col in name_to_col.items():
             results["total_order"][name] = total_order[col]
 
+        #should add plotting so its easy to visualize relative sensitivity
+
         return results, otSobol
 
     def get_first_order_indices(self, output_name, algo="Jansen"):
@@ -1691,6 +1824,168 @@ class SobolSensitivityPost(BasicStatsPost):
         """
         results, _ = self.generate_Sobol_indices(output_name, algo)
         return results["total_order"]
+
+
+@register_post_workflow
+class IVPAnalysisPost:
+    def __init__(self, tradestudy: Tradestudy):
+        """Initialize object state and configuration.
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
+        """
+        self.tradestudy = tradestudy
+
+    def _generate_output_var_data(self,var_name):
+        trade_name=self.tradestudy.trade_name
+        trade_base=self.tradestudy.study.control.trade_studies[trade_name]
+        #special case for IVP problems with ad hoc state generation
+        ivp_meta=[]
+        meta_to_epistemic_state={}
+        epistemic_vars=list(trade_base.epistemic_var_to_vals.keys())
+        for result in self.tradestudy._results:
+            state_meta=int(result.state["__IVP__STATE__META"])
+            ivp_meta.append(int(state_meta))
+            if state_meta not in meta_to_epistemic_state:
+                epistemic_state={}
+                for epistemic_var in epistemic_vars:
+                    epistemic_state[epistemic_var]=result.state[epistemic_var]
+                meta_to_epistemic_state[state_meta]=epistemic_state
+
+        ivp_meta=np.array(ivp_meta)
+
+        u,inv=np.unique(ivp_meta,return_inverse=True)
+        indices_per_value = {
+            val: np.where(inv == i)[0]
+            for i, val in enumerate(u)
+            }
+
+        out_vals=np.array(self.tradestudy.get_variable(var_name),dtype=float)
+        if not np.all(np.isfinite(out_vals)):
+            num_bad=int(np.size(out_vals)-np.count_nonzero(np.isfinite(out_vals)))
+            raise ValueError(
+                f"Found {num_bad} non-finite values for '{var_name}' in IVP results. "
+                "Cannot compute ECDF-based IVP post metrics with NaN/Inf values."
+            )
+        meta_to_cdf={}
+
+        #numbers of columns is the epistemic states
+        num_cols=len(meta_to_epistemic_state)
+        #number of rows is total states/epistemic states
+        if not ivp_meta.shape[0]%num_cols==0:
+            raise ValueError(f'Should be cleanly divisible here, some error')
+
+        num_rows=int(ivp_meta.shape[0]/num_cols)
+        quantiles_data=np.zeros((num_rows,num_cols))
+        probabilities_data=np.zeros((num_rows,num_cols))
+        for epistemic_meta,inds in indices_per_value.items():
+            vals=out_vals[inds]
+            ecdf=stats.ecdf(vals)
+            meta_to_cdf[epistemic_meta]=ecdf
+            quantiles_data[:,epistemic_meta]=ecdf.cdf.quantiles
+            probabilities_data[:,epistemic_meta]=ecdf.cdf.probabilities
+
+        return meta_to_cdf,quantiles_data,probabilities_data
+
+
+    def plot_pbox(self,var_name,x_axis_title=None,plot_title="",save_dir=None):
+
+        _,quantiles_data,probabilities_data=self._generate_output_var_data(var_name=var_name)
+
+        max_quantiles=np.max(quantiles_data,axis=1)
+        #gives column with max
+        max_quantiles_locs=np.argmax(quantiles_data,axis=1)
+        max_quantile_probabilities=probabilities_data[np.arange(max_quantiles.shape[0]),max_quantiles_locs]
+
+        min_quantiles=np.min(quantiles_data,axis=1)
+        min_quantiles_locs=np.argmin(quantiles_data,axis=1)
+        min_quantile_probabilities=probabilities_data[np.arange(min_quantiles.shape[0]),min_quantiles_locs]
+
+        #plot data
+        fig,ax=plt.subplots(figsize=(10, 6))
+        ax.plot(max_quantiles,max_quantile_probabilities,color="red",label="max envelope")
+        ax.plot(min_quantiles,min_quantile_probabilities,color='blue',label="min envelope")
+        if x_axis_title is None:
+            x_axis_title=var_name
+        if plot_title=="":
+            plot_title= f"P-box Plot of {x_axis_title}"
+        ax.set_title(plot_title,fontsize=16,fontweight="bold")
+        ax.set_xlabel(x_axis_title,fontsize=14)
+        ax.set_ylabel('Probability',fontsize=14)
+        ax.grid(True,which="both",linestyle="--",linewidth=0.5)
+        ax.legend()
+
+        if save_dir is not None:
+            plt.savefig(
+                f"{save_dir}/{plot_title.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
+
+    def get_plevel_bounds(self,var_name,p_level):
+        _,quantiles,probabilities=self._generate_output_var_data(var_name)
+        if p_level<0.0 or p_level>1.0:
+            raise ValueError(f'p_level must be between 0 and 1')
+
+
+        #get probability row, note structure of creation results
+        # in consistent probability matrix (each column is identical):
+        probabilities=probabilities[:,0]
+        le=np.where(probabilities<=p_level)[0]
+        ge=np.where(probabilities>=p_level)[0]
+
+        if le.size==0:
+            # clamp to left boundary
+            min_loc=0
+            max_loc=0
+        elif ge.size==0:
+            # clamp to right boundary
+            min_loc=probabilities.shape[0]-1
+            max_loc=probabilities.shape[0]-1
+        else:
+            min_loc=le[-1]
+            max_loc=ge[0]
+
+        if min_loc==max_loc:
+            max_quantile=np.max(quantiles[max_loc])
+            min_quantile=np.min(quantiles[min_loc])
+        else:
+            #handle interpolation of curves first,
+            #then take envelope, handle edge cases
+            #handle max
+            low_mat=quantiles[min_loc]
+            high_mat=quantiles[max_loc]
+            numerator=(high_mat-low_mat)*(p_level-probabilities[min_loc])
+            denominator=(probabilities[max_loc]-probabilities[min_loc])
+            interp_curves=numerator/denominator+low_mat
+
+            max_quantile=np.max(interp_curves)
+            min_quantile=np.min(interp_curves)
+
+        return (min_quantile,max_quantile)
+
+
+    def plot_horsetails(self,var_name,x_axis_title=None,plot_title="",save_dir=None):
+        _,quantiles,probabilities=self._generate_output_var_data(var_name)
+        fig,ax=plt.subplots(figsize=(10, 6))
+        ax.plot(quantiles,probabilities,color="blue")
+        if x_axis_title is None:
+            x_axis_title=var_name
+        if plot_title=="":
+            plot_title= f"Horsetail Plot of {x_axis_title}"
+        ax.set_title(plot_title,fontsize=16,fontweight="bold")
+        ax.set_xlabel(x_axis_title,fontsize=14)
+        ax.set_ylabel('Probability',fontsize=14)
+        ax.grid(True,which="both",linestyle="--",linewidth=0.5)
+
+
+        if save_dir is not None:
+            plt.savefig(
+                f"{save_dir}/{plot_title.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
 
 
 # Define various sampling methods
@@ -2126,3 +2421,25 @@ if __name__ == "__main__":
 
     j = ot.JointDistribution([uni._OT_Dist(), norm._OT_Dist()])
     print("hello")
+
+    # IVP mixed uncertainty debug case:
+    # 2 epistemic interval variables + 2 aleatory random variables.
+    ivp_debug = IVPAnalysis(
+        AleatorySamplingClass=MonteCarloSampler,
+        EpistemicSamplingClass=LatinHypercubeSampler,
+        num_epistemic_samples=6,
+        num_aleatory_samples=25,
+        seed=42,
+    )
+
+    # Aleatory variables
+    ivp_debug.add_aleatory_variable("wind_gust", NormalDistribution(8.0, 1.5))
+    ivp_debug.add_aleatory_variable("payload_mass", UniformDistribution(120.0, 180.0))
+
+    # Epistemic interval variables (must be np.ndarray with shape (2,))
+    ivp_debug.add_epistemic_variable("drag_factor", np.array([0.92, 1.08]))
+    ivp_debug.add_epistemic_variable("battery_eff", np.array([0.88, 0.96]))
+
+    # get_states() is currently under development and is called here for debugging.
+    ivp_states = ivp_debug.get_states()
+    print("IVP debug get_states result type:", type(ivp_states))
