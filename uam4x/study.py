@@ -264,7 +264,6 @@ class Study:
         with open(json_path, "w") as f:
             json.dump(data, f, indent=4)
 
-
     def save_to_json(self,variant_dir:str,commit=False):
         """Write model and optional results JSON files for a variant.
 
@@ -288,6 +287,11 @@ class Study:
             "solution":study_dict["solution"],
         }
 
+        model_hash=Study.generate_model_hash(model_dict)
+        new_control_dict=Study._update_control(model_dict,model_hash)
+        model_dict['control']=new_control_dict
+
+
         #hash current model for comparison
         payload = json.dumps(
         model_dict,
@@ -310,7 +314,10 @@ class Study:
         written=[model_path]
         #save the results
         if study_dict['results']:
+            header_data=Study._generate_header_dict(study_dict["control"],
+                                                model_hash)
             result_dict={
+                "header":header_data,
                 'results':study_dict['results'],
                 'execution_meta_data':study_dict['execution_meta_data']
                 }
@@ -319,8 +326,14 @@ class Study:
         if commit:
             self._commit_json_to_branch(written,commit_message=msg)
 
-
-
+    @staticmethod
+    def _update_control(model_dict,model_hash):
+        new_control_dict={}
+        for i,(name,data) in enumerate(model_dict["control"].items()):
+            new_control_dict[name]=data
+            if i==3:
+                new_control_dict["model_hash"]=model_hash
+        return new_control_dict
 
     def save_model_to_json(self, variant_dir: str, commit=False):
         """Write model configuration data to JSON.
@@ -341,10 +354,26 @@ class Study:
             "solution":study_dict["solution"],
         }
 
+        model_hash=Study.generate_model_hash(model_dict)
+        new_control_dict=Study._update_control(model_dict,model_hash)
+        model_dict['control']=new_control_dict
+
         model_path=os.path.join(variant_dir,'model.json')
         self._save_to_json(model_dict,model_path)
         if commit:
             self._commit_json_to_branch(json_paths=[model_path],commit_message=msg)
+
+    @staticmethod
+    def _generate_header_dict(control_dict,model_hash):
+        return {
+            "title":control_dict['title'],
+            "author":control_dict["author"],
+            "description":control_dict["description"],
+            "model_hash":model_hash,
+            "repo_root":control_dict["repo_root"],
+            "variant_name":control_dict["variant_name"]
+        }
+
 
     def save_results_to_json(self, variant_path: str, commit=False):
         """Write current results data to JSON.
@@ -373,7 +402,10 @@ class Study:
         }
         model_hash= Study.generate_model_hash(model_dict)
 
+        header_data=Study._generate_header_dict(study_dict["control"],
+                                                model_hash)
         results_dict={
+            "header":header_data,
             "results":study_dict["results"],
             "execution_meta_data":study_dict["execution_meta_data"]
         }
@@ -485,6 +517,8 @@ class Study:
         with open(model_path, "r") as f:
             model_data = json.load(f)
 
+        loaded_model_hash=model_data["control"]["model_hash"]
+        del model_data['control']['model_hash']
         #initially loads in model
         total_dict={
             "control":model_data["control"],
@@ -492,8 +526,13 @@ class Study:
             "solution":model_data["solution"],
         }
 
+
         model_hash=Study.generate_model_hash(total_dict)
 
+        if loaded_model_hash!=model_hash:
+            log.warning(
+            f'Warning, loaded model hash differs from model checksum at save point'
+            )
 
         results_path=os.path.join(variant_dir,'results.json')
         if os.path.exists(results_path):
