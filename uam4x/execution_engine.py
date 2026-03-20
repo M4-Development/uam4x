@@ -935,6 +935,13 @@ class Engine:
         """
         var_value = var_data["value"]
         var_shape = var_data["shape"]
+
+        # check that constraints have at least 1 bound
+        if data_lower is None and data_upper is None and dv_or_const == "Constraint":
+            msg = f"At least one constraint must be declared. The constraint {var_name}\n does not have at least a lower or upper bound declared"
+            self.log.error(msg)
+            raise ValueError(msg )
+
         # Checks on allowables for arrays
         if var_type is np.ndarray:
             # If the type has been declared as an ndarray, then

@@ -222,6 +222,29 @@ class Optimization:
         )
         self.des_vars[name] = {"lower": lower, "upper": upper, "indices": indices}
 
+    def edit_design_var(
+            self,
+            name: str,
+            dict_key:str,
+            value: np.ndarray | float | np.floating |list | None = None
+            ):
+        """Edit an existing design variable's lower, upper, or indices value.
+        Parameters
+        ----------
+        name : str
+            The name of the design variable to edit.
+        dict_key : str
+            The field to update, must be one of 'lower', 'upper', or 'indices'.
+        value : np.ndarray | float | np.floating | list | None, optional
+            The new value to assign to the field."""
+        current_desvar = self.des_vars[name]
+        if dict_key not in current_desvar:
+            raise KeyError
+        bounds = {k: current_desvar[k] for k in ('lower', 'upper', 'indices')}
+        bounds[dict_key] = value
+        self.check_upper_lower(name, 'design variable', **bounds)
+        self.des_vars[name][dict_key] = value
+
     def add_constraint(
         self,
         name: str,
@@ -265,6 +288,29 @@ class Optimization:
             "upper": upper,
             "indices": indices,
         }
+
+    def edit_constraint(
+            self,
+            name: str,
+            dict_key:str,
+            value: np.ndarray | float | np.floating |list | None = None
+            ):
+        """Edit an existing constraints's lower, upper, or indices value.
+        Parameters
+        ----------
+        name : str
+            The name of the constraint to edit.
+        dict_key : str
+            The field to update, must be one of 'lower', 'upper', or 'indices'.
+        value : np.ndarray | float | np.floating | list | None, optional
+            The new value to assign to the field."""
+        current_constraint = self.constraints[name]
+        if dict_key not in current_constraint:
+            raise KeyError
+        bounds = {k: current_constraint[k] for k in ('lower', 'upper', 'indices')}
+        bounds[dict_key] = value
+        self.check_upper_lower(name, 'constraint', **bounds)
+        self.constraints[name][dict_key] = value
 
     @staticmethod
     def check_upper_lower(
@@ -310,11 +356,6 @@ class Optimization:
             lower bound.
 
         """
-        if lower is None and upper is None and const_or_dv == "constraint":
-            raise ValueError(
-                f"At least one constraint must be declared. The constraint {name}\n"
-                f"does not have at least a lower or upper bound declared."
-            )
 
         # Check continuity within our paradigm (here user would not be able to declare constraints as lists, ints etc.)
         # without, relies on MDAO to consolidate mismatch e.g declared as array but some weird list is provided.
