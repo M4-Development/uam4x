@@ -291,16 +291,6 @@ class Study:
         new_control_dict=Study._update_control(model_dict,model_hash)
         model_dict['control']=new_control_dict
 
-
-        #hash current model for comparison
-        payload = json.dumps(
-        model_dict,
-        sort_keys=True,
-        separators=(",", ":"),   # remove whitespace for stable bytes
-        ).encode("utf-8")
-
-        model_hash=hashlib.sha256(payload).hexdigest()
-
         msg = f"AutoCommit: Writing study to json for variant {self.control.variant_name}"
         if self._study_dict_hash:
             if self._study_dict_hash!=model_hash:

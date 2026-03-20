@@ -274,9 +274,15 @@ class IVPAnalysis:
 
         epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
         #then generate aleatory inner loop
-        aleatory_samples, aleatory_var_name_to_col=self.AleatorySamplingClass.sample(
-            self.aleatory_var_to_dist,self.num_aleatory_samples
-        )
+        all_aleatory_states=np.zeros((self.num_aleatory_samples*epistemic_samples.shape[0],
+                                      len(self.aleatory_var_to_dist)))
+        row=0
+        for i in range(self.num_epistemic_samples):
+            aleatory_samples, aleatory_var_name_to_col=self.AleatorySamplingClass.sample(
+                self.aleatory_var_to_dist,self.num_aleatory_samples
+            )
+            all_aleatory_states[row:row+self.num_aleatory_samples,:]=aleatory_samples
+            row+=self.num_aleatory_samples
 
         all_vars_to_col={self._META_STATE_NAME:0}
         for name,col in epistemic_var_name_to_col.items():
@@ -286,9 +292,10 @@ class IVPAnalysis:
             #account for meta offset
             all_vars_to_col[name]=col+(len(epistemic_var_name_to_col)+1)
 
-        epistemic_states=np.repeat(epistemic_with_meta,aleatory_samples.shape[0],axis=0)
-        aleatory_states=np.tile(aleatory_samples, (epistemic_with_meta.shape[0], 1))
-        full_states_arr=np.hstack((epistemic_states,aleatory_states))
+        epistemic_states=np.repeat(epistemic_with_meta,
+                                   self.num_aleatory_samples,
+                                   axis=0)
+        full_states_arr=np.hstack((epistemic_states,all_aleatory_states))
         #then aggregate states
         all_states=[]
         for row in full_states_arr:
@@ -338,8 +345,22 @@ class IVPAnalysis:
 
 
 @register_workflow
-class SecondOrderAnalysis:
-    pass
+class SecondOrderProbabilityAnalysis:
+    def __init__(self,AleatorySamplingClass,EpistemicSamplingClass,
+                 num_epistemic_samples,num_aleatory_samples,seed=None):
+        self.AleatorySamplingClass=AleatorySamplingClass
+        if EpistemicSamplingClass not in [LatinHypercubeSampler,
+                                          SobolSampler,HaltonSampler]:
+            raise ValueError(f'Sampler must be low discrepancy sampler')
+
+        self.EpistemicSamplingClass=EpistemicSamplingClass
+        self.aleatory_var_to_dist={}
+        self.num_aleatory_samples=num_aleatory_samples
+        self.epistemic_var_to_vals={}
+        self.num_epistemic_samples=num_epistemic_samples
+        self._epistemic_var_to_dist={}
+        self.seed = seed if seed is not None else 42
+        self.post_spec=IVPAnalysisPost
 
 
 @register_workflow
@@ -1825,6 +1846,25 @@ class SobolSensitivityPost(BasicStatsPost):
         results, _ = self.generate_Sobol_indices(output_name, algo)
         return results["total_order"]
 
+    def plot_total_order_indices(self,output_name,plot_title="",algo="Jansen",save_dir=None):
+        results,_=self.generate_Sobol_indices(output_name,algo)
+        total_results=results["total_order"]
+        fig,ax=plt.subplots(figsize=(10,6))
+        names=[name.split('.')[-1] for name in list(total_results.keys())]
+        values=list(total_results.values())
+        ax.bar(names,values)
+        ax.set_xlabel(f'Variable Names')
+        ax.set_ylabel(f'Sensitivity Metrics')
+        if plot_title=="":
+            ax.set_title(f'Total Sensitivity Indices of {output_name}')
+        else:
+            ax.set_title(plot_title)
+        if save_dir is not None:
+            plt.savefig(
+                f"{save_dir}/PDF_{output_name.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
 
 @register_post_workflow
 class IVPAnalysisPost:
