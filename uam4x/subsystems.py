@@ -1062,6 +1062,24 @@ def get_param_name_and_type_list(subsystem):
     """
     return _subsystem_to_param_name_type_list[subsystem]
 
+def get_param_type(subsystem, param):
+    """Return the dtype of a parameter for a given subsystem, or None if not found.
+    Parameters
+    ----------
+    subsystem : str
+        The subsystem key to look up.
+    param : str
+        The parameter name to find the type for.
+    Returns
+    -------
+    str or None
+        The dtype of the parameter, or None if the parameter does not exist in the subsystem.
+    """
+    subsystem_params_to_type = get_param_name_and_type_list(subsystem)
+    for parameter, dtype in subsystem_params_to_type:
+        if parameter == param:
+            return dtype
+    return None
 
 # Wing subsystem with only span, chord, and sweep
 @register_subsystem
