@@ -89,7 +89,7 @@ def register_post_workflow(PostWorkflow):
     return PostWorkflow
 
 
-class UQAnalysis:
+class AleatoryAnalysis:
     # MIGHT CHANGE THIS TO ALEATORYANALYSIS,
     # THEN MAYBE HAVE A MIXED ANALYSIS
     # AND PURE EPISTEMIC ALL ESSENTIALLY AT PARAMETERSWEEP/OPTIMIZATION level
@@ -211,25 +211,19 @@ class UQAnalysis:
         return UQanalysis
 
 
-@register_workflow
 class IVPAnalysis:
     _META_STATE_NAME = "__IVP__STATE__META"
 
-    def __init__(self,AleatorySamplingClass,EpistemicSamplingClass,
-                 num_epistemic_samples,num_aleatory_samples,seed=None):
-        self.AleatorySamplingClass=AleatorySamplingClass
-        if EpistemicSamplingClass not in [LatinHypercubeSampler,
-                                          SobolSampler,HaltonSampler]:
-            raise ValueError(f'Sampler must be low discrepancy sampler')
+    def __init__(self,UQ_workflow,seed=None):
 
-        self.EpistemicSamplingClass=EpistemicSamplingClass
-        self.aleatory_var_to_dist={}
-        self.num_aleatory_samples=num_aleatory_samples
-        self.epistemic_var_to_vals={}
-        self.num_epistemic_samples=num_epistemic_samples
-        self._epistemic_var_to_dist={}
+        if not isinstance(UQ_workflow,(BasicIVP,SOPIVP)):
+            raise ValueError('')
+        self.UQ_workflow=UQ_workflow
         self.seed = seed if seed is not None else 42
-        self.post_spec=IVPAnalysisPost
+        self.aleatory_var_to_dist={}
+        self.epistemic_var_to_vals={}
+
+        self.post_spec=pre_to_post_workflow_registry[UQ_workflow.__class__.__name__]
 
     def add_aleatory_variable(self,name,PDFObject):
         if name == self._META_STATE_NAME:
@@ -256,30 +250,109 @@ class IVPAnalysis:
         if interval[0] > interval[1]:
             raise ValueError("Epistemic interval must satisfy low <= high.")
         self.epistemic_var_to_vals[name]=interval
-        self._epistemic_var_to_dist[name]=UniformDistribution(0,1)
-
 
     def get_states(self):
         ot.RandomGenerator.SetSeed(self.seed)
         #first generate epistemic outerloop
+        return self.UQ_workflow._get_states(self)
+
+
+    def _to_dict(self):
+
+        return {
+            "type":self.__class__.__name__,
+            "seed":self.seed,
+            "aleatory_variables":{name:dist._to_dict()
+                                  for name,dist in self.aleatory_var_to_dist.items()},
+
+            "epistemic_variables":{name:interval
+                                   for name,interval in self.epistemic_var_to_vals.items()},
+            "analysis_workflow":self.UQ_workflow._to_dict(),
+            "post_processing":self.post_spec.__name__ if self.post_spec else None
+        }
+
+    @classmethod
+    def _from_dict(cls,IVPdict):
+        seed = IVPdict["seed"]
+        workflow_dict = IVPdict["analysis_workflow"]
+        workflow = workflow_name_to_class_registry[workflow_dict["name"]]._from_dict(
+            workflow_dict
+        )
+        ivp_analysis=cls(workflow,seed)
+        for name,distribution_data in IVPdict["aleatory_variables"].items():
+            dist=distribution_name_to_class_registry[
+                distribution_data["name"]
+            ]._from_dict(distribution_data)
+
+            ivp_analysis.add_aleatory_variable(name,dist)
+
+        for name,interval_data in IVPdict["epistemic_variables"].items():
+            ivp_analysis.add_epistemic_variable(name,np.array(interval_data))
+
+        return ivp_analysis
+
+
+@register_workflow
+class SOPIVP:
+
+    _META_STATE_NAME = "__IVP__STATE__META"
+
+    def __init__(self,num_epistemic_samples,EpistemicSamplingClass,
+               num_aleatory_samples,AleatorySamplingClass):
+        self.num_epistemic_samples=num_epistemic_samples
+        self.num_aleatory_samples=num_aleatory_samples
+        self.EpistemicSamplingClass=EpistemicSamplingClass
+        self.AleatorySamplingClass=AleatorySamplingClass
+
+    def _get_states(self,IVPAnalysisObj):
+        # SOPIVP uses epistemic entries as distribution-parameter uncertainty.
+        epistemic_to_vals = IVPAnalysisObj.epistemic_var_to_vals
+        aleatory_to_distribution = IVPAnalysisObj.aleatory_var_to_dist
+
+
+        epistemic_to_distribution={}
+        for name,data in epistemic_to_vals.items():
+            epistemic_to_distribution[name]=UniformDistribution(0,1)
 
         epistemic_samples, epistemic_var_name_to_col =self.EpistemicSamplingClass.sample(
-            self._epistemic_var_to_dist,self.num_epistemic_samples
+            epistemic_to_distribution,self.num_epistemic_samples
             )
 
         for name,col in epistemic_var_name_to_col.items():
-            interval_min=self.epistemic_var_to_vals[name][0]
-            interval_max=self.epistemic_var_to_vals[name][1]
+            interval_min=epistemic_to_vals[name][0]
+            interval_max=epistemic_to_vals[name][1]
             epistemic_samples[:,col]=epistemic_samples[:,col]*(interval_max-interval_min)+interval_min
 
         epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
         #then generate aleatory inner loop
         all_aleatory_states=np.zeros((self.num_aleatory_samples*epistemic_samples.shape[0],
-                                      len(self.aleatory_var_to_dist)))
+                                      len(aleatory_to_distribution)))
         row=0
+        var_to_used_param={}
+        for epistemic_var,col in epistemic_var_name_to_col.items():
+            param=epistemic_var.split('.')[-1]
+            aleatory='.'.join(epistemic_var.split('.')[:-1])
+            if aleatory not in var_to_used_param:
+                var_to_used_param[aleatory]={}
+
+            var_to_used_param[aleatory][param]=col
+
         for i in range(self.num_epistemic_samples):
+            temp_aleatory=copy.deepcopy(aleatory_to_distribution)
+
+            #resolve the aleatory vars
+            for name,data in var_to_used_param.items():
+                base_dist=temp_aleatory[name]
+                base_class=base_dist.__class__
+                dist_dict=base_dist._to_dict()
+                for param_name,param_data in data.items():
+                    dist_dict[param_name]=epistemic_samples[i,param_data]
+                aleatory_instance=base_class._from_dict(dist_dict)
+                temp_aleatory[name]=aleatory_instance
+
+
             aleatory_samples, aleatory_var_name_to_col=self.AleatorySamplingClass.sample(
-                self.aleatory_var_to_dist,self.num_aleatory_samples
+               temp_aleatory,self.num_aleatory_samples
             )
             all_aleatory_states[row:row+self.num_aleatory_samples,:]=aleatory_samples
             row+=self.num_aleatory_samples
@@ -307,61 +380,103 @@ class IVPAnalysis:
         return all_states
 
     def _to_dict(self):
-
         return {
-            "type":self.__class__.__name__,
-            "seed":self.seed,
-            "aleatory_sampling_class_name":self.AleatorySamplingClass.__name__,
-            "epistemic_sampling_class_name":self.EpistemicSamplingClass.__name__,
-            "num_aleatory_samples":self.num_aleatory_samples,
+            "name":self.__class__.__name__,
+            "epistemic_sampler":self.EpistemicSamplingClass.__name__,
+            "aleatory_sampler":self.AleatorySamplingClass.__name__,
             "num_epistemic_samples":self.num_epistemic_samples,
-            "aleatory_variables":{name:dist._to_dict()
-                                  for name,dist in self.aleatory_var_to_dist.items()},
-
-            "epistemic_variables":{name:interval
-                                   for name,interval in self.epistemic_var_to_vals.items()},
+            "num_aleatory_samples":self.num_aleatory_samples
         }
 
     @classmethod
-    def _from_dict(cls,IVPdict):
-        seed = IVPdict["seed"]
-        aleatory_sampling_class=sampler_name_to_class_registry[IVPdict["aleatory_sampling_class_name"]]
-        epistemic_sampling_class=sampler_name_to_class_registry[IVPdict["epistemic_sampling_class_name"]]
-        num_epistemic_samples=IVPdict["num_epistemic_samples"]
-        num_aleatory_samples=IVPdict["num_aleatory_samples"]
-        ivp_analysis=cls(aleatory_sampling_class,epistemic_sampling_class,
-                         num_epistemic_samples,num_aleatory_samples,seed)
-        for name,distribution_data in IVPdict["aleatory_variables"].items():
-            dist=distribution_name_to_class_registry[
-                distribution_data["name"]
-            ]._from_dict(distribution_data)
-
-            ivp_analysis.add_aleatory_variable(name,dist)
-
-        for name,interval_data in IVPdict["epistemic_variables"].items():
-            ivp_analysis.add_epistemic_variable(name,np.array(interval_data))
-
-        return ivp_analysis
+    def _from_dict(cls,workflow_dict):
+        e_sampler=sampler_name_to_class_registry[workflow_dict["epistemic_sampler"]]
+        a_sampler=sampler_name_to_class_registry[workflow_dict["aleatory_sampler"]]
+        ne_samps=workflow_dict["num_epistemic_samples"]
+        na_samps=workflow_dict["num_aleatory_samples"]
+        return cls(ne_samps,e_sampler,na_samps,a_sampler)
 
 
 @register_workflow
-class SecondOrderProbabilityAnalysis:
-    def __init__(self,AleatorySamplingClass,EpistemicSamplingClass,
-                 num_epistemic_samples,num_aleatory_samples,seed=None):
-        self.AleatorySamplingClass=AleatorySamplingClass
-        if EpistemicSamplingClass not in [LatinHypercubeSampler,
-                                          SobolSampler,HaltonSampler]:
-            raise ValueError(f'Sampler must be low discrepancy sampler')
+class BasicIVP:
 
-        self.EpistemicSamplingClass=EpistemicSamplingClass
-        self.aleatory_var_to_dist={}
-        self.num_aleatory_samples=num_aleatory_samples
-        self.epistemic_var_to_vals={}
+    _META_STATE_NAME = "__IVP__STATE__META"
+
+    def __init__(self,num_epistemic_samples,EpistemicSamplingClass,
+               num_aleatory_samples,AleatorySamplingClass):
         self.num_epistemic_samples=num_epistemic_samples
-        self._epistemic_var_to_dist={}
-        self.seed = seed if seed is not None else 42
-        self.post_spec=IVPAnalysisPost
+        self.num_aleatory_samples=num_aleatory_samples
+        self.EpistemicSamplingClass=EpistemicSamplingClass
+        self.AleatorySamplingClass=AleatorySamplingClass
 
+    def _get_states(self,IVPAnalysisObj):
+        #generate the epistemic to distribution here
+        aleatory_to_distribution=IVPAnalysisObj.aleatory_var_to_dist
+        epistemic_to_vals=IVPAnalysisObj.epistemic_var_to_vals
+
+        epistemic_to_distribution={}
+        for name,data in epistemic_to_vals.items():
+            epistemic_to_distribution[name]=UniformDistribution(0,1)
+
+        epistemic_samples, epistemic_var_name_to_col =self.EpistemicSamplingClass.sample(
+            epistemic_to_distribution,self.num_epistemic_samples
+            )
+
+        for name,col in epistemic_var_name_to_col.items():
+            interval_min=epistemic_to_vals[name][0]
+            interval_max=epistemic_to_vals[name][1]
+            epistemic_samples[:,col]=epistemic_samples[:,col]*(interval_max-interval_min)+interval_min
+
+        epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
+        #then generate aleatory inner loop
+        all_aleatory_states=np.zeros((self.num_aleatory_samples*epistemic_samples.shape[0],
+                                      len(aleatory_to_distribution)))
+        row=0
+        for i in range(self.num_epistemic_samples):
+            aleatory_samples, aleatory_var_name_to_col=self.AleatorySamplingClass.sample(
+               aleatory_to_distribution,self.num_aleatory_samples
+            )
+            all_aleatory_states[row:row+self.num_aleatory_samples,:]=aleatory_samples
+            row+=self.num_aleatory_samples
+
+        all_vars_to_col={self._META_STATE_NAME:0}
+        for name,col in epistemic_var_name_to_col.items():
+            all_vars_to_col[name]=col+1
+
+        for name,col in aleatory_var_name_to_col.items():
+            #account for meta offset
+            all_vars_to_col[name]=col+(len(epistemic_var_name_to_col)+1)
+
+        epistemic_states=np.repeat(epistemic_with_meta,
+                                   self.num_aleatory_samples,
+                                   axis=0)
+        full_states_arr=np.hstack((epistemic_states,all_aleatory_states))
+        #then aggregate states
+        all_states=[]
+        for row in full_states_arr:
+            state_dict={}
+            for name,col in all_vars_to_col.items():
+                state_dict[name]=row[col]
+            all_states.append(state_dict)
+
+        return all_states
+
+    def _to_dict(self):
+        return {
+            "name":self.__class__.__name__,
+            "epistemic_sampler":self.EpistemicSamplingClass.__name__,
+            "aleatory_sampler":self.AleatorySamplingClass.__name__,
+            "num_epistemic_samples":self.num_epistemic_samples,
+            "num_aleatory_samples":self.num_aleatory_samples
+        }
+
+    @classmethod
+    def _from_dict(cls,workflow_dict):
+        e_sampler=sampler_name_to_class_registry[workflow_dict["epistemic_sampler"]]
+        a_sampler=sampler_name_to_class_registry[workflow_dict["aleatory_sampler"]]
+        ne_samps=workflow_dict["num_epistemic_samples"]
+        na_samps=workflow_dict["num_aleatory_samples"]
+        return cls(ne_samps,e_sampler,na_samps,a_sampler)
 
 @register_workflow
 class BasicStats:
@@ -1867,7 +1982,7 @@ class SobolSensitivityPost(BasicStatsPost):
             )
 
 @register_post_workflow
-class IVPAnalysisPost:
+class BasicIVPPost:
     def __init__(self, tradestudy: Tradestudy):
         """Initialize object state and configuration.
         Parameters
@@ -2447,6 +2562,8 @@ pre_to_post_workflow_registry = {
     "RegressionPCE": RegressionPCEPost,
     "SobolSensitivity": SobolSensitivityPost,
     "GaussQuadraturePCE": GaussQuadtraturePCEPost,
+    "BasicIVP":BasicIVPPost,
+    "SOPIVP":BasicIVPPost
 }
 if __name__ == "__main__":
 
