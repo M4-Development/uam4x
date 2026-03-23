@@ -9,6 +9,8 @@ from numbers import Real
 from operator import itemgetter, attrgetter
 import hashlib
 import sys
+import importlib.util
+from pathlib import Path
 
 DEV = True
 if hasattr(sys, "_MEIPASS"):  # this indicates we are in the pyinstaller exe
@@ -888,3 +890,25 @@ def replace_empty_quotes_with_none(value):
         return {k: replace_empty_quotes_with_none(x) for k, x in value.items()}
 
     return value
+
+def _get_class_from_file(class_name, file_path):
+    file_path = Path(file_path).resolve()
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"Python file not found: {file_path}")
+
+    module_name = file_path.stem
+
+    spec = importlib.util.spec_from_file_location(module_name, str(file_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not create import spec for: {file_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+
+    try:
+        cls = getattr(module, class_name)
+    except AttributeError:
+        return None
+    return cls
