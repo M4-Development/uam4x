@@ -10,7 +10,7 @@ from uam4x.utils import (
     value_to_type_name,
     replace_empty_quotes_with_none,
 )
-from uam4x.UQ import AleatoryAnalysis,IVPAnalysis
+from uam4x.UQ import AleatoryAnalysis,MixedAnalysis
 from uam4x.local_sensitivity import LocalSensitivity
 
 DEFAULT_TRADE_NAME = "Default State"
@@ -568,7 +568,7 @@ class Control:
         self.description = description
 
     def add_tradestudy(
-        self, trade_name: str, trade: Union[ParameterSweep, Optimization, AleatoryAnalysis,IVPAnalysis],
+        self, trade_name: str, trade: Union[ParameterSweep, Optimization, AleatoryAnalysis,MixedAnalysis],
     ) -> None:
         """Add tradestudy.
 
@@ -643,8 +643,8 @@ class Control:
                 trade = AleatoryAnalysis._from_dict(v)
             elif v["type"] == "LocalSensitivity":
                 trade = LocalSensitivity._from_dict(v)
-            elif v["type"]=="IVPAnalysis":
-                trade=IVPAnalysis._from_dict(v)
+            elif v["type"]=="MixedAnalysis":
+                trade=MixedAnalysis._from_dict(v)
             else:
                 raise ValueError(f"Unknown trade study type: {v['type']}")
             control.add_tradestudy(k, trade)

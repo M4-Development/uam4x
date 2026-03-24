@@ -1,8 +1,6 @@
 from __future__ import annotations
-from matplotlib.dates import SA
 import numpy as np
 import scipy.stats as stats
-from numpy.random import default_rng
 import openturns as ot
 import matplotlib.pyplot as plt
 from math import comb
@@ -211,12 +209,12 @@ class AleatoryAnalysis:
         return UQanalysis
 
 
-class IVPAnalysis:
+class MixedAnalysis:
     _META_STATE_NAME = "__IVP__STATE__META"
 
     def __init__(self,UQ_workflow,seed=None):
 
-        if not isinstance(UQ_workflow,(BasicIVP,SOPIVP)):
+        if not isinstance(UQ_workflow,(BasicIVP,BasicSOP,MixedRegressionPCE)):
             raise ValueError('')
         self.UQ_workflow=UQ_workflow
         self.seed = seed if seed is not None else 42
@@ -293,7 +291,7 @@ class IVPAnalysis:
 
 
 @register_workflow
-class SOPIVP:
+class BasicSOP:
 
     _META_STATE_NAME = "__IVP__STATE__META"
 
@@ -311,17 +309,14 @@ class SOPIVP:
 
 
         epistemic_to_distribution={}
-        for name,data in epistemic_to_vals.items():
-            epistemic_to_distribution[name]=UniformDistribution(0,1)
+        for name,interval in epistemic_to_vals.items():
+            low=interval[0]
+            high=interval[1]
+            epistemic_to_distribution[name]=UniformDistribution(low,high)
 
         epistemic_samples, epistemic_var_name_to_col =self.EpistemicSamplingClass.sample(
             epistemic_to_distribution,self.num_epistemic_samples
             )
-
-        for name,col in epistemic_var_name_to_col.items():
-            interval_min=epistemic_to_vals[name][0]
-            interval_max=epistemic_to_vals[name][1]
-            epistemic_samples[:,col]=epistemic_samples[:,col]*(interval_max-interval_min)+interval_min
 
         epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
         #then generate aleatory inner loop
@@ -341,11 +336,11 @@ class SOPIVP:
             temp_aleatory=copy.deepcopy(aleatory_to_distribution)
 
             #resolve the aleatory vars
-            for name,data in var_to_used_param.items():
+            for name,interval in var_to_used_param.items():
                 base_dist=temp_aleatory[name]
                 base_class=base_dist.__class__
                 dist_dict=base_dist._to_dict()
-                for param_name,param_data in data.items():
+                for param_name,param_data in interval.items():
                     dist_dict[param_name]=epistemic_samples[i,param_data]
                 aleatory_instance=base_class._from_dict(dist_dict)
                 temp_aleatory[name]=aleatory_instance
@@ -415,17 +410,14 @@ class BasicIVP:
         epistemic_to_vals=IVPAnalysisObj.epistemic_var_to_vals
 
         epistemic_to_distribution={}
-        for name,data in epistemic_to_vals.items():
-            epistemic_to_distribution[name]=UniformDistribution(0,1)
+        for name,interval in epistemic_to_vals.items():
+            low=interval[0]
+            high=interval[1]
+            epistemic_to_distribution[name]=UniformDistribution(low,high)
 
         epistemic_samples, epistemic_var_name_to_col =self.EpistemicSamplingClass.sample(
             epistemic_to_distribution,self.num_epistemic_samples
             )
-
-        for name,col in epistemic_var_name_to_col.items():
-            interval_min=epistemic_to_vals[name][0]
-            interval_max=epistemic_to_vals[name][1]
-            epistemic_samples[:,col]=epistemic_samples[:,col]*(interval_max-interval_min)+interval_min
 
         epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
         #then generate aleatory inner loop
@@ -477,6 +469,86 @@ class BasicIVP:
         ne_samps=workflow_dict["num_epistemic_samples"]
         na_samps=workflow_dict["num_aleatory_samples"]
         return cls(ne_samps,e_sampler,na_samps,a_sampler)
+
+
+@register_workflow
+class MixedRegressionPCE:
+    def __init__(self,SamplingClass,num_samples,
+                 poly_order):
+        self.SamplingClass=SamplingClass
+        self.num_samples=num_samples
+        self.poly_order = poly_order
+
+    def _get_states(self,IVPAnalysisObj):
+        #generate the epistemic to distribution here
+        aleatory_to_distribution=IVPAnalysisObj.aleatory_var_to_dist
+        epistemic_to_vals=IVPAnalysisObj.epistemic_var_to_vals
+
+        all_vars_to_dist={}
+        for name,interval in epistemic_to_vals.items():
+            low=interval[0]
+            high=interval[1]
+            all_vars_to_dist[name]=UniformDistribution(low,high)
+
+        for name,dist in aleatory_to_distribution.items():
+            all_vars_to_dist[name]=dist
+
+        all_samples, all_vars_to_col = self.SamplingClass.sample(
+            all_vars_to_dist,self.num_samples
+            )
+
+        #then aggregate states
+        all_states=[]
+        for row in all_samples:
+            state_dict={}
+            for name,col in all_vars_to_col.items():
+                state_dict[name]=row[col]
+            all_states.append(state_dict)
+
+        return all_states
+
+    def _check_analysis(self, SOPAnalysis):
+        # check order and number of aleatory vs. num samples
+        # from XIU Polynomial expansion, dimension of space is C(order+number of random vars,number of random vars)
+        # should oversample 2-3x
+        """Validate that workflow settings are consistent with requested analysis.
+
+        Parameters
+        ----------
+        UQAnalysis : Any
+            Input value for `UQAnalysis`.
+
+        """
+        num_vars = len(SOPAnalysis.aleatory_var_to_dist) + len(
+            SOPAnalysis.epistemic_var_to_vals
+        )
+        min_terms = comb(self.poly_order + num_vars, self.poly_order)
+        num_samples=self.num_samples
+        if min_terms > num_samples:
+            raise ValueError(
+                f"Insufficient terms for polynomial chaos expansion of degree {self.poly_order} "
+                f"for {num_vars} mixed variables"
+            )
+        elif min_terms * 3 > num_samples:
+            print(
+                "Warning: mixed regression PCE is lightly sampled. "
+                "Consider 2-3x oversampling relative to the basis size."
+            )
+
+    def _to_dict(self):
+        return{
+            "name":self.__class__.__name__,
+            "sampler":self.SamplingClass.__name__,
+            "num_samples":self.num_samples,
+            "polynomial_order":self.poly_order
+        }
+
+    @classmethod
+    def _from_dict(cls, workflow_dict):
+        sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
+        num_samples = workflow_dict["num_samples"]
+        poly_order = workflow_dict["polynomial_order"]
+        return cls(sampler,num_samples, poly_order)
 
 @register_workflow
 class BasicStats:
@@ -1311,48 +1383,6 @@ class BasicStatsPost:
         # SHOULD HANDLE >3 VARS REQUIRES MATRIX
         return significance_res, p_val
 
-
-class MixedBasicStatsPost(BasicStatsPost):
-    """Represent the mixedbasicstatspost component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
-
-    def __init__(self, tradestudy: Tradestudy):
-        """Initialize object state and configuration.
-
-        Parameters
-        ----------
-        tradestudy : Tradestudy
-            Trade-study results container used for post-processing.
-
-        """
-        super().__init__(tradestudy)
-
-    def plot_probability_box():
-        """Placeholder for probability-box visualization for mixed uncertainty.
-
-        Notes
-        -----
-        This method performs class-internal setup or validation logic.
-
-        """
-        pass
-
-    def compute_confidence_intervals():
-        """Placeholder for confidence-interval calculations.
-
-        Notes
-        -----
-        This method performs class-internal setup or validation logic.
-
-        """
-        pass
-
-
 @register_post_workflow
 class RegressionPCEPost(BasicStatsPost):
     """Represent the regressionpcepost component in the UAM4X workflow.
@@ -1459,7 +1489,7 @@ class RegressionPCEPost(BasicStatsPost):
 
         aleatory_var_to_dist = ts.aleatory_var_to_dist
 
-        return Surrogate(aleatory_var_to_dist, res)
+        return AleatorySurrogate(aleatory_var_to_dist, res)
 
 
 @register_post_workflow
@@ -1575,10 +1605,10 @@ class GaussQuadtraturePCEPost(BasicStatsPost):
 
         aleatory_var_to_dist = ts.aleatory_var_to_dist
 
-        return Surrogate(aleatory_var_to_dist, res)
+        return AleatorySurrogate(aleatory_var_to_dist, res)
 
 
-class Surrogate:
+class AleatorySurrogate:
     """Represent the surrogate component in the UAM4X workflow.
 
     Notes
@@ -1604,6 +1634,57 @@ class Surrogate:
         self._ot_res = result
         self.new_sample_points = None
         self.new_sample_values = None
+        self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
+
+    def get_first_order_sobol(self,var_name):
+        for i,name in enumerate(self.aleatory_var_to_dist.keys()):
+            if var_name==name:
+                return self._Chaos_SI.getSobolIndex(i)
+
+    def get_total_order_sobol(self,var_name):
+        for i,name in enumerate(self.aleatory_var_to_dist.keys()):
+            if var_name==name:
+                return self._Chaos_SI.getSobolTotalIndex(i)
+
+    def get_interaction_sobol(self,var_names:list):
+        inds=[]
+        for i,name in enumerate(self.aleatory_var_to_dist.keys()):
+            for var_name in var_names:
+                if var_name==name:
+                    inds.append(i)
+
+        return self._Chaos_SI.getSobolGroupedIndex(inds)
+
+    def get_total_interaction_sobol(self,var_names:list):
+        inds=[]
+        for i,name in enumerate(self.aleatory_var_to_dist.keys()):
+            for var_name in var_names:
+                if var_name==name:
+                    inds.append(i)
+
+        return self._Chaos_SI.getSobolGroupedTotalIndex(inds)
+
+    def plot_total_order_sobol(self,plot_title="",save_dir=None):
+        name_to_inds={}
+        names=[]
+        for i,name in enumerate(self.aleatory_var_to_dist.keys()):
+            name_to_inds[name]=self._Chaos_SI.getSobolTotalIndex(i)
+            names.append(name.split('.')[-1])
+        fig,ax=plt.subplots(figsize=(10,6))
+        ax.grid(True,which="both",linestyle="--",linewidth=0.5)
+        ax.bar(names,list(name_to_inds.values()))
+        ax.set_xlabel(f'Variable Names')
+        ax.set_ylabel(f'Sensitivity Metrics')
+
+        if plot_title=="":
+            plot_title = f'Total Sensitivity Indices of Surrogate'
+        ax.set_title(plot_title)
+        if save_dir is not None:
+            plt.savefig(
+                rf"{save_dir}/{plot_title.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
 
     def predict(self, name_to_value_dict):
         # Note, name_to_value_dict should be PHYSICAL inputs, not
@@ -1714,7 +1795,7 @@ class Surrogate:
         # NOTE, SAMPLE POINTS RETURNED ARE PHYSICAL POINTS, NOT Probability space points
         # in the case of the lognormal distribution. Basic Uniform and Normal
         # probability space is equal to the physical since no transformaton occurs.
-        for i, (name, distribution) in enumerate(self.aleatory_var_to_dist.items()):
+        for i, (name, distribution) in enumerate(self.all_var_to_dist.items()):
             if isinstance(distribution, LogNormalDistribution):
                 # points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
                 # where gamma is the shift
@@ -1725,7 +1806,7 @@ class Surrogate:
         self.new_sample_values = np.array(Y)
         return np.array(self.new_sample_points), np.array(self.new_sample_values)
 
-    def plot_cdf(self, save_dir=None):
+    def plot_cdf(self, xlabel=None,plot_title="",save_dir=None):
         """Plot a CDF from previously generated surrogate samples.
 
         Parameters
@@ -1747,19 +1828,24 @@ class Surrogate:
         probabilities = ecdf.cdf.probabilities
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.plot(quantiles, probabilities, color="blue")
-        ax.set_title(f"CDF of surrogate output", fontsize=16, fontweight="bold")
-        ax.set_xlabel("Output", fontsize=14)
+        if plot_title=="":
+            plot_title=f"CDF of surrogate output"
+        if xlabel is None:
+            xlabel="Output value"
+
+        ax.set_title(plot_title, fontsize=16, fontweight="bold")
+        ax.set_xlabel(xlabel, fontsize=14)
         ax.set_ylabel("Probability", fontsize=14)
         ax.grid(True, which="both", linestyle="--", linewidth=0.5)
 
         if save_dir is not None:
             plt.savefig(
-                f"{save_dir}/CDF_surrogate_output.png", dpi=300, bbox_inches="tight"
+                f"{save_dir}/{plot_title.replace(' ','_')}.png", dpi=300, bbox_inches="tight"
             )
 
         return np.hstack((quantiles, probabilities))
 
-    def plot_pdf(self, bins=20, save_dir=None):
+    def plot_pdf(self, bins=20, xlabel=None, plot_title="", save_dir=None):
         """Plot a PDF from previously generated surrogate samples.
 
         Parameters
@@ -1780,14 +1866,20 @@ class Surrogate:
         vals = self.new_sample_values.flatten()
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.hist(vals, bins=bins, color="blue", edgecolor="black")
-        ax.set_title(f"PDF of surrogate output", fontsize=16, fontweight="bold")
-        ax.set_xlabel("Output", fontsize=14)
+        if plot_title == "":
+            plot_title = "PDF of surrogate output"
+        if xlabel is None:
+            xlabel = "Output value"
+        ax.set_title(plot_title, fontsize=16, fontweight="bold")
+        ax.set_xlabel(xlabel, fontsize=14)
         ax.set_ylabel("Frequency", fontsize=14)
         ax.grid(True, which="both", linestyle="--", linewidth=0.5)
 
         if save_dir is not None:
             plt.savefig(
-                f"{save_dir}/PDF_surrogate_output.png", dpi=300, bbox_inches="tight"
+                f"{save_dir}/{plot_title.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
             )
 
         return ax
@@ -1810,7 +1902,7 @@ class SobolSensitivityPost(BasicStatsPost):
         "Martinez": ot.MartinezSensitivityAlgorithm,
     }
 
-    def init(self, tradestudy):
+    def __init__(self, tradestudy):
         """Execute init.
 
         Parameters
@@ -1819,7 +1911,7 @@ class SobolSensitivityPost(BasicStatsPost):
             Input value for `tradestudy`.
 
         """
-        super().init(tradestudy)
+        super().__init__(tradestudy)
 
     def generate_Sobol_indices(self, output_name, algo="Jansen"):
         # Output values
@@ -1967,22 +2059,22 @@ class SobolSensitivityPost(BasicStatsPost):
         fig,ax=plt.subplots(figsize=(10,6))
         names=[name.split('.')[-1] for name in list(total_results.keys())]
         values=list(total_results.values())
+        ax.grid(True,which="both",linestyle="--",linewidth=0.5)
         ax.bar(names,values)
         ax.set_xlabel(f'Variable Names')
         ax.set_ylabel(f'Sensitivity Metrics')
         if plot_title=="":
-            ax.set_title(f'Total Sensitivity Indices of {output_name}')
-        else:
-            ax.set_title(plot_title)
+            plot_title = f'Total Sensitivity Indices of {output_name}'
+        ax.set_title(plot_title)
         if save_dir is not None:
             plt.savefig(
-                f"{save_dir}/PDF_{output_name.replace(' ','_')}.png",
+                f"{save_dir}/{plot_title.replace(' ','_')}.png",
                 dpi=300,
                 bbox_inches="tight",
             )
 
 @register_post_workflow
-class BasicIVPPost:
+class BasicMixedPost:
     def __init__(self, tradestudy: Tradestudy):
         """Initialize object state and configuration.
         Parameters
@@ -2143,7 +2235,418 @@ class BasicIVPPost:
             )
 
 
-# Define various sampling methods
+@register_post_workflow
+class MixedRegressionPCEPost(BasicStatsPost):
+    def __init__(self, tradestudy: Tradestudy):
+        super().__init__(tradestudy)
+
+    def _get_mixed_var_to_dist(self):
+        trade_name = self.tradestudy.trade_name
+        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        mixed_var_to_dist = {}
+        for name, interval in ts.epistemic_var_to_vals.items():
+            mixed_var_to_dist[name] = UniformDistribution(interval[0], interval[1])
+        for name, distribution in ts.aleatory_var_to_dist.items():
+            mixed_var_to_dist[name] = distribution
+        return mixed_var_to_dist
+
+    def generate_surrogate(self, output_name):
+        trade_name = self.tradestudy.trade_name
+        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        num_samples = ts.UQ_workflow.num_samples
+        all_var_to_dist = self._get_mixed_var_to_dist()
+        poly_factories = []
+        abscissas = np.zeros((num_samples, len(all_var_to_dist)))
+        joint_list = []
+        for i, (name, distribution) in enumerate(all_var_to_dist.items()):
+            if isinstance(distribution, LogNormalDistribution):
+                # special transformation of log-->normal since no analytical
+                # polynomials for log (was getting error)
+
+                # transform distribution, let Y~LN(mu,sigma). Y=exp(X) for X~N(mu,sigma)
+                # then this says the log of Y is normally distributed with mean mu and
+                # standard deviation sigma (the log distribution has different expectation)
+                # and variance
+                ot_dist = ot.Normal(distribution.mu_log, distribution.sigma_log)
+                # first center the log distribution by getting rid of the gamma shift
+                # then take the natural log, X=ln(Y-gamma)
+                x_phys = np.array(self.tradestudy.get_variable(name))
+                z = x_phys - distribution.gamma
+                if np.any(z) <= 0.0:
+                    raise ValueError()
+
+                new_vals = np.log(z)
+                abscissas[:, i] = new_vals
+                poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
+            else:
+                ot_dist = distribution._OT_Dist()
+                poly_factories.append(ot.StandardDistributionPolynomialFactory(ot_dist))
+                abscissas[:, i] = np.array(self.tradestudy.get_variable(name))
+
+            joint_list.append(ot_dist)
+
+        # Data as OT samples
+        abscissas = ot.Sample(abscissas)
+        outputs = ot.Sample(
+            np.array(self.tradestudy.get_variable(output_name))[:, None]
+        )
+
+        # Joint distribution based on independent input aleatory dists
+        joint = ot.JointDistribution(joint_list)
+
+        # Enumeration function
+        enum = ot.LinearEnumerateFunction(len(all_var_to_dist))
+
+        # Basis built from distributions (Normal-->Hermite, Uniform-->Legendre)
+        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
+
+        # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
+        poly_order = ts.UQ_workflow.poly_order
+        basis_size = enum.getBasisSizeFromTotalDegree(poly_order)
+        if basis_size != comb(poly_order + len(all_var_to_dist), poly_order):
+            raise ValueError(
+                f"Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(all_var_to_dist)}"
+            )
+
+        # Selects first P elemens of the polynomial chaos basis according to enumeration function
+        truncation_strategy = ot.FixedStrategy(product_basis, basis_size)
+
+        # This is regression based PCE, so projection is done via least squares minimization
+        projection_strategy = ot.LeastSquaresStrategy()
+
+        algo = ot.FunctionalChaosAlgorithm(
+            abscissas, outputs, joint, truncation_strategy, projection_strategy
+        )
+        algo.run()
+        res = algo.getResult()
+
+        epistemic_var_to_interval=ts.epistemic_var_to_vals
+        aleatory_var_to_dist=ts.aleatory_var_to_dist
+
+        return SOPSurrogate(all_var_to_dist, res,epistemic_var_to_interval,aleatory_var_to_dist)
+
+class SOPSurrogate:
+
+    _META_STATE_NAME="__IVP__STATE__META"
+    def __init__(self, all_var_to_dist, result,epistemic_var_to_interval,
+                 aleatory_var_to_dist):
+        # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
+        # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
+        """Initialize object state and configuration.
+        Parameters
+        ----------
+        aleatory_var_to_dist : Any
+            Mapping from aleatory variable names to distributions.
+        result : Any
+            OpenTurns functional-chaos result object.
+        """
+        self.epistemic_var_to_interval=epistemic_var_to_interval
+        self.aleatory_var_to_dist=aleatory_var_to_dist
+        self.all_var_to_dist = all_var_to_dist
+        self._ot_res = result
+        self.new_sample_points = None
+        self.new_sample_values = None
+        self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
+
+
+    def predict(self, name_to_value_dict):
+        # Note, name_to_value_dict should be PHYSICAL inputs, not
+        # probabalistic based inputs
+        """Evaluate the surrogate at one dictionary of input variable values.
+        Parameters
+        ----------
+        name_to_value_dict : Any
+            Mapping from variable names to surrogate input values.
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+        """
+        vals = []
+        for name, distribution in self.all_var_to_dist.items():
+            if isinstance(distribution, LogNormalDistribution):
+                transformed_val = np.log(name_to_value_dict[name] - distribution.gamma)
+                vals.append(transformed_val)
+            else:
+                vals.append(name_to_value_dict[name])
+        point = ot.Point(vals)
+        return self._ot_res.getMetaModel()(point)
+
+
+    def sample(self, num_epistemic_samples,
+                num_aleatory_samples,method="MC"):
+        """Generate new surrogate samples using a selected sampling strategy.
+        Parameters
+        ----------
+        num_samples : Any
+            Number of samples to generate.
+        method : Any, optional
+            Method identifier controlling algorithm behavior.
+        Returns
+        -------
+        Any
+            Return value produced by this method.
+        """
+        aleatory_to_distribution=self.aleatory_var_to_dist
+        epistemic_to_vals=self.epistemic_var_to_interval
+        all_var_to_dists=self.all_var_to_dist
+        model = self._ot_res.getMetaModel()
+
+        local_epistemic_to_distribution={}
+        for name,dist in all_var_to_dists.items():
+            if name in epistemic_to_vals:
+                local_epistemic_to_distribution[name]=dist
+
+        local_aleatory_to_distribution={}
+        for name,dist in all_var_to_dists.items():
+            if name in aleatory_to_distribution:
+                local_aleatory_to_distribution[name]=dist
+
+        if method == "MC":
+            SamplingClass=MonteCarloSampler
+        elif method == "LHS":
+            SamplingClass=LatinHypercubeSampler
+        elif method == "Sobol":
+            SamplingClass=SobolSampler
+        elif method == "Halton":
+            SamplingClass=HaltonSampler
+        else:
+            raise ValueError()
+
+        epistemic_samples, epistemic_var_name_to_col =SamplingClass.sample(
+            local_epistemic_to_distribution,num_epistemic_samples
+            )
+
+        epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
+        #then generate aleatory inner loop
+        all_aleatory_states=np.zeros((num_aleatory_samples*epistemic_samples.shape[0],
+                                      len(aleatory_to_distribution)))
+        row=0
+        for i in range(num_epistemic_samples):
+            aleatory_samples, aleatory_var_name_to_col=SamplingClass.sample(
+               local_aleatory_to_distribution,num_aleatory_samples
+            )
+            all_aleatory_states[row:row+num_aleatory_samples,:]=aleatory_samples
+            row+=num_aleatory_samples
+
+        all_vars_to_col={self._META_STATE_NAME:0}
+        for name,col in epistemic_var_name_to_col.items():
+            all_vars_to_col[name]=col+1
+
+        for name,col in aleatory_var_name_to_col.items():
+            #account for meta offset
+            all_vars_to_col[name]=col+(len(epistemic_var_name_to_col)+1)
+
+        epistemic_states=np.repeat(epistemic_with_meta,
+                                   num_aleatory_samples,
+                                   axis=0)
+
+        #do not include meta data for sample
+        self._new_sample_points_with_meta=epistemic_states
+        self.new_sample_points=np.hstack((epistemic_states[:,1:],all_aleatory_states))
+
+        Y = model(self.new_sample_points)
+        # NOTE, SAMPLE POINTS RETURNED ARE PHYSICAL POINTS, NOT Probability space points
+        # in the case of the lognormal distribution. Basic Uniform and Normal
+        # probability space is equal to the physical since no transformaton occurs.
+        for i, (name, distribution) in enumerate(self.all_var_to_dist.items()):
+            if isinstance(distribution, LogNormalDistribution):
+                # points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
+                # where gamma is the shift
+                self.new_sample_points[:, i] = (
+                    np.exp(self.new_sample_points[:, i]) + distribution.gamma
+                )
+
+        self.new_sample_values = np.array(Y)
+
+        return np.array(self.new_sample_points), np.array(self.new_sample_values)
+
+
+    def _aggregate_predicted_vals(self):
+        ivp_meta=self._new_sample_points_with_meta[:,0]
+        u,inv=np.unique(ivp_meta,return_inverse=True)
+        indices_per_value = {
+            val: np.where(inv == i)[0]
+            for i, val in enumerate(u)
+            }
+        out_vals=self.new_sample_values
+        num_cols=u.shape[0]
+        num_rows=int(ivp_meta.shape[0]/num_cols)
+        quantiles_data=np.zeros((num_rows,num_cols))
+        probabilities_data=np.zeros((num_rows,num_cols))
+        meta_to_cdf={}
+        for epistemic_meta,inds in indices_per_value.items():
+            vals=out_vals[inds][:,0]
+            ecdf=stats.ecdf(vals)
+            meta_to_cdf[epistemic_meta]=ecdf
+            epistemic_meta=int(epistemic_meta)
+            quantiles_data[:,epistemic_meta]=ecdf.cdf.quantiles
+            probabilities_data[:,epistemic_meta]=ecdf.cdf.probabilities
+
+        return meta_to_cdf,quantiles_data,probabilities_data
+
+    def plot_horsetails(self,xlabel=None,plot_title="", save_dir=None):
+        """Plot a CDF from previously generated surrogate samples.
+
+        Parameters
+        ----------
+        save_dir : Any, optional
+            Optional directory where plots are saved.
+
+        Returns
+        -------
+        Any
+            Plot artifact (axes object or plotted data).
+
+        """
+        if self.new_sample_values is None:
+            raise ValueError("Must generate samples before plotting cdf")
+        _,quantiles,probabilities=self._aggregate_predicted_vals()
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(quantiles, probabilities, color="blue")
+        if plot_title=="":
+            plot_title=f"Horsetail plot of surrogate output"
+        if xlabel is None:
+            xlabel="Output value"
+
+        ax.set_title(plot_title,fontsize=16,fontweight="bold")
+        ax.set_xlabel(xlabel, fontsize=14)
+        ax.set_ylabel("Probability", fontsize=14)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+
+
+        if save_dir is not None:
+            plt.savefig(
+                f"{save_dir}/{plot_title.replace(' ','_')}.png", dpi=300, bbox_inches="tight"
+            )
+
+    def plot_pbox(self, xlabel=None, plot_title="", save_dir=None):
+
+        _,quantiles_data,probabilities_data=self._aggregate_predicted_vals()
+
+        max_quantiles=np.max(quantiles_data,axis=1)
+        #gives column with max
+        max_quantiles_locs=np.argmax(quantiles_data,axis=1)
+        max_quantile_probabilities=probabilities_data[np.arange(max_quantiles.shape[0]),max_quantiles_locs]
+
+        min_quantiles=np.min(quantiles_data,axis=1)
+        min_quantiles_locs=np.argmin(quantiles_data,axis=1)
+        min_quantile_probabilities=probabilities_data[np.arange(min_quantiles.shape[0]),min_quantiles_locs]
+
+        #plot data
+        fig,ax=plt.subplots(figsize=(10, 6))
+        ax.plot(max_quantiles,max_quantile_probabilities,color="red",label="max envelope")
+        ax.plot(min_quantiles,min_quantile_probabilities,color='blue',label="min envelope")
+
+        if plot_title == "":
+            plot_title = "P-box Plot of surrogate model"
+        if xlabel is None:
+            xlabel = "Output value"
+        ax.set_title(plot_title,fontsize=16,fontweight="bold")
+        ax.set_xlabel(xlabel,fontsize=14)
+        ax.set_ylabel('Probability',fontsize=14)
+        ax.grid(True,which="both",linestyle="--",linewidth=0.5)
+        ax.legend()
+
+        if save_dir is not None:
+            plt.savefig(
+                f"{save_dir}/{plot_title.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
+
+    def get_plevel_bounds(self,p_level):
+        _,quantiles,probabilities=self._aggregate_predicted_vals()
+        if p_level<0.0 or p_level>1.0:
+            raise ValueError(f'p_level must be between 0 and 1')
+
+
+        #get probability row, note structure of creation results
+        # in consistent probability matrix (each column is identical):
+        probabilities=probabilities[:,0]
+        le=np.where(probabilities<=p_level)[0]
+        ge=np.where(probabilities>=p_level)[0]
+
+        if le.size==0:
+            # clamp to left boundary
+            min_loc=0
+            max_loc=0
+        elif ge.size==0:
+            # clamp to right boundary
+            min_loc=probabilities.shape[0]-1
+            max_loc=probabilities.shape[0]-1
+        else:
+            min_loc=le[-1]
+            max_loc=ge[0]
+
+        if min_loc==max_loc:
+            max_quantile=np.max(quantiles[max_loc])
+            min_quantile=np.min(quantiles[min_loc])
+        else:
+            #handle interpolation of curves first,
+            #then take envelope, handle edge cases
+            #handle max
+            low_mat=quantiles[min_loc]
+            high_mat=quantiles[max_loc]
+            numerator=(high_mat-low_mat)*(p_level-probabilities[min_loc])
+            denominator=(probabilities[max_loc]-probabilities[min_loc])
+            interp_curves=numerator/denominator+low_mat
+
+            max_quantile=np.max(interp_curves)
+            min_quantile=np.min(interp_curves)
+
+        return (min_quantile,max_quantile)
+
+    def get_first_order_sobol(self,var_name):
+        for i,name in enumerate(self.all_var_to_dist.keys()):
+            if var_name==name:
+                return self._Chaos_SI.getSobolIndex(i)
+
+    def get_total_order_sobol(self,var_name):
+        for i,name in enumerate(self.all_var_to_dist.keys()):
+            if var_name==name:
+                return self._Chaos_SI.getSobolTotalIndex(i)
+
+    def get_interaction_sobol(self,var_names:list):
+        inds=[]
+        for i,name in enumerate(self.all_var_to_dist.keys()):
+            for var_name in var_names:
+                if var_name==name:
+                    inds.append(i)
+
+        return self._Chaos_SI.getSobolGroupedIndex(inds)
+
+    def get_total_interaction_sobol(self,var_names:list):
+        inds=[]
+        for i,name in enumerate(self.all_var_to_dist.keys()):
+            for var_name in var_names:
+                if var_name==name:
+                    inds.append(i)
+
+        return self._Chaos_SI.getSobolGroupedTotalIndex(inds)
+
+    def plot_total_order_sobol(self,plot_title="",save_dir=None):
+        name_to_inds={}
+        names=[]
+        for i,name in enumerate(self.all_var_to_dist.keys()):
+            name_to_inds[name]=self._Chaos_SI.getSobolTotalIndex(i)
+            names.append(name.split('.')[-1])
+        fig,ax=plt.subplots(figsize=(10,6))
+        ax.grid(True,which="both",linestyle="--",linewidth=0.5)
+        ax.bar(names,list(name_to_inds.values()))
+        ax.set_xlabel(f'Variable Names')
+        ax.set_ylabel(f'Sensitivity Metrics')
+
+        if plot_title=="":
+            plot_title = f'Total Sensitivity Indices of Surrogate'
+        ax.set_title(plot_title)
+        if save_dir is not None:
+            plt.savefig(
+                rf"{save_dir}/{plot_title.replace(' ','_')}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
+
 
 
 class BaseSampler:
@@ -2442,7 +2945,6 @@ class UniformDistribution:
         """
         self.low = low
         self.high = high
-        self.scale = self.high - self.low
 
     def _OT_Dist(self):
         """Return the equivalent OpenTurns distribution object.
@@ -2562,8 +3064,9 @@ pre_to_post_workflow_registry = {
     "RegressionPCE": RegressionPCEPost,
     "SobolSensitivity": SobolSensitivityPost,
     "GaussQuadraturePCE": GaussQuadtraturePCEPost,
-    "BasicIVP":BasicIVPPost,
-    "SOPIVP":BasicIVPPost
+    "BasicSOP": BasicMixedPost,
+    "BasicIVP": BasicMixedPost,
+    "MixedRegressionPCE": MixedRegressionPCEPost,
 }
 if __name__ == "__main__":
 
@@ -2581,7 +3084,7 @@ if __name__ == "__main__":
 
     # IVP mixed uncertainty debug case:
     # 2 epistemic interval variables + 2 aleatory random variables.
-    ivp_debug = IVPAnalysis(
+    ivp_debug = MixedAnalysis(
         AleatorySamplingClass=MonteCarloSampler,
         EpistemicSamplingClass=LatinHypercubeSampler,
         num_epistemic_samples=6,
