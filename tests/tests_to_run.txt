@@ -1,4 +1,4 @@
-uq_testing
+tests/uq_testing
 tests/test_vehicle.py
 tests/test_utils.py
 tests/test_subsystems.py
