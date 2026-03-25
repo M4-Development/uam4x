@@ -400,7 +400,7 @@ class Study:
             "execution_meta_data":study_dict["execution_meta_data"]
         }
         if not self._study_dict_hash:
-            raise AttributeError(f'Study must be loaded from json before run'
+            raise AttributeError(f'Study must be loaded from json before run '
                                  'if results are to be saved')
         else:
             if self._study_dict_hash!=model_hash:

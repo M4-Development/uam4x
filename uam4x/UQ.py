@@ -150,6 +150,7 @@ class AleatoryAnalysis:
             Requested value.
 
         """
+        ot.RandomGenerator.Reset()
         ot.RandomGenerator.SetSeed(self.seed)
         return self.UQ_workflow._get_states(self.aleatory_var_to_dist)
 
@@ -1790,6 +1791,7 @@ class EpistemicAnalysis:
         self.epistemic_var_to_vals[name]=interval
 
     def get_states(self):
+        ot.RandomGenerator.Reset()
         ot.RandomGenerator.SetSeed(self.seed)
 
         return self.UQ_workflow._get_states(self)
@@ -1936,6 +1938,7 @@ class MixedAnalysis:
         self.epistemic_var_to_vals[name]=interval
 
     def get_states(self):
+        ot.RandomGenerator.Reset()
         ot.RandomGenerator.SetSeed(self.seed)
         return self.UQ_workflow._get_states(self)
 

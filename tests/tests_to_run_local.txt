@@ -1,3 +1,4 @@
+uq_testing
 test_vehicle.py
 test_utils.py
 test_subsystems.py
@@ -10,3 +11,4 @@ test_execution_engine.py
 test_openmdao_optimization.py
 test_results_extra.py
 test_local_sensitivity.py
+
