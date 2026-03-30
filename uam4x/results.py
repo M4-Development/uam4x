@@ -120,11 +120,6 @@ class Results:
         for trade_name, results in tradename_to_results.items():
             ts = Tradestudy._from_dict(trade_name, results)
             res.add_tradestudy(trade_name, ts)
-            if trade_name in study.control.trade_studies:
-                workflow = res.study.control.trade_studies[trade_name]
-                if hasattr(workflow, "post_spec"):
-                    post_spec_class = workflow.post_spec
-                    ts.set_post(post_spec_class)
         return res
 
 
@@ -152,18 +147,6 @@ class Tradestudy:
         self._results_owner = None
         self._results_owner = None
 
-        self.post = None
-
-    def set_post(self, Post):
-        """Attach a post-processing class instance to this trade study.
-
-        Parameters
-        ----------
-        Post : Any
-            Input value for `Post`.
-
-        """
-        self.post = Post(self)
 
     @property
     def study(self):
@@ -180,51 +163,6 @@ class Tradestudy:
         else:
             return self._results_owner.study
 
-    def scatter(
-        self, var1, var2, xlabel=None, ylabel=None, title="default_title", save_dir=None
-    ):
-        """Plot a scatter chart for two variables across stored result points.
-
-        Parameters
-        ----------
-        var1 : Any
-            Variable name to plot on the x-axis.
-        var2 : Any
-            Variable name to plot on the y-axis.
-        xlabel : Any, optional
-            Input value for `xlabel`.
-        ylabel : Any, optional
-            Input value for `ylabel`.
-        title : Any, optional
-            Input value for `title`.
-        save_dir : Any, optional
-            Input value for `save_dir`.
-
-        Returns
-        -------
-        Any
-            Matplotlib axes object for the generated plot.
-
-        """
-        fig, ax = plt.subplots(figsize=(10, 6))
-        x_values = self.get_variable(var1)
-        y_values = self.get_variable(var2)
-        ax.scatter(x_values, y_values, color="blue", alpha=0.7)
-
-        ax.set_title(title, fontsize=16, fontweight="bold")
-        if xlabel is None:
-            xlabel = var1
-        if ylabel is None:
-            ylabel = var2
-        ax.set_xlabel(xlabel, fontsize=14)
-        ax.set_ylabel(ylabel, fontsize=14)
-        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-
-        if save_dir is not None:
-            plt.savefig(
-                f"{save_dir}/{title.replace(' ','_')}.png", dpi=300, bbox_inches="tight"
-            )
-        return ax
 
     def get_changing_variables(self):
         """Return variables that change across trade-study evaluations.
@@ -393,13 +331,7 @@ class Tradestudy:
             JSON-serializable representation.
 
         """
-        if self.post is not None:
-            return {
-                "points": [result._to_dict() for result in self._results],
-                "post": self.post.__class__.__name__,
-            }
-        else:
-            return {
+        return {
                 "points": [result._to_dict() for result in self._results],
             }
 

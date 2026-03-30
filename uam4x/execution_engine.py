@@ -623,10 +623,6 @@ class Engine:
                 f"Overwriting existing results for trade study {trade_name}"
             )
         ts = Tradestudy(trade_name)
-        spec = self.study.control.trade_studies[trade_name]
-        post_cls = getattr(spec, "post_spec", None)
-        if post_cls is not None:
-            ts.set_post(post_cls)
         for result in outputs:
             ts._results.append(result)
             ts._hash_to_result[result.state_hash] = result
