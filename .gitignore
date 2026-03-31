@@ -4,7 +4,8 @@ requirements.yml
 # SQLite databases and journals
 *.sqlite
 *.sqlite-journal
-
+*.zip
+*.json
 # CSS assets in tests
 tests/assets/*.css
 
