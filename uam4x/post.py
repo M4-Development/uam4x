@@ -628,7 +628,7 @@ class RegressionPCEPost(BasicAleatoryPost):
 
         aleatory_var_to_dist = ts.aleatory_var_to_dist
 
-        return AleatorySurrogate(aleatory_var_to_dist, res)
+        return AleatorySurrogate(aleatory_var_to_dist, res,self.post_storage)
 
 
 class GaussQuadtraturePCEPost(BasicAleatoryPost):
@@ -1001,7 +1001,7 @@ class AleatorySurrogate:
         # NOTE, SAMPLE POINTS RETURNED ARE PHYSICAL POINTS, NOT Probability space points
         # in the case of the lognormal distribution. Basic Uniform and Normal
         # probability space is equal to the physical since no transformaton occurs.
-        for i, (name, distribution) in enumerate(self.all_var_to_dist.items()):
+        for i, (name, distribution) in enumerate(self.aleatory_var_to_dist.items()):
             if isinstance(distribution, LogNormalDistribution):
                 # points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
                 # where gamma is the shift

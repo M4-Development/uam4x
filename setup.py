@@ -20,7 +20,8 @@ setup(
         'matplotlib>=3.10.0',
         'openturns==1.26.0',
         'scipy>=1.16.1',
-        'tzdata==2025.2'
+        'tzdata==2025.2',
+        'sympy==1.14.0'
 
     ],
     description='M4 Engineering developed UAM design space exploration framework with embedded version control',
