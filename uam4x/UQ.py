@@ -11,7 +11,6 @@ from uam4x.utils import log
 workflow_name_to_class_registry = {}
 sampler_name_to_class_registry = {}
 distribution_name_to_class_registry = {}
-post_workflow_name_to_class_registry = {}
 
 # Orchestrator class, manages workflows and interfaces with uam4x
 

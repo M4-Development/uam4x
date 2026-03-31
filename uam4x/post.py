@@ -13,6 +13,8 @@ import sympy as sp
 class BasicPost:
     def __init__(self, tradestudy: Tradestudy):
         self.tradestudy = tradestudy
+        trade_name=self.tradestudy.trade_name
+        self.post_storage=tradestudy.study._post_data[trade_name]
 
     def scatter(
         self, var1, var2, xlabel=None, ylabel=None, title="default_title", save_dir=None
@@ -90,6 +92,8 @@ class BasicAleatoryPost:
 
         """
         self.tradestudy = tradestudy
+        trade_name=self.tradestudy.trade_name
+        self.post_storage=tradestudy.study._post_data[trade_name]
 
     def compute_mean(self, var_name):
         """Compute the sample mean for a variable across trade-study results.
@@ -742,7 +746,7 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
 
         aleatory_var_to_dist = ts.aleatory_var_to_dist
 
-        return AleatorySurrogate(aleatory_var_to_dist, res)
+        return AleatorySurrogate(aleatory_var_to_dist, res,self.post_storage)
 
 
 class AleatorySurrogate:
@@ -754,7 +758,7 @@ class AleatorySurrogate:
 
     """
 
-    def __init__(self, aleatory_var_to_dist, result):
+    def __init__(self, aleatory_var_to_dist, result,post_storage):
         # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
         # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
         """Initialize object state and configuration.
@@ -773,6 +777,7 @@ class AleatorySurrogate:
         self.new_sample_values = None
         self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
         self.symbolic_metamodel,self.aleatory_to_sympy_map=self._get_symbolic_metamodel()
+        self.post_storage=post_storage
 
 
     def _get_symbolic_metamodel(self):
@@ -1278,6 +1283,8 @@ class SobolSensitivityPost(BasicAleatoryPost):
 class BasicEpistemicPost:
     def __init__(self,tradestudy:Tradestudy):
         self.tradestudy=tradestudy
+        trade_name=self.tradestudy.trade_name
+        self.post_storage=tradestudy.study._post_data[trade_name]
 
     def compute_bounds(self,var_name):
         vals = np.array(self.tradestudy.get_variable(var_name), dtype=float)
@@ -1310,6 +1317,8 @@ class BasicMixedPost:
             Trade-study results container used for post-processing.
         """
         self.tradestudy = tradestudy
+        trade_name=self.tradestudy.trade_name
+        self.post_storage=tradestudy.study._post_data[trade_name]
 
     def _generate_output_var_data(self,var_name):
         trade_name=self.tradestudy.trade_name
@@ -1558,13 +1567,14 @@ class MixedRegressionPCEPost(BasicAleatoryPost):
         epistemic_var_to_interval=ts.epistemic_var_to_vals
         aleatory_var_to_dist=ts.aleatory_var_to_dist
 
-        return MixedSurrogate(all_var_to_dist, res,epistemic_var_to_interval,aleatory_var_to_dist)
+        return MixedSurrogate(all_var_to_dist, res,epistemic_var_to_interval,
+                              aleatory_var_to_dist,self.post_storage)
 
 class MixedSurrogate:
 
     _META_STATE_NAME="__IVP__STATE__META"
     def __init__(self, all_var_to_dist, result,epistemic_var_to_interval,
-                 aleatory_var_to_dist):
+                 aleatory_var_to_dist,post_storage):
         # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
         # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
         """Initialize object state and configuration.
@@ -1583,6 +1593,7 @@ class MixedSurrogate:
         self.new_sample_values = None
         self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
         self.symbolic_metamodel,self.all_to_sympy_map=self._get_symbolic_metamodel()
+        self.post_storage=post_storage
 
 
     def _get_symbolic_metamodel(self):

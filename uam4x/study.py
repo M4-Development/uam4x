@@ -57,7 +57,9 @@ class Study:
         self.control = Control()
         self.results = Results(self)
         self._runtime_meta_data = defaultdict(dict)
-        self._study_dict_hash=''
+        self._model_dict_hash=''
+        self._results_dict_hash=''
+        self._post_data={}
 
     def _add_runtime_plugin_checksums(self, trade_name, plugin_to_checksum):
         """Store runtime plugin checksums for a trade execution.
@@ -287,13 +289,13 @@ class Study:
             "solution":study_dict["solution"],
         }
 
-        model_hash=Study.generate_model_hash(model_dict)
+        model_hash=Study._generate_data_hash(model_dict)
         new_control_dict=Study._update_control(model_dict,model_hash)
         model_dict['control']=new_control_dict
 
         msg = f"AutoCommit: Writing study to json for variant {self.control.variant_name}"
-        if self._study_dict_hash:
-            if self._study_dict_hash!=model_hash:
+        if self._model_dict_hash:
+            if self._model_dict_hash!=model_hash:
                 self._save_to_json(model_dict,model_path)
                 print(f'New model does not match loaded model, discarding results and saving')
                 if commit:
@@ -304,8 +306,13 @@ class Study:
         written=[model_path]
         #save the results
         if study_dict['results']:
+            results_dict={
+                "results":study_dict["results"],
+                "execution_meta_data":study_dict["execution_meta_data"]
+            }
+            results_hash=Study._generate_data_hash(results_dict)
             header_data=Study._generate_header_dict(study_dict["control"],
-                                                model_hash)
+                                                model_hash,results_hash)
             result_dict={
                 "header":header_data,
                 'results':study_dict['results'],
@@ -344,7 +351,7 @@ class Study:
             "solution":study_dict["solution"],
         }
 
-        model_hash=Study.generate_model_hash(model_dict)
+        model_hash=Study._generate_data_hash(model_dict)
         new_control_dict=Study._update_control(model_dict,model_hash)
         model_dict['control']=new_control_dict
 
@@ -354,12 +361,13 @@ class Study:
             self._commit_json_to_branch(json_paths=[model_path],commit_message=msg)
 
     @staticmethod
-    def _generate_header_dict(control_dict,model_hash):
+    def _generate_header_dict(control_dict,model_hash,results_hash):
         return {
             "title":control_dict['title'],
             "author":control_dict["author"],
             "description":control_dict["description"],
             "model_hash":model_hash,
+            "results_hash":results_hash,
             "repo_root":control_dict["repo_root"],
             "variant_name":control_dict["variant_name"]
         }
@@ -390,20 +398,26 @@ class Study:
             "vehicles":study_dict["vehicles"],
             "solution":study_dict["solution"],
         }
-        model_hash= Study.generate_model_hash(model_dict)
+        model_hash= Study._generate_data_hash(model_dict)
 
+        temp_results_dict={
+            "results":study_dict["results"],
+            "execution_meta_data":study_dict["execution_meta_data"]
+        }
+
+        results_hash=Study._generate_data_hash(temp_results_dict)
         header_data=Study._generate_header_dict(study_dict["control"],
-                                                model_hash)
+                                                model_hash,results_hash)
         results_dict={
             "header":header_data,
             "results":study_dict["results"],
             "execution_meta_data":study_dict["execution_meta_data"]
         }
-        if not self._study_dict_hash:
+        if not self._model_dict_hash:
             raise AttributeError(f'Study must be loaded from json before run '
                                  'if results are to be saved')
         else:
-            if self._study_dict_hash!=model_hash:
+            if self._model_dict_hash!=model_hash:
                 raise ValueError(f"Study's loaded in hash does not match current model"
                                  "hash.")
 
@@ -411,6 +425,51 @@ class Study:
 
         if commit:
             self._commit_json_to_branch([results_path],commit_message=msg)
+
+    def save_post_to_json(self,variant_path,commit=False):
+        msg=f"AutoCommit: Writing post processing data for variant {self.control.variant_name}"
+        post_processing_path=os.path.join(variant_path,'post.json')
+        study_dict=replace_none_with_empty_quotes(self._to_dict())
+        results_path=os.path.join(variant_path,'results.json')
+        #i dont think these checks actually matter because to process the
+        #results, you actually need the results already but this
+        #is just a safeguard i guess
+        if not study_dict['results']:
+            raise ValueError(f'Attempted to save post to json but no results exist for study')
+        if not os.path.exists(results_path):
+            raise ValueError(f'results.json file must exist before saving post to json')
+        if not os.path.exists(os.path.join(variant_path,'model.json')):
+            raise ValueError(f'model.json file must exist before saving post to json')
+
+
+        model_dict={
+            "control":study_dict["control"],
+            "vehicles":study_dict["vehicles"],
+            "solution":study_dict["solution"],
+        }
+        model_hash= Study._generate_data_hash(model_dict)
+
+
+
+        result_dict={
+            "results":study_dict["results"],
+            "execution_meta_data":study_dict["execution_meta_data"]
+                     }
+        results_hash=Study._generate_data_hash(result_dict)
+
+        if self._results_dict_hash and self._results_dict_hash!=results_hash:
+            raise ValueError(f"Study's loaded in hash does not match current results"
+                             "hash.")
+        header_data=Study._generate_header_dict(study_dict["control"],
+                                                model_hash,results_hash)
+        header_data["result_hash"]=results_hash
+        post_dict={
+            "header":header_data,
+            "post_storage":self._post_data
+                   }
+        self._save_to_json(post_dict,post_processing_path)
+        if commit:
+            self._commit_json_to_branch([post_processing_path],msg)
 
     def _commit_json_to_branch(self, json_paths, commit_message):
         """Commit one or more JSON artifacts into the configured git repository.
@@ -517,7 +576,7 @@ class Study:
         }
 
 
-        model_hash=Study.generate_model_hash(total_dict)
+        model_hash=Study._generate_data_hash(total_dict)
 
         if loaded_model_hash!=model_hash:
             log.warning(
@@ -525,21 +584,32 @@ class Study:
             )
 
         results_path=os.path.join(variant_dir,'results.json')
+        results_hash=None
         if os.path.exists(results_path):
             with open(results_path,'r') as f:
                 result_data=json.load(f)
 
             total_dict["results"]=result_data["results"]
             total_dict["execution_meta_data"]=result_data["execution_meta_data"]
+            result_dict={
+                "results":result_data["results"],
+                "execution_meta_data":result_data["execution_meta_data"]
+            }
+            results_hash=Study._generate_data_hash(result_dict)
 
         study=cls._from_dict(total_dict,work_dir=variant_dir)
-        study._study_dict_hash=model_hash
+        study._model_dict_hash=model_hash
+        if results_hash:
+            study._results_dict_hash=results_hash
+
+        for name in study.control.trade_studies.keys():
+            study._post_data[name]={}
 
         return study
 
 
     @staticmethod
-    def generate_model_hash(model_dict):
+    def _generate_data_hash(model_dict):
         payload = json.dumps(
         model_dict,
         sort_keys=True,
