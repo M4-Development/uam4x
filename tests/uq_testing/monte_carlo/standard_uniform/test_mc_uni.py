@@ -6,6 +6,7 @@ import scipy.stats as stats
 import pytest
 from mc_branching_script import setup_model,setup_solution,setup_tradestudy
 import openturns as ot
+from uam4x.post import BasicAleatoryPost
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 STACKED_COMPARISON_PATH = os.path.join(THIS_DIR, "predicted_vs_mc_stacked.csv")
 
@@ -27,10 +28,10 @@ def test_mc_uniform():
     study.save_results_to_json(study_dir)
     study=Study.from_json(study_dir)
     #start asserting things
-    uq=study.results.get_tradestudy('standard_uniform')
-    uq_post=uq.post
+    ts=study.results.get_tradestudy('standard_uniform')
+    uq_post=BasicAleatoryPost(ts)
 
-    x=uq.get_variable('point_calc.x_out')
+    x=ts.get_variable('point_calc.x_out')
     assert len(x)==100000
     #Analytical mean: 0.5
     analytical_mu=0.5

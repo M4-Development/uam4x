@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from uam4x.results import Results, Tradestudy, Result
+from uam4x.post import BasicPost
 
 
 class _DummySolution:
@@ -23,6 +24,7 @@ class _DummyStudy:
         self.solution = _DummySolution(tracked_outputs)
         self.control = _DummyControl()
         self._vehicle_value = vehicle_value
+        self._post_data = {}
 
     def get_value(self, name):
         if name == "vehicles.v.c.p":
@@ -120,12 +122,14 @@ def test_tradestudy_default_state_branch():
     assert ts.get_variable("tracked.y") == [5.0, 6.0]
 
 
-def test_tradestudy_to_dict_and_from_dict_and_post_setting():
+def test_tradestudy_to_dict_and_from_dict_roundtrip():
     study = _DummyStudy(tracked_outputs=["tracked.y"])
-    study.control.trade_studies["trade"] = type("Workflow", (), {"post_spec": _DummyPost})()
+    study.control.trade_studies["trade"] = _DummyTrade()
+    study._post_data["trade"] = {"user_note": "saved-only freeform post data"}
 
     ts = Tradestudy("trade")
-    ts.set_post(_DummyPost)
+    res = Results(study=study)
+    res.add_tradestudy("trade", ts)
 
     r = Result(state={"x": 1.0})
     r._add_result("tracked.y", 10.0)
@@ -139,11 +143,13 @@ def test_tradestudy_to_dict_and_from_dict_and_post_setting():
     assert rebuilt_ts._results[0].outputs["tracked.y"] == 10.0
 
     rebuilt_results = Results._from_dict({"trade": d}, study)
-    assert isinstance(rebuilt_results.get_tradestudy("trade").post, _DummyPost)
+    assert rebuilt_results.get_tradestudy("trade").trade_name == "trade"
+    assert study._post_data["trade"]["user_note"] == "saved-only freeform post data"
 
 
 def test_results_to_dict_and_scatter(tmp_path):
     study = _DummyStudy(tracked_outputs=["tracked.y", "tracked.x"])
+    study._post_data["Default State"] = {}
     ts = Tradestudy("Default State")
     res = Results(study=study)
     res.add_tradestudy("Default State", ts)
@@ -156,7 +162,7 @@ def test_results_to_dict_and_scatter(tmp_path):
     r1._add_result("tracked.y", 4.0)
     ts._results.extend([r0, r1])
 
-    ax = ts.scatter("tracked.x", "tracked.y", title="My Plot", save_dir=str(tmp_path))
+    ax = BasicPost(ts).scatter("tracked.x", "tracked.y", title="My Plot", save_dir=str(tmp_path))
 
     assert ax.get_title() == "My Plot"
     assert (tmp_path / "My_Plot.png").exists()
