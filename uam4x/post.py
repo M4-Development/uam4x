@@ -6,6 +6,8 @@ from uam4x.UQ import LatinHypercubeSampler, SobolSampler,MonteCarloSampler,\
     HaltonSampler,NormalDistribution,UniformDistribution,LogNormalDistribution
 import scipy.stats as stats
 from math import comb
+import sympy as sp
+
 
 #--------------------------Basic Post Process Class
 class BasicPost:
@@ -770,16 +772,71 @@ class AleatorySurrogate:
         self.new_sample_points = None
         self.new_sample_values = None
         self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
+        self.symbolic_metamodel,self.aleatory_to_sympy_map=self._get_symbolic_metamodel()
+
+
+    def _get_symbolic_metamodel(self):
+        result=self._ot_res
+        coeffs=np.array(result.getCoefficients()).reshape(-1)
+        indices=result.getIndices()
+        basis=result.getOrthogonalBasis()
+
+        aleatory_to_sympy_map={}
+        physical_to_standard_map={}
+        for i,name in enumerate(self.aleatory_var_to_dist.keys()):
+            aleatory_to_sympy_map[name]=sp.symbols(f'x{i}')
+            physical_to_standard_map[sp.symbols(f'x{i}')]=sp.symbols(f'z{i}')
+        # OpenTurns builds the orthogonal basis in its stochastic input space.
+        # Re-express those basis variables in terms of the physical variables so
+        # symbolic substitution matches `predict(...)`.
+        #That is the pce is in terms of the z variables (standard space)
+        #need to represent z in terms of x
+        standard_to_physical_subs = {}
+        for i, (name, distribution) in enumerate(self.aleatory_var_to_dist.items()):
+            physical_symbol = aleatory_to_sympy_map[name]
+            standard_symbol = sp.symbols(f"z{i}")
+
+            if isinstance(distribution, UniformDistribution):
+
+                #mapping from X~Unif(a,b)-->Z~Unif(-1,1)
+                midpoint=(distribution.low+distribution.high)/2
+                half_range=(distribution.high-distribution.low)/2
+                transformed_symbol=(physical_symbol-midpoint)/half_range
+            elif isinstance(distribution, NormalDistribution):
+                #mapping from X~Norm(mu,sigma)-->Z~Norm(0,1)
+                transformed_symbol=(physical_symbol-distribution.mean)/distribution.std
+            elif isinstance(distribution, LogNormalDistribution):
+                #mapping from X~Lognormal(mu,sigma)-->Z~Norm(0,1)
+                #Map X~Lognormal(mu,sigma)-->Y~Norm(mu,sigma)
+                transformed_symbol=(sp.ln(physical_symbol-distribution.gamma)-distribution.mu_log)/distribution.sigma_log
+            else:
+                raise ValueError(f'Invalid distribution')
+
+            standard_to_physical_subs[standard_symbol] = transformed_symbol
+
+        model=0
+        for coeff,ind in zip(coeffs,indices):
+            term=str(basis.build(ind))
+            term=sp.sympify(term)
+            term=term.subs(physical_to_standard_map)
+            term=term.subs(standard_to_physical_subs)
+            term=coeff*term
+            model+=term
+        return model, aleatory_to_sympy_map
+
 
     def get_first_order_sobol(self,var_name):
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
             if var_name==name:
-                return self._Chaos_SI.getSobolIndex(i)
+                val=self._Chaos_SI.getSobolIndex(i)
+                return val
+
 
     def get_total_order_sobol(self,var_name):
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
             if var_name==name:
-                return self._Chaos_SI.getSobolTotalIndex(i)
+                val=self._Chaos_SI.getSobolTotalIndex(i)
+                return val
 
     def get_interaction_sobol(self,var_names:list):
         inds=[]
@@ -787,8 +844,9 @@ class AleatorySurrogate:
             for var_name in var_names:
                 if var_name==name:
                     inds.append(i)
-
-        return self._Chaos_SI.getSobolGroupedIndex(inds)
+        vals=self._Chaos_SI.getSobolGroupedIndex(inds)
+        names=tuple(var_names)
+        return vals
 
     def get_total_interaction_sobol(self,var_names:list):
         inds=[]
@@ -797,7 +855,9 @@ class AleatorySurrogate:
                 if var_name==name:
                     inds.append(i)
 
-        return self._Chaos_SI.getSobolGroupedTotalIndex(inds)
+        vals=self._Chaos_SI.getSobolGroupedTotalIndex(inds)
+        names=tuple(var_names)
+        return vals
 
     def plot_total_order_sobol(self,plot_title="",save_dir=None):
         name_to_inds={}
@@ -857,7 +917,9 @@ class AleatorySurrogate:
             Return value produced by this operation.
 
         """
-        return ot.FunctionalChaosRandomVector(self._ot_res).getMean()[0]
+        mean=ot.FunctionalChaosRandomVector(self._ot_res).getMean()[0]
+        return mean
+
 
     @property
     def analytical_variance(self):
@@ -892,7 +954,8 @@ class AleatorySurrogate:
             Return value produced by this operation.
 
         """
-        return np.sqrt(self.analytical_variance)
+        std=np.sqrt(self.analytical_variance)
+        return std
 
     def sample(self, num_samples, method="MC"):
         """Generate new surrogate samples using a selected sampling strategy.
@@ -933,7 +996,7 @@ class AleatorySurrogate:
         # NOTE, SAMPLE POINTS RETURNED ARE PHYSICAL POINTS, NOT Probability space points
         # in the case of the lognormal distribution. Basic Uniform and Normal
         # probability space is equal to the physical since no transformaton occurs.
-        for i, (name, distribution) in enumerate(self.aleatory_var_to_dist.items()):
+        for i, (name, distribution) in enumerate(self.all_var_to_dist.items()):
             if isinstance(distribution, LogNormalDistribution):
                 # points are in normal space X~N(mu,sigma) transform to Y=exp(X)+gamma
                 # where gamma is the shift
@@ -1021,6 +1084,7 @@ class AleatorySurrogate:
             )
 
         return ax
+
 
 
 class SobolSensitivityPost(BasicAleatoryPost):
@@ -1518,6 +1582,54 @@ class MixedSurrogate:
         self.new_sample_points = None
         self.new_sample_values = None
         self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
+        self.symbolic_metamodel,self.all_to_sympy_map=self._get_symbolic_metamodel()
+
+
+    def _get_symbolic_metamodel(self):
+        result=self._ot_res
+        coeffs=np.array(result.getCoefficients()).reshape(-1)
+        indices=result.getIndices()
+        basis=result.getOrthogonalBasis()
+
+        #both epistemic and aleatory
+        all_var_to_sympy_map={}
+        physical_to_standard_map={}
+        for i,name in enumerate(self.all_var_to_dist.keys()):
+            physical_to_standard_map[sp.symbols(f'x{i}')]=sp.symbols(f'z{i}')
+            all_var_to_sympy_map[name]=sp.symbols(f'x{i}')
+
+        standard_to_physical_subs = {}
+        for i, (name, distribution) in enumerate(self.all_var_to_dist.items()):
+            physical_symbol = all_var_to_sympy_map[name]
+            standard_symbol = sp.symbols(f"z{i}")
+
+            if isinstance(distribution, UniformDistribution):
+
+                #mapping from X~Unif(a,b)-->Z~Unif(-1,1)
+                midpoint=(distribution.low+distribution.high)/2
+                half_range=(distribution.high-distribution.low)/2
+                transformed_symbol=(physical_symbol-midpoint)/half_range
+            elif isinstance(distribution, NormalDistribution):
+                #mapping from X~Norm(mu,sigma)-->Z~Norm(0,1)
+                transformed_symbol=(physical_symbol-distribution.mean)/distribution.std
+            elif isinstance(distribution, LogNormalDistribution):
+                #mapping from X~Lognormal(mu,sigma)-->Z~Norm(0,1)
+                #Map X~Lognormal(mu,sigma)-->Y~Norm(mu,sigma)
+                transformed_symbol=(sp.ln(physical_symbol-distribution.gamma)-distribution.mu_log)/distribution.sigma_log
+            else:
+                raise ValueError(f'Invalid distribution')
+
+            standard_to_physical_subs[standard_symbol] = transformed_symbol
+
+        model=0
+        for coeff,ind in zip(coeffs,indices):
+            term=str(basis.build(ind))
+            term=sp.sympify(term)
+            term=term.subs(physical_to_standard_map)
+            term=term.subs(standard_to_physical_subs)
+            term=coeff*term
+            model+=term
+        return model, all_var_to_sympy_map
 
 
     def predict(self, name_to_value_dict):
