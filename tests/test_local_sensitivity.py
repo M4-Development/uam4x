@@ -5,7 +5,8 @@ os.environ.setdefault("UAM4X_DISABLE_REGISTRY_WRITES", "1")
 import numpy as np
 import pytest
 
-from uam4x.local_sensitivity import LocalSensitivity, LocalSensitivityPost, post_workflow_name_to_class_registry
+from uam4x.local_sensitivity import LocalSensitivity
+from uam4x.post import LocalSensitivityPost
 from uam4x.results import Results, Tradestudy, Result
 
 
@@ -47,9 +48,7 @@ def _build_sensitivity_tradestudy(method_states):
     return ls, ts
 
 
-def test_local_sensitivity_registry_and_basic_api():
-    assert "LocalSensitivityPost" in post_workflow_name_to_class_registry
-
+def test_local_sensitivity_basic_api():
     ls = LocalSensitivity(step_size=0.5)
     ls.add_perturbation_var("a", evaluation_point=2.0)
     ls.add_perturbation_var("b", evaluation_point=4.0, step_size=0.25)
@@ -78,9 +77,10 @@ def test_local_sensitivity_to_dict_from_dict_roundtrip():
     d = ls._to_dict()
     rebuilt = LocalSensitivity._from_dict(d)
 
+    assert "post_spec" not in d
     assert rebuilt.step_size == 0.2
     assert rebuilt.variable_to_sensitivity_data["x"]["evaluation_point"] == 3.0
-    assert rebuilt.post_spec is LocalSensitivityPost
+    assert not hasattr(rebuilt, "post_spec")
 
 
 def test_local_sensitivity_post_compute_methods_and_invalid():

@@ -781,7 +781,7 @@ class Variants:
         """
         self.dir = os.path.abspath(os.path.expanduser(repo_dir))
 
-    def add_variant(self, name, func_list: list):
+    def add_variant(self, name, func_list: list,options:dict=None):
         """Add variant.
 
         Parameters
@@ -793,7 +793,7 @@ class Variants:
 
         """
         self.log.debug(f"add variant {name}")
-        self.variants[name] = func_list
+        self.variants[name] = (func_list, options)
 
     def generate_variants(self, commit=False):
         """Generate, save, and return all configured study variants.
@@ -812,7 +812,7 @@ class Variants:
         self.log.debug("generate variants")
         studies = []
 
-        for name, func_list in self.variants.items():
+        for name, (func_list, options) in self.variants.items():
             variants_dir = os.path.join(self.dir, "variants")
 
             if not os.path.exists(variants_dir):
@@ -824,7 +824,10 @@ class Variants:
 
             study = Study(log_dir=variants_dir)
             for func in func_list:
-                func(study)
+                if options is not None:
+                    func(study,options)
+                else:
+                    func(study)
 
             study.control._set_repo_root(self.dir)
             study.control._set_variant_name(name)

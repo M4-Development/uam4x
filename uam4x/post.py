@@ -1477,7 +1477,7 @@ class BasicMixedPost:
             )
 
 
-class MixedRegressionPCEPost(BasicAleatoryPost):
+class MixedRegressionPCEPost(BasicMixedPost):
     def __init__(self, tradestudy: Tradestudy):
         super().__init__(tradestudy)
 
@@ -1945,3 +1945,78 @@ class MixedSurrogate:
                 dpi=300,
                 bbox_inches="tight",
             )
+
+
+#--------------------------Local one at a time sensitivity post process class
+class LocalSensitivityPost:
+    """Represent the localsensitivitypost component in the UAM4X workflow.
+
+    Notes
+    -----
+    This class encapsulates related state and behavior used by UAM4X workflows.
+
+    """
+
+    def __init__(self, tradestudy: Tradestudy):
+        """Initialize object state and default configuration.
+
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Input value for `tradestudy`.
+
+        """
+        self.tradestudy = tradestudy
+
+    def compute_sensitivity(self, output_name, method="forward"):
+        """Compute sensitivity.
+
+        Parameters
+        ----------
+        output_name : Any
+            Identifier used by this operation.
+        method : Any, optional
+            Input value for `method`.
+
+        Returns
+        -------
+        Any
+            Return value produced by this operation.
+
+        """
+        trade_name = self.tradestudy.trade_name
+        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        perturbation_vars = list(ts.variable_to_sensitivity_data.keys())
+        # use np.max and np.min to locate
+        outs = np.array(self.tradestudy.get_variable(output_name))
+        var_to_sens = {output_name: {}}
+        max_sense = 0.0
+        max_sense_var = None
+        for var_name in perturbation_vars:
+            vals = self.tradestudy.get_variable(var_name)
+            base = vals[0]
+            pert_up = np.max(vals)
+            pert_down = np.min(vals)
+            out_base = outs[0]
+            out_up = outs[np.argmax(vals)]
+            out_down = outs[np.argmin(vals)]
+            if method == "forward":
+                sensitivity = (out_up - out_base) / (pert_up - base)
+            elif method == "backward":
+                sensitivity = (out_base - out_down) / (base - pert_down)
+            elif method == "central":
+                sensitivity = (out_up - out_down) / (pert_up - pert_down)
+            else:
+                raise ValueError(
+                    f"Method {method} not recognized. Use 'forward', 'backward', or 'central'."
+                )
+
+            if abs(sensitivity) > max_sense:
+                max_sense = abs(sensitivity)
+                max_sense_var = var_name
+
+            var_to_sens[output_name][var_name] = sensitivity
+
+        max_dict = {"variable": max_sense_var, "sensitivity": max_sense}
+
+        return var_to_sens, max_dict
