@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from math import comb
 import copy
 from uam4x.utils import log
+import pandas as pd
+import hashlib
 
 # Global registry
 workflow_name_to_class_registry = {}
@@ -68,6 +70,11 @@ def register_distribution(Distribution):
     distribution_name_to_class_registry[Distribution.__name__] = Distribution
     return Distribution
 
+def gen_csv_states(csv_path,col_order):
+    df=pd.read_csv(csv_path)
+    df=df[col_order]
+    return df.to_dict(orient='records')
+
 #--------------------Aleatory Suite-------------------------------------
 class AleatoryAnalysis:
     # MIGHT CHANGE THIS TO ALEATORYANALYSIS,
@@ -95,6 +102,11 @@ class AleatoryAnalysis:
         self.UQ_workflow = UQ_workflow
         self.seed = seed if seed is not None else 42
         self.aleatory_var_to_dist = {}
+        self.states_csv=None
+
+    def add_csv_points(self,csv_path):
+        self.states_csv=csv_path
+
 
     def _check_analysis(self):
         """Validate that workflow settings are consistent with requested analysis.
@@ -131,6 +143,9 @@ class AleatoryAnalysis:
         """
         ot.RandomGenerator.Reset()
         ot.RandomGenerator.SetSeed(self.seed)
+        if self.states_csv is not None:
+            return gen_csv_states(self.states_csv, list(self.aleatory_var_to_dist.keys()))
+
         return self.UQ_workflow._get_states(self.aleatory_var_to_dist)
 
     def _to_dict(self):
@@ -142,7 +157,7 @@ class AleatoryAnalysis:
             JSON-serializable representation.
 
         """
-        return {
+        base_dict = {
             "type": self.__class__.__name__,
             "seed": self.seed,
             "aleatory_variables": {
@@ -151,6 +166,9 @@ class AleatoryAnalysis:
             },
             "analysis_workflow": self.UQ_workflow._to_dict(),
         }
+        if self.states_csv is not None:
+            base_dict["states_csv"] = self.states_csv
+        return base_dict
 
     @classmethod
     def _from_dict(cls, UQdict):
@@ -183,6 +201,8 @@ class AleatoryAnalysis:
                 distribution_data["name"]
             ]._from_dict(distribution_data)
             UQanalysis.add_aleatory_variable(name, dist)
+        if "states_csv" in UQdict:
+            UQanalysis.states_csv = UQdict["states_csv"]
         return UQanalysis
 
 @register_workflow
@@ -604,6 +624,10 @@ class EpistemicAnalysis:
         self.UQ_workflow=UQ_workflow
         self.seed=seed if seed is not None else 42
         self.epistemic_var_to_vals={}
+        self.states_csv=None
+
+    def add_csv_points(self,csv_path):
+        self.states_csv=csv_path
 
     def add_epistemic_variable(self,name,interval):
         if not isinstance(interval,np.ndarray):
@@ -622,17 +646,21 @@ class EpistemicAnalysis:
     def get_states(self):
         ot.RandomGenerator.Reset()
         ot.RandomGenerator.SetSeed(self.seed)
-
+        if self.states_csv is not None:
+            return gen_csv_states(self.states_csv, list(self.epistemic_var_to_vals.keys()))
         return self.UQ_workflow._get_states(self)
 
     def _to_dict(self):
-        return {
+        base_dict = {
             "type":self.__class__.__name__,
             "seed":self.seed,
             "epistemic_variables":{name:interval
                                     for name,interval in self.epistemic_var_to_vals.items()},
             "analysis_workflow":self.UQ_workflow._to_dict(),
         }
+        if self.states_csv is not None:
+            base_dict["states_csv"] = self.states_csv
+        return base_dict
 
     @classmethod
     def _from_dict(cls,epistemic_dict):
@@ -644,6 +672,8 @@ class EpistemicAnalysis:
         epistemic_analysis=cls(workflow,seed)
         for name,interval_data in epistemic_dict["epistemic_variables"].items():
             epistemic_analysis.add_epistemic_variable(name,np.array(interval_data))
+        if "states_csv" in epistemic_dict:
+            epistemic_analysis.states_csv = epistemic_dict["states_csv"]
 
         return epistemic_analysis
 
@@ -691,7 +721,6 @@ class BasicEpistemic:
 
 #--------------------Mixed Analysis Suite-------------------------------------
 class MixedAnalysis:
-    _META_STATE_NAME = "__IVP__STATE__META"
 
     def __init__(self,UQ_workflow,seed=None):
 
@@ -704,21 +733,15 @@ class MixedAnalysis:
         self.seed = seed if seed is not None else 42
         self.aleatory_var_to_dist={}
         self.epistemic_var_to_vals={}
+        self.states_csv=None
+
+    def add_csv_points(self,csv_path):
+        self.states_csv=csv_path
 
     def add_aleatory_variable(self,name,PDFObject):
-        if name == self._META_STATE_NAME:
-            raise ValueError(
-                f"'{self._META_STATE_NAME}' is reserved for IVP internal metadata. "
-                "Choose a different aleatory variable name."
-            )
         self.aleatory_var_to_dist[name]=PDFObject
 
     def add_epistemic_variable(self,name,interval):
-        if name == self._META_STATE_NAME:
-            raise ValueError(
-                f"'{self._META_STATE_NAME}' is reserved for IVP internal metadata. "
-                "Choose a different epistemic variable name."
-            )
         if not isinstance(interval,np.ndarray):
             raise ValueError("Epistemic interval must be a numpy array with shape (2,).")
         if interval.shape != (2,):
@@ -734,12 +757,14 @@ class MixedAnalysis:
     def get_states(self):
         ot.RandomGenerator.Reset()
         ot.RandomGenerator.SetSeed(self.seed)
+        if self.states_csv is not None:
+            all_names=list(self.epistemic_var_to_vals.keys())+list(self.aleatory_var_to_dist.keys())
+            return gen_csv_states(self.states_csv, all_names)
         return self.UQ_workflow._get_states(self)
 
 
     def _to_dict(self):
-
-        return {
+        base_dict={
             "type":self.__class__.__name__,
             "seed":self.seed,
             "aleatory_variables":{name:dist._to_dict()
@@ -748,7 +773,11 @@ class MixedAnalysis:
             "epistemic_variables":{name:interval
                                    for name,interval in self.epistemic_var_to_vals.items()},
             "analysis_workflow":self.UQ_workflow._to_dict(),
+
         }
+        if self.states_csv is not None:
+            base_dict["states_csv"]=self.states_csv
+        return base_dict
 
     @classmethod
     def _from_dict(cls,IVPdict):
@@ -768,13 +797,14 @@ class MixedAnalysis:
         for name,interval_data in IVPdict["epistemic_variables"].items():
             ivp_analysis.add_epistemic_variable(name,np.array(interval_data))
 
+        if "states_csv" in IVPdict:
+            ivp_analysis.states_csv=IVPdict["states_csv"]
+
         return ivp_analysis
 
 
 @register_workflow
 class BasicSOP:
-
-    _META_STATE_NAME = "__IVP__STATE__META"
 
     def __init__(self,num_epistemic_samples,EpistemicSamplingClass,
                num_aleatory_samples,AleatorySamplingClass):
@@ -799,7 +829,6 @@ class BasicSOP:
             epistemic_to_distribution,self.num_epistemic_samples
             )
 
-        epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
         #then generate aleatory inner loop
         all_aleatory_states=np.zeros((self.num_aleatory_samples*epistemic_samples.shape[0],
                                       len(aleatory_to_distribution)))
@@ -833,15 +862,14 @@ class BasicSOP:
             all_aleatory_states[row:row+self.num_aleatory_samples,:]=aleatory_samples
             row+=self.num_aleatory_samples
 
-        all_vars_to_col={self._META_STATE_NAME:0}
+        all_vars_to_col={}
         for name,col in epistemic_var_name_to_col.items():
-            all_vars_to_col[name]=col+1
+            all_vars_to_col[name]=col
 
         for name,col in aleatory_var_name_to_col.items():
-            #account for meta offset
-            all_vars_to_col[name]=col+(len(epistemic_var_name_to_col)+1)
+            all_vars_to_col[name]=col+(len(epistemic_var_name_to_col))
 
-        epistemic_states=np.repeat(epistemic_with_meta,
+        epistemic_states=np.repeat(epistemic_samples,
                                    self.num_aleatory_samples,
                                    axis=0)
         full_states_arr=np.hstack((epistemic_states,all_aleatory_states))
@@ -876,8 +904,6 @@ class BasicSOP:
 @register_workflow
 class BasicMixedIVP:
 
-    _META_STATE_NAME = "__IVP__STATE__META"
-
     def __init__(self,num_epistemic_samples,EpistemicSamplingClass,
                num_aleatory_samples,AleatorySamplingClass):
         self.num_epistemic_samples=num_epistemic_samples
@@ -900,7 +926,6 @@ class BasicMixedIVP:
             epistemic_to_distribution,self.num_epistemic_samples
             )
 
-        epistemic_with_meta=np.hstack((np.arange(epistemic_samples.shape[0])[:,None],epistemic_samples,))
         #then generate aleatory inner loop
         all_aleatory_states=np.zeros((self.num_aleatory_samples*epistemic_samples.shape[0],
                                       len(aleatory_to_distribution)))
@@ -912,15 +937,14 @@ class BasicMixedIVP:
             all_aleatory_states[row:row+self.num_aleatory_samples,:]=aleatory_samples
             row+=self.num_aleatory_samples
 
-        all_vars_to_col={self._META_STATE_NAME:0}
+        all_vars_to_col={}
         for name,col in epistemic_var_name_to_col.items():
-            all_vars_to_col[name]=col+1
+            all_vars_to_col[name]=col
 
         for name,col in aleatory_var_name_to_col.items():
-            #account for meta offset
-            all_vars_to_col[name]=col+(len(epistemic_var_name_to_col)+1)
+            all_vars_to_col[name]=col+(len(epistemic_var_name_to_col))
 
-        epistemic_states=np.repeat(epistemic_with_meta,
+        epistemic_states=np.repeat(epistemic_samples,
                                    self.num_aleatory_samples,
                                    axis=0)
         full_states_arr=np.hstack((epistemic_states,all_aleatory_states))

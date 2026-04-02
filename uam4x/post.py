@@ -776,11 +776,38 @@ class AleatorySurrogate:
         self.new_sample_points = None
         self.new_sample_values = None
         self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
-        self.symbolic_metamodel,self.aleatory_to_sympy_map=self._get_symbolic_metamodel()
         self.post_storage=post_storage
 
 
-    def _get_symbolic_metamodel(self):
+    def get_symbolic_metamodel(self, model_type='physical'):
+        if model_type == 'physical':
+            return self._get_physical_symbolic_metamodel()
+        elif model_type == 'probabalistic':
+            return self._get_probability_symbolic_metamodel()
+        else:
+            raise ValueError(
+                "model_type must be either 'physical' or 'probabalistic'."
+            )
+
+    def _get_probability_symbolic_metamodel(self):
+        result=self._ot_res
+        coeffs=np.array(result.getCoefficients()).reshape(-1)
+        indices=result.getIndices()
+        basis=result.getOrthogonalBasis()
+
+        aleatory_to_sympy_map={}
+        for i,name in enumerate(self.aleatory_var_to_dist.keys()):
+            aleatory_to_sympy_map[name]=sp.symbols(f'x{i}')
+
+        model=0
+        for coeff,ind in zip(coeffs,indices):
+            term=str(basis.build(ind))
+            term=sp.sympify(term)
+            term=coeff*term
+            model+=term
+        return model, aleatory_to_sympy_map
+
+    def _get_physical_symbolic_metamodel(self):
         result=self._ot_res
         coeffs=np.array(result.getCoefficients()).reshape(-1)
         indices=result.getIndices()
@@ -1323,57 +1350,33 @@ class BasicMixedPost:
     def _generate_output_var_data(self,var_name):
         trade_name=self.tradestudy.trade_name
         trade_base=self.tradestudy.study.control.trade_studies[trade_name]
+        out_vals= np.array(self.tradestudy.get_variable(var_name))
         #special case for IVP problems with ad hoc state generation
-        ivp_meta=[]
-        meta_to_epistemic_state={}
         epistemic_vars=list(trade_base.epistemic_var_to_vals.keys())
-        for result in self.tradestudy._results:
-            state_meta=int(result.state["__IVP__STATE__META"])
-            ivp_meta.append(int(state_meta))
-            if state_meta not in meta_to_epistemic_state:
-                epistemic_state={}
-                for epistemic_var in epistemic_vars:
-                    epistemic_state[epistemic_var]=result.state[epistemic_var]
-                meta_to_epistemic_state[state_meta]=epistemic_state
+        epistemic_state_to_inds={}
+        for i,result in enumerate(self.tradestudy._results):
+            epistemic_state=tuple(result.state[epistemic_var] for epistemic_var in epistemic_vars)
+            if epistemic_state not in epistemic_state_to_inds:
+                epistemic_state_to_inds[epistemic_state]=[i]
+            else:
+                epistemic_state_to_inds[epistemic_state].append(i)
 
-        ivp_meta=np.array(ivp_meta)
-
-        u,inv=np.unique(ivp_meta,return_inverse=True)
-        indices_per_value = {
-            val: np.where(inv == i)[0]
-            for i, val in enumerate(u)
-            }
-
-        out_vals=np.array(self.tradestudy.get_variable(var_name),dtype=float)
-        if not np.all(np.isfinite(out_vals)):
-            num_bad=int(np.size(out_vals)-np.count_nonzero(np.isfinite(out_vals)))
-            raise ValueError(
-                f"Found {num_bad} non-finite values for '{var_name}' in IVP results. "
-                "Cannot compute ECDF-based IVP post metrics with NaN/Inf values."
-            )
-        meta_to_cdf={}
-
-        #numbers of columns is the epistemic states
-        num_cols=len(meta_to_epistemic_state)
-        #number of rows is total states/epistemic states
-        if not ivp_meta.shape[0]%num_cols==0:
-            raise ValueError(
-                "IVP result grouping is inconsistent: the total number of states "
-                f"({ivp_meta.shape[0]}) is not divisible by the number of "
-                f"epistemic states ({num_cols})."
-            )
-
-        num_rows=int(ivp_meta.shape[0]/num_cols)
+        num_cols=len(epistemic_state_to_inds.keys())
+        group_sizes = [len(inds) for inds in epistemic_state_to_inds.values()]
+        if len(set(group_sizes)) != 1:
+            raise ValueError("Inconsistent number of aleatory samples per epistemic state.")
+        num_rows = group_sizes[0]
         quantiles_data=np.zeros((num_rows,num_cols))
         probabilities_data=np.zeros((num_rows,num_cols))
-        for epistemic_meta,inds in indices_per_value.items():
+        state_to_cdf={}
+        for i,(epistemic_state,inds) in enumerate(epistemic_state_to_inds.items()):
             vals=out_vals[inds]
             ecdf=stats.ecdf(vals)
-            meta_to_cdf[epistemic_meta]=ecdf
-            quantiles_data[:,epistemic_meta]=ecdf.cdf.quantiles
-            probabilities_data[:,epistemic_meta]=ecdf.cdf.probabilities
+            state_to_cdf[epistemic_state]=ecdf
+            quantiles_data[:,i]=ecdf.cdf.quantiles
+            probabilities_data[:,i]=ecdf.cdf.probabilities
 
-        return meta_to_cdf,quantiles_data,probabilities_data
+        return state_to_cdf,quantiles_data,probabilities_data
 
 
     def plot_pbox(self,var_name,x_axis_title=None,plot_title="",save_dir=None):
@@ -1592,11 +1595,39 @@ class MixedSurrogate:
         self.new_sample_points = None
         self.new_sample_values = None
         self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
-        self.symbolic_metamodel,self.all_to_sympy_map=self._get_symbolic_metamodel()
         self.post_storage=post_storage
 
 
-    def _get_symbolic_metamodel(self):
+    def get_symbolic_metamodel(self,model_type='physical'):
+        if model_type=='physical':
+            return self._get_physical_symbolic_metamodel()
+        elif model_type=='probabalistic':
+            return self._get_probability_symbolic_metamodel()
+        else:
+            raise ValueError(f'h')
+
+    def _get_probability_symbolic_metamodel(self):
+        result=self._ot_res
+        result=self._ot_res
+        coeffs=np.array(result.getCoefficients()).reshape(-1)
+        indices=result.getIndices()
+        basis=result.getOrthogonalBasis()
+
+        #both epistemic and aleatory
+        all_var_to_sympy_map={}
+        for i,name in enumerate(self.all_var_to_dist.keys()):
+            all_var_to_sympy_map[name]=sp.symbols(f'x{i}')
+
+        model=0
+        for coeff,ind in zip(coeffs,indices):
+            term=str(basis.build(ind))
+            term=sp.sympify(term)
+            term=coeff*term
+            model+=term
+
+        return model, all_var_to_sympy_map
+
+    def _get_physical_symbolic_metamodel(self):
         result=self._ot_res
         coeffs=np.array(result.getCoefficients()).reshape(-1)
         indices=result.getIndices()
