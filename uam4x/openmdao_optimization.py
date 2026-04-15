@@ -203,7 +203,7 @@ class Optimization:
                     result._add_template_checksum(path, checksum)
         # add objectives
         problem.model.add_objective(self.state["objective_name"].replace(".", "~"))
-        driver_name = self.state["optimizer"]
+        driver_name = self.state["driver"]
         driver_cls = driver_name_to_driver[driver_name]
         problem.driver = driver_cls()
 

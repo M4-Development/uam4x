@@ -176,7 +176,7 @@ def test_optimization_from_dict_applies_optimizer_options():
         "optimizer": "pyOptSparseDriver",
     }
     opt = Optimization._from_dict(data)
-    assert opt.optimizer == "pyOptSparseDriver"
+    assert opt.driver == "pyOptSparseDriver"
     assert opt._optimizer_options["print_level"] == 0
 
 # -------------------- Failure paths: shared validator branches --------------------
@@ -275,12 +275,12 @@ def test_add_design_var_indices_passthrough():
 
 def test_optimization_setters_and_get_desvar_names():
     opt = Optimization()
-    opt.set_optimizer("pyOptSparseDriver")
+    opt.set_driver("pyOptSparseDriver")
     opt.add_driver_option("maxiter", 25)
     opt.add_optimizer_option("tol", 1e-8)
     opt.add_design_var("x", lower=0.0, upper=1.0)
 
-    assert opt.optimizer == "pyOptSparseDriver"
+    assert opt.driver == "pyOptSparseDriver"
     assert opt._mdao_driver_options["maxiter"] == 25
     assert opt._optimizer_options["tol"] == 1e-8
     assert opt.get_desvar_names() == ["x"]

@@ -38,7 +38,7 @@ class Optimization:
         self.objective_name = ""
         self._mdao_driver_options = {"optimizer": "SLSQP"}
         self._optimizer_options = {}
-        self.optimizer = "ScipyOptimizeDriver"
+        self.driver = "ScipyOptimizeDriver"
 
     def _to_dict(self):
         """Execute to dict.
@@ -56,12 +56,12 @@ class Optimization:
             "objective_name": self.objective_name,
             "driver_options": self._mdao_driver_options,
             "optimizer_options": self._optimizer_options,
-            "optimizer": self.optimizer,
+            "driver": self.driver,
         }
         return save_dict
 
-    def set_optimizer(self, name):
-        """Set optimizer.
+    def set_driver(self, name):
+        """Set driver.
 
         Parameters
         ----------
@@ -69,7 +69,7 @@ class Optimization:
             Identifier used by this operation.
 
         """
-        self.optimizer = name
+        self.driver = name
 
     def add_driver_option(self, name, value):
         """Add driver option.
@@ -142,7 +142,7 @@ class Optimization:
         obj.des_vars = data["des_vars"]
         obj.constraints = data["constraints"]
         obj.objective_name = data["objective_name"]
-        obj.optimizer = data["optimizer"]
+        obj.driver = data["optimizer"]
         if data["driver_options"]:
             for name, value in data["driver_options"].items():
                 obj.add_driver_option(name, value)
