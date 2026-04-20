@@ -111,7 +111,7 @@ def _build_study_and_state(tmp_path, tracked_outputs):
             "analysis.y": {"lower": 0.0, "upper": 10.0, "indices": None}
         },
         "objective_name": "analysis.y",
-        "optimizer": "ScipyOptimizeDriver",
+        "driver": "ScipyOptimizeDriver",
         "driver_options": {"maxiter": 5},
         "optimizer_options": {"tol": 1e-8},
     }

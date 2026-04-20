@@ -97,7 +97,7 @@ def test_to_dict_good():
             'optimizer': 'SLSQP',
         },
         'optimizer_options': {},
-        'optimizer': 'ScipyOptimizeDriver',
+        'driver': 'ScipyOptimizeDriver',
     }
 
 def test_Optimization_from_dict_array_and_scalar_bounds():
