@@ -142,7 +142,7 @@ class Optimization:
         obj.des_vars = data["des_vars"]
         obj.constraints = data["constraints"]
         obj.objective_name = data["objective_name"]
-        obj.driver = data["optimizer"]
+        obj.driver = data["driver"]
         if data["driver_options"]:
             for name, value in data["driver_options"].items():
                 obj.add_driver_option(name, value)

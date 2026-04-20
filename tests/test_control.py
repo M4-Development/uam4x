@@ -119,7 +119,7 @@ def test_Optimization_from_dict_array_and_scalar_bounds():
         "objective_name": "obj",
         "driver_options": {"optimizer": "SLSQP", "maxiter": 200, "tol": 1e-6},
         "optimizer_options": {},
-        "optimizer": "ScipyOptimizeDriver",
+        "driver": "ScipyOptimizeDriver",
     }
 
     opt = Optimization._from_dict(data)
@@ -173,7 +173,7 @@ def test_optimization_from_dict_applies_optimizer_options():
         "objective_name": "obj",
         "driver_options": {"optimizer": "SLSQP"},
         "optimizer_options": {"print_level": 0},
-        "optimizer": "pyOptSparseDriver",
+        "driver": "pyOptSparseDriver",
     }
     opt = Optimization._from_dict(data)
     assert opt.driver == "pyOptSparseDriver"
@@ -560,7 +560,7 @@ def test_Control_from_dict_mixed_trades():
         "objective_name": "obj_sweep",
         "driver_options": {"optimizer": "SLSQP", "maxiter": 200, "tol": 1e-6},
         "optimizer_options": {},
-        "optimizer": "ScipyOptimizeDriver",
+        "driver": "ScipyOptimizeDriver",
     }
 
     # Standalone optimization trade
@@ -573,7 +573,7 @@ def test_Control_from_dict_mixed_trades():
         "objective_name": "obj_opt_only",
         "driver_options": {"optimizer": "SLSQP", "maxiter": 200, "tol": 1e-6},
         "optimizer_options": {},
-        "optimizer": "ScipyOptimizeDriver",
+        "driver": "ScipyOptimizeDriver",
     }
 
     control_dict = {
