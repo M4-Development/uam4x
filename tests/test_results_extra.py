@@ -71,7 +71,8 @@ def test_result_roundtrip_and_equal_states():
     data = r._to_dict()
     rebuilt = Result._from_dict(data)
 
-    assert rebuilt.outputs["y"] == [3.0, 4.0]
+    np.testing.assert_allclose(rebuilt.state["x"], np.array([1.0, 2.0]))
+    np.testing.assert_allclose(rebuilt.outputs["y"], np.array([3.0, 4.0]))
     assert rebuilt.template_hashes["path"] == "abc"
     assert rebuilt.convergence_status is True
     assert r.equal_states(rebuilt)

@@ -406,7 +406,7 @@ class Result:
             Input value for `result_value`.
 
         """
-        self.outputs[result_name] = convert_numpy_to_python(result_value)
+        self.outputs[result_name] = result_value
 
     def _add_template_checksum(self, file_path, checksum):
         """Store one template checksum associated with this result point.
@@ -473,8 +473,30 @@ class Result:
             Reconstructed object instance.
 
         """
-        result = cls(results_dict["input_state"])
-        result.outputs = copy.deepcopy(results_dict.get("outputs", {}))
+
+        #lists are always arrays in our code
+        input_state=copy.deepcopy(results_dict["input_state"])
+        for category,data in results_dict['input_state'].items():
+            if isinstance(data,list):
+                input_state[category]=np.array(data)
+            elif isinstance(data,dict):
+                for var_name,var_value in data.items():
+                    if isinstance(var_value,list):
+                        input_state[category][var_name]=np.array(var_value)
+
+
+
+        result = cls(input_state)
+
+        output_state=copy.deepcopy(results_dict.get("outputs", {}))
+        for var_name,var_value in output_state.items():
+            if isinstance(var_value,list):
+                output_state[var_name]=np.array(var_value)
+            else:
+                output_state[var_name]=var_value
+
+        result.outputs = output_state
+
         result.template_hashes = copy.deepcopy(
             results_dict.get("template_checksums", {})
         )
