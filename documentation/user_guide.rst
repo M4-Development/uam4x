@@ -3,74 +3,25 @@ User Guide
 
 This guide provides step-by-step instructions for using UAM4X.
 
-Getting Started
----------------
 
-Creating Your First Study
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Getting Started: Multi-Objective Optimization Example
+-----------------------------------------------------
 
-A study in UAM4X represents a complete aircraft analysis or optimization problem. Here's how to create one:
+The goal is to do a parameter sweep and optimization of a simple wing
+with varying weighting factors between drag and weight as the objective.
 
-.. code-block:: python
+.. figure:: images/wing_box.png
+    :align: center
 
-   from uam4x.study import Study
-   from uam4x.vehicle import Vehicle
-   from uam4x.subsystems import Wing
-
-   # Create a new study
-   study = Study("My First Study")
-
-   # Create a vehicle
-   vehicle = Vehicle("my_aircraft")
-
-   # Add components
-   wing = Wing("main_wing")
-   wing.set_parameter("span", 10.0)
-   wing.set_parameter("chord", 1.0)
-   vehicle.add_component(wing)
-
-   # Add vehicle to study
-   study.add_vehicle(vehicle)
-
-Working with Subsystems
-~~~~~~~~~~~~~~~~~~~~~~~
-
- Subsystems are the building blocks of aircraft in UAM4X:
-
-.. code-block:: python
-
-   from uam4x.subsystems import Wing, Rotor
-   from uam4x.vehicles import Vehicle
-
-   # Create a wing
-   wing = Wing("main_wing")
-   wing.set_parameter("span", 15.0)
-   wing.set_parameter("chord", 1.2)
-   wing.set_parameter("sweep", 5.0)
-
-   # Create a rotor
-   rotor = Rotor("main_rotor")
-   rotor.set_parameter("diameter", 8.0)
-   rotor.set_parameter("blades", 4)
-
-   # Create an aircraft and add components
-   aircraft = Vehicle("my_aircraft")
-   aircraft.add_component(wing)
-   aircraft.add_component(rotor)
-
-
-Working with Variants, an example problem:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-multi_objective
-^^^^^^^^^^^^^^^
+    Diagram of the simple wing box model used in the multi-objective example.
 
 The ``multi_objective`` example is a complete end-to-end pattern for:
 
 1. Declaring custom subsystems and plugins
 2. Building a model and trade studies
-3. Generating a variant JSON
+3. Generating a model JSON
 4. Running the analysis and reading results
+
 
 First, check out the example repository:
 
@@ -267,13 +218,17 @@ Variant generation in ``__main__``:
 
 .. code-block:: python
 
-   if __name__ == "__main__":
-       demo = [setup_model, setup_solution, setup_tradestudy]
-       framework = Variants(THIS_DIR)
-       framework.add_variant("demo", demo)
-       study = framework.generate_variants()[0]
+    if __name__ == "__main__":
+        # define variants
+        demo = [setup_model, setup_solution, setup_tradestudy]
+        # setup framework
+        framework = Variants(THIS_DIR)
+        framework.add_variant('demo', demo)
+        study = framework.generate_variants()[0]
+        save_path = os.path.join(THIS_DIR, "variants","demo")
+        study_from_json = Study.from_json(save_path)
 
-Step 3: ``run_analysis.py`` (execute and inspect results)
+Step 3: ``run_analysis.py`` (execute trade studies)
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 This script loads the generated variant and runs both trade studies.
@@ -281,23 +236,57 @@ This script loads the generated variant and runs both trade studies.
 .. code-block:: python
 
    if __name__ == "__main__":
-       file = os.path.join(THIS_DIR, "variants", "demo", "data.json")
-       study = Study.from_json(file)
-       engine = Engine(study, os.path.join(THIS_DIR, "variants", "demo", "work"))
+    study_dir=os.path.join(THIS_DIR, "variants", "demo")
+    study = Study.from_json(study_dir)
+    engine = Engine(study, os.path.join(study_dir,"work"))
+    engine.run_tradestudy("sweep",num_processors=10)
+    engine.run_solution()
+    engine.run_tradestudy("optimization_only")
+    study.save_results_to_json(study_dir)
 
-       engine.run_tradestudy("sweep", num_processors=10)
-       engine.run_solution()
-       engine.run_tradestudy("optimization_only")
 
-       study.save_results_to_json(file)
-
+Step 4: ``post_process.py`` (inspect results)
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 Then read outputs from each trade study:
 
 .. code-block:: python
 
-   sweep_ts = study.results.get_tradestudy("sweep")
-   opt_ts = study.results.get_tradestudy("optimization_only")
-   sp_ts = study.results.get_tradestudy("Default State")
+   if __name__ == "__main__":
+        # vsp.StartGUI()
+        study_dir=os.path.join(THIS_DIR, "variants", "demo")
+        study = Study.from_json(study_dir)
+
+        #Sweep trade
+        sweep_ts=study.results.get_tradestudy('sweep')
+        ar=sweep_ts.get_variable("vehicles.multi_objective_vehicle.wing1.aspect_ratio")
+        span=sweep_ts.get_variable("vehicles.multi_objective_vehicle.wing1.span")
+        obj=sweep_ts.get_variable("calc_objective.objective")
+        print(f'Aspect Ratio: {ar}, Span: {span}, Objective: {obj} for sweep trade study.')
+        post=BasicPost(sweep_ts)
+        post.scatter(var1="calc_objective.CD",
+                     var2="calc_objective.wing_weight",
+                     title="Pareto Front Plot of Drag Coefficient vs. Wing Weight", xlabel="Drag Coefficient", ylabel="Wing Weight",save_dir=THIS_DIR)
+
+        #Optimization trade
+        opt_ts=study.results.get_tradestudy('optimization_only')
+        ar_opt=opt_ts.get_variable("vehicles.multi_objective_vehicle.wing1.aspect_ratio")
+        span_opt=opt_ts.get_variable("vehicles.multi_objective_vehicle.wing1.span")
+        obj_opt=opt_ts.get_variable("calc_objective.objective")
+        print(f'Aspect Ratio: {ar_opt}, Span: {span_opt}, Objective: {obj_opt} for optimization trade study.')
+
+        # single point trade
+        sp_ts=study.results.get_tradestudy('Default State')
+        ar_sp=sp_ts.get_variable("vehicles.multi_objective_vehicle.wing1.aspect_ratio")
+        span_sp=sp_ts.get_variable("vehicles.multi_objective_vehicle.wing1.span")
+        obj_sp=sp_ts.get_variable("calc_objective.objective")
+        print(f'Aspect Ratio: {ar_sp}, Span: {span_sp}, Objective: {obj_sp} for single point trade study.')
+
+You should get a plot of the pareto front that looks like:
+
+.. figure:: /images/pareto_front.png
+   :align: center
+
+   Pareto front plot of drag coefficient vs. wing weight for the parameter sweep trade study.
 
 GUI Usage
 ---------

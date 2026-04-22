@@ -7,6 +7,7 @@ Welcome to UAM4X, the Urban Air Mobility 4X Framework for aircraft design and op
    :maxdepth: 2
    :caption: Contents:
 
+   basic_overview
    installation
    user_guide
    api_reference

@@ -4,7 +4,7 @@ Installation
 Prerequisites
 -------------
 
-UAM4X requires Python 3.8 or higher. The following packages are required
+UAM4X requires Python 3.11 or higher. The following packages are required
 (as defined in ``setup.py``):
 
 * ``numpy>=2.2.6``
@@ -19,16 +19,24 @@ UAM4X requires Python 3.8 or higher. The following packages are required
 * ``openturns==1.26.0``
 * ``scipy>=1.16.1``
 * ``tzdata==2025.2``
+* ``sympy==1.14.0``
+* ``pandas==2.3.1``
 
-Installation
-------------
+Installation Procedure
+-----------------------
 
 1. Clone the repository:
 
    .. code-block:: bash
 
+      # Using https:
       git clone https://github.com/M4-Development/uam4x.git
       cd uam4x
+
+      # Using SSH:
+      git clone git@github.com:M4-Development/uam4x.git
+      cd uam4x
+
 
 2. Install Anaconda (if needed) and create a conda environment (recommended):
 
@@ -36,7 +44,7 @@ Installation
 
    .. code-block:: bash
 
-      conda create -n uam4x python=3.12
+      conda create -n uam4x python=3.11
       conda activate uam4x
 
 3. Install UAM4X in development mode (this installs all required packages from ``setup.py``):
@@ -99,10 +107,14 @@ Common installation issues:
 
       conda install wxpython
 
-2. **OpenMDAO conflicts**: Ensure you're using a compatible version:
+2. **wxPython installation help Linux**: Ensure you have the necessary system dependencies:
+
+   Follow instructions at: https://wxpython.org/blog/2017-08-17-builds-for-linux-with-pip/index.html
+
+3. **OpenMDAO conflicts**: Ensure you're using a compatible version:
 
    .. code-block:: bash
 
       pip install openmdao>=3.39.0
 
-3. **Import errors**: Make sure the uam4x package is in your Python path.
+4. **Import errors**: Make sure the uam4x package is in your Python path.
