@@ -18,17 +18,18 @@ distribution_name_to_class_registry = {}
 
 
 def register_workflow(Workflow):
-    """Register a UQ workflow class in the global workflow registry.
+    """Register a UQ workflow class.
 
     Parameters
     ----------
-    Workflow : Any
-        Workflow class to register.
+    Workflow : type
+        Workflow class to add to the global workflow registry.
 
     Returns
     -------
-    Any
-        The registered class (decorator passthrough).
+    type
+        The registered workflow class. This allows the function to be used as a
+        class decorator.
 
     """
     workflow_name_to_class_registry[Workflow.__name__] = Workflow
@@ -36,17 +37,18 @@ def register_workflow(Workflow):
 
 
 def register_sampler(Sampler):
-    """Register a sampler class in the global sampler registry.
+    """Register a sampler class.
 
     Parameters
     ----------
-    Sampler : Any
-        Sampler class to register.
+    Sampler : type
+        Sampler class to add to the global sampler registry.
 
     Returns
     -------
-    Any
-        The registered class (decorator passthrough).
+    type
+        The registered sampler class. This allows the function to be used as a
+        class decorator.
 
     """
     sampler_name_to_class_registry[Sampler.__name__] = Sampler
@@ -54,49 +56,81 @@ def register_sampler(Sampler):
 
 
 def register_distribution(Distribution):
-    """Register a distribution class in the global distribution registry.
+    """Register a distribution class.
 
     Parameters
     ----------
-    Distribution : Any
-        Distribution class to register.
+    Distribution : type
+        Distribution class to add to the global distribution registry.
 
     Returns
     -------
-    Any
-        The registered class (decorator passthrough).
+    type
+        The registered distribution class. This allows the function to be used
+        as a class decorator.
 
     """
     distribution_name_to_class_registry[Distribution.__name__] = Distribution
     return Distribution
 
 def gen_csv_states(csv_path,col_order):
+    """Load uncertainty states from a CSV file.
+
+    Parameters
+    ----------
+    csv_path : str or path-like
+        Path to a CSV file containing one column for each uncertainty variable.
+    col_order : sequence of str
+        Column names to select from the CSV file and the order in which they
+        should appear in each returned state dictionary.
+
+    Returns
+    -------
+    list of dict
+        State dictionaries generated from the selected CSV columns. Each
+        dictionary maps variable names to the corresponding row values.
+
+    """
     df=pd.read_csv(csv_path)
     df=df[col_order]
     return df.to_dict(orient='records')
 
 #--------------------Aleatory Suite-------------------------------------
 class AleatoryAnalysis:
-    # MIGHT CHANGE THIS TO ALEATORYANALYSIS,
-    # THEN MAYBE HAVE A MIXED ANALYSIS
-    # AND PURE EPISTEMIC ALL ESSENTIALLY AT PARAMETERSWEEP/OPTIMIZATION level
-    """Represent the uqanalysis component in the UAM4X workflow.
+    """Configure an aleatory uncertainty analysis.
+
+    An aleatory analysis maps UAM4X state variable names to probability
+    distributions and uses a workflow object to generate sampled states. The
+    generated states can be passed through UAM4X trades or serialized with the
+    surrounding control workflow.
+
+    Parameters
+    ----------
+    UQ_workflow : object
+        Workflow object used to generate aleatory states. The object must
+        provide a ``_get_states`` method and may provide ``_check_analysis`` and
+        ``_to_dict`` methods.
+    seed : int, optional
+        Random seed used by OpenTURNS sample generation. If omitted, the seed
+        defaults to 42.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    Use :meth:`add_aleatory_variable` to add random variables before calling
+    :meth:`get_states`.
 
     """
 
     def __init__(self, UQ_workflow, seed=None):
-        """Initialize object state and configuration.
+        """Initialize an aleatory analysis.
 
         Parameters
         ----------
-        UQ_workflow : Any
-            Workflow object that generates uncertainty states.
-        seed : Any, optional
-            Random seed used for OpenTurns sample generation.
+        UQ_workflow : object
+            Workflow object used to generate aleatory states.
+        seed : int, optional
+            Random seed used by OpenTURNS sample generation. If omitted, the seed
+            defaults to 42.
 
         """
         self.UQ_workflow = UQ_workflow
@@ -105,40 +139,68 @@ class AleatoryAnalysis:
         self.states_csv=None
 
     def add_csv_points(self,csv_path):
+        """Use state points from a CSV file instead of sampling a workflow.
+
+        Parameters
+        ----------
+        csv_path : str or path-like
+            Path to a CSV file containing one column for each registered
+            aleatory variable.
+
+        Notes
+        -----
+        When ``states_csv`` is set, :meth:`get_states` reads state dictionaries
+        from this file using the order of variables added with
+        :meth:`add_aleatory_variable`.
+
+        """
         self.states_csv=csv_path
 
 
     def _check_analysis(self):
-        """Validate that workflow settings are consistent with requested analysis.
+        """Validate this analysis with the configured workflow.
 
         Notes
         -----
-        This method performs class-internal setup or validation logic.
+        If the workflow defines ``_check_analysis``, that method is called with
+        this analysis object. Workflows can use this hook to validate sample
+        counts, polynomial order, dimensionality, or other workflow-specific
+        requirements.
 
         """
         if hasattr(self.UQ_workflow, "_check_analysis"):
             self.UQ_workflow._check_analysis(self)
 
     def add_aleatory_variable(self, var_name, PDFObject):
-        """Associate one aleatory variable name with a probability distribution.
+        """Add an aleatory variable to the analysis.
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        PDFObject : Any
-            Distribution object associated with one aleatory variable.
+        var_name : str
+            Name of the UAM4X state variable to sample. Nested state variables
+            can be referenced with dotted paths.
+        PDFObject : object
+            Distribution object used to sample ``var_name``. The object must
+            provide ``_OT_Dist`` and ``_to_dict`` methods.
 
         """
         self.aleatory_var_to_dist[var_name] = PDFObject
 
     def get_states(self):
-        """Generate state dictionaries for all uncertainty samples in this workflow.
+        """Generate aleatory state dictionaries.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of dict
+            State dictionaries for the configured aleatory variables. Each
+            dictionary maps variable names to sampled values. If CSV points were
+            configured with :meth:`add_csv_points`, the states are read from
+            that CSV file instead of generated by the workflow.
+
+        Notes
+        -----
+        The OpenTURNS random generator is reset and seeded before states are
+        generated.
 
         """
         ot.RandomGenerator.Reset()
@@ -149,12 +211,14 @@ class AleatoryAnalysis:
         return self.UQ_workflow._get_states(self.aleatory_var_to_dist)
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the analysis to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the analysis type, random
+            seed, aleatory variables, workflow configuration, and optional CSV
+            state file.
 
         """
         base_dict = {
@@ -172,19 +236,19 @@ class AleatoryAnalysis:
 
     @classmethod
     def _from_dict(cls, UQdict):
-
-        # load in the workflow from dictionary
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct an aleatory analysis from a dictionary.
 
         Parameters
         ----------
-        UQdict : Any
-            Serialized uncertainty-analysis dictionary.
+        UQdict : dict
+            Serialized aleatory analysis dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        AleatoryAnalysis
+            Reconstructed aleatory analysis with workflow, seed, variables, and
+            optional CSV state file restored.
 
         """
         workflow_dict = UQdict["analysis_workflow"]
@@ -207,41 +271,50 @@ class AleatoryAnalysis:
 
 @register_workflow
 class BasicAleatory:
-    """Represent the basicstats component in the UAM4X workflow.
+    """Generate aleatory states with a sampling class.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    This workflow samples each registered aleatory distribution and returns one
+    UAM4X state dictionary per sample.
+
+    Parameters
+    ----------
+    num_samples : int
+        Number of aleatory samples to generate.
+    SamplingClass : type
+        Sampler class used to generate samples. The class must provide a
+        ``sample`` method accepting a variable-to-distribution mapping and a
+        sample count.
+
 
     """
 
     def __init__(self, num_samples, SamplingClass):
-        """Initialize object state and configuration.
+        """Initialize a basic aleatory workflow.
 
         Parameters
         ----------
-        num_samples : Any
+        num_samples : int
             Number of samples to generate.
-        SamplingClass : Any
-            Sampler class used to generate uncertainty samples.
+        SamplingClass : type
+            Sampler class used to generate samples.
 
         """
         self.num_samples = num_samples
         self.SamplingClass = SamplingClass
 
     def _get_states(self, aleatory_to_distribution):
-        # states should be a list of dictionaries
-        """Generate analysis state dictionaries from configured distributions.
+        """Generate sampled state dictionaries.
 
         Parameters
         ----------
-        aleatory_to_distribution : Any
-            Mapping from aleatory variable names to distributions.
+        aleatory_to_distribution : dict
+            Mapping from aleatory variable names to distribution objects.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        list of dict
+            State dictionaries generated from the sampled aleatory variables.
+            Each dictionary maps variable names to one sampled value.
 
         """
         sample_points, var_name_to_col = self.SamplingClass.sample(
@@ -256,12 +329,13 @@ class BasicAleatory:
         return states
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the workflow to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the workflow name, sampler
+            name, and number of samples.
 
         """
         return {
@@ -272,17 +346,18 @@ class BasicAleatory:
 
     @classmethod
     def _from_dict(cls, workflow_dict):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a basic aleatory workflow from a dictionary.
 
         Parameters
         ----------
-        workflow_dict : Any
-            Serialized workflow dictionary.
+        workflow_dict : dict
+            Serialized workflow dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        BasicAleatory
+            Reconstructed basic aleatory workflow.
 
         """
         sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
@@ -292,25 +367,39 @@ class BasicAleatory:
 
 @register_workflow
 class RegressionPCE(BasicAleatory):
-    """Represent the regressionpce component in the UAM4X workflow.
+    """Generate samples for a regression polynomial chaos expansion.
+
+    This workflow uses a sampling class to generate aleatory states for fitting
+    a polynomial chaos expansion by regression.
+
+    Parameters
+    ----------
+    num_samples : int
+        Number of aleatory samples to generate.
+    SamplingClass : type
+        Sampler class used to generate samples.
+    poly_order : int
+        Total polynomial order of the polynomial chaos basis.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    The workflow checks that the number of samples is at least the number of
+    basis terms required for the requested polynomial order and number of
+    aleatory variables.
 
     """
 
     def __init__(self, num_samples, SamplingClass, poly_order):
-        """Initialize object state and configuration.
+        """Initialize a regression PCE workflow.
 
         Parameters
         ----------
-        num_samples : Any
-            Number of samples to generate.
-        SamplingClass : Any
-            Sampler class used to generate uncertainty samples.
-        poly_order : Any
-            Polynomial order used for chaos expansions.
+        num_samples : int
+            Number of aleatory samples to generate.
+        SamplingClass : type
+            Sampler class used to generate samples.
+        poly_order : int
+            Total polynomial order of the polynomial chaos basis.
 
         """
         super().__init__(num_samples, SamplingClass)
@@ -320,12 +409,26 @@ class RegressionPCE(BasicAleatory):
         # check order and number of aleatory vs. num samples
         # from XIU Polynomial expansion, dimension of space is C(order+number of random vars,number of random vars)
         # should oversample 2-3x
-        """Validate that workflow settings are consistent with requested analysis.
+        """Validate the regression PCE sample count.
 
         Parameters
         ----------
-        UQAnalysis : Any
-            Input value for `UQAnalysis`.
+        UQAnalysis : AleatoryAnalysis
+            Analysis object containing the aleatory variables used to determine
+            the polynomial basis size.
+
+        Raises
+        ------
+        ValueError
+            If ``num_samples`` is smaller than the number of required
+            polynomial basis terms.
+
+        Notes
+        -----
+        The number of basis terms is computed as
+        ``comb(poly_order + num_aleatory, poly_order)``. A warning is logged
+        when ``num_samples`` is less than three times the number of required
+        basis terms.
 
         """
         num_aleatory = len(UQAnalysis.aleatory_var_to_dist)
@@ -343,12 +446,13 @@ class RegressionPCE(BasicAleatory):
             )
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the workflow to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the workflow name, sampler
+            name, number of samples, and polynomial order.
 
         """
         return {
@@ -360,17 +464,18 @@ class RegressionPCE(BasicAleatory):
 
     @classmethod
     def _from_dict(cls, workflow_dict):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a regression PCE workflow from a dictionary.
 
         Parameters
         ----------
-        workflow_dict : Any
-            Serialized workflow dictionary.
+        workflow_dict : dict
+            Serialized workflow dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        RegressionPCE
+            Reconstructed regression PCE workflow.
 
         """
         sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
@@ -381,32 +486,47 @@ class RegressionPCE(BasicAleatory):
 
 @register_workflow
 class GaussQuadraturePCE:
-    """Represent the gaussquadraturepce component in the UAM4X workflow.
+    """Generate quadrature states for a polynomial chaos expansion.
+
+    This workflow builds a tensor-product Gauss quadrature rule from the
+    registered aleatory distributions. Each generated state includes sampled
+    variable values and a quadrature ``weight``.
+
+    Parameters
+    ----------
+    poly_order : int
+        Polynomial order of the polynomial chaos expansion. The quadrature rule
+        uses ``poly_order + 1`` points per aleatory variable.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
+    This workflow is intended for low-dimensional aleatory analyses. Validation
+    raises an error when more than five aleatory variables are configured.
     """
 
     def __init__(self, poly_order):
-        """Initialize object state and configuration.
+        """Initialize a Gauss quadrature PCE workflow.
 
         Parameters
         ----------
-        poly_order : Any
-            Polynomial order used for chaos expansions.
+        poly_order : int
+            Polynomial order of the polynomial chaos expansion.
 
         """
         self.poly_order = poly_order
 
     def _check_analysis(self, UQAnalysis):
-        """Validate that workflow settings are consistent with requested analysis.
+        """Validate the quadrature workflow dimensionality.
 
         Parameters
         ----------
-        UQAnalysis : Any
-            Input value for `UQAnalysis`.
+        UQAnalysis : AleatoryAnalysis
+            Analysis object containing the aleatory variables to sample.
+
+        Raises
+        ------
+        ValueError
+            If more than five aleatory variables are configured.
 
         """
         num_aleatory = len(UQAnalysis.aleatory_var_to_dist)
@@ -416,17 +536,24 @@ class GaussQuadraturePCE:
             )
 
     def _get_states(self, aleatory_to_distribution):
-        """Generate analysis state dictionaries from configured distributions.
+        """Generate weighted quadrature state dictionaries.
 
         Parameters
         ----------
-        aleatory_to_distribution : Any
-            Mapping from aleatory variable names to distributions.
+        aleatory_to_distribution : dict
+            Mapping from aleatory variable names to distribution objects.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        list of dict
+            State dictionaries generated from the quadrature nodes. Each
+            dictionary maps variable names to quadrature node values and
+            includes a ``weight`` entry.
+
+        Notes
+        -----
+        For ``k`` aleatory variables, this workflow generates a full tensor grid
+        with ``(poly_order + 1) ** k`` states.
 
         """
         num_aleatory = len(aleatory_to_distribution)
@@ -461,29 +588,31 @@ class GaussQuadraturePCE:
         return states
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the workflow to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the workflow name and
+            polynomial order.
 
         """
         return {"name": self.__class__.__name__, "polynomial_order": self.poly_order}
 
     @classmethod
     def _from_dict(cls, workflow_dict):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a Gauss quadrature PCE workflow from a dictionary.
 
         Parameters
         ----------
-        workflow_dict : Any
-            Serialized workflow dictionary.
+        workflow_dict : dict
+            Serialized workflow dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        GaussQuadraturePCE
+            Reconstructed Gauss quadrature PCE workflow.
 
         """
         poly_order = workflow_dict["polynomial_order"]
@@ -492,42 +621,70 @@ class GaussQuadraturePCE:
 
 @register_workflow
 class SobolSensitivity(BasicAleatory):
-    """Represent the sobolsensitivity component in the UAM4X workflow.
+    """Generate samples for Sobol sensitivity analysis.
+
+    This workflow creates the structured sample design required to estimate
+    Sobol sensitivity indices for the configured aleatory variables.
+
+    Parameters
+    ----------
+    num_samples : int
+        Base sample size used by the Sobol experiment.
+    SamplingClass : type
+        Sampler class used by OpenTURNS for the Sobol experiment.
+    computeSecondOrder : bool, optional
+        Whether to generate samples for second-order Sobol indices. The default
+        is False.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    The total number of generated states depends on the number of aleatory
+    variables and whether second-order indices are requested.
 
     """
 
     def __init__(self, num_samples, SamplingClass, computeSecondOrder: bool = False):
-        """Initialize object state and configuration.
+        """Initialize a Sobol sensitivity workflow.
 
         Parameters
         ----------
-        num_samples : Any
-            Number of samples to generate.
-        SamplingClass : Any
-            Sampler class used to generate uncertainty samples.
+        num_samples : int
+            Base sample size used by the Sobol experiment.
+        SamplingClass : type
+            Sampler class used by OpenTURNS for the Sobol experiment.
         computeSecondOrder : bool, optional
-            Whether second-order Sobol terms are generated.
+            Whether to generate samples for second-order Sobol indices. The
+            default is False.
 
         """
         super().__init__(num_samples, SamplingClass)
         self.computeSecondOrder = computeSecondOrder
 
     def _get_states(self, aleatory_to_distribution):
-        """Generate analysis state dictionaries from configured distributions.
+        """Generate Sobol experiment state dictionaries.
 
         Parameters
         ----------
-        aleatory_to_distribution : Any
-            Mapping from aleatory variable names to distributions.
+        aleatory_to_distribution : dict
+            Mapping from aleatory variable names to distribution objects.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        list of dict
+            State dictionaries generated from the Sobol experiment design. Each
+            dictionary maps variable names to sampled values.
+
+        Raises
+        ------
+        ValueError
+            If OpenTURNS returns an unexpected number of experiment rows.
+
+        Notes
+        -----
+        If second-order indices are not requested, the experiment generates
+        ``num_samples * (2 + k)`` states for ``k`` aleatory variables. With
+        second-order indices and ``k != 2``, it generates
+        ``num_samples * (2 + 2 * k)`` states.
 
         """
         ot.ResourceMap.Set(
@@ -577,12 +734,13 @@ class SobolSensitivity(BasicAleatory):
         return states
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the workflow to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the workflow name, sampler
+            name, number of samples, and second-order Sobol setting.
 
         """
         return {
@@ -594,17 +752,18 @@ class SobolSensitivity(BasicAleatory):
 
     @classmethod
     def _from_dict(cls, workflow_dict):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a Sobol sensitivity workflow from a dictionary.
 
         Parameters
         ----------
-        workflow_dict : Any
-            Serialized workflow dictionary.
+        workflow_dict : dict
+            Serialized workflow dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        SobolSensitivity
+            Reconstructed Sobol sensitivity workflow.
 
         """
         sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
@@ -620,16 +779,81 @@ class SobolSensitivity(BasicAleatory):
 
 #--------------------Epistemic Suite-------------------------------------
 class EpistemicAnalysis:
+    """Configure an epistemic uncertainty analysis.
+
+    An epistemic analysis maps UAM4X state variable names to bounded intervals
+    and uses a workflow object to generate state dictionaries from those
+    intervals.
+
+    Parameters
+    ----------
+    UQ_workflow : object
+        Workflow object used to generate epistemic states.
+    seed : int, optional
+        Random seed used by OpenTURNS sample generation. If omitted, the seed
+        defaults to 42.
+
+    Notes
+    -----
+    Epistemic intervals must be one-dimensional NumPy arrays with shape ``(2,)``
+    and values ``[low, high]``.
+
+    """
+
     def __init__(self,UQ_workflow,seed=None):
+        """Initialize an epistemic analysis.
+
+        Parameters
+        ----------
+        UQ_workflow : object
+            Workflow object used to generate epistemic states.
+        seed : int, optional
+            Random seed used by OpenTURNS sample generation. If omitted, the
+            seed defaults to 42.
+
+        """
         self.UQ_workflow=UQ_workflow
         self.seed=seed if seed is not None else 42
         self.epistemic_var_to_vals={}
         self.states_csv=None
 
     def add_csv_points(self,csv_path):
+        """Use state points from a CSV file instead of sampling a workflow.
+
+        Parameters
+        ----------
+        csv_path : str or path-like
+            Path to a CSV file containing one column for each registered
+            epistemic variable.
+
+        Notes
+        -----
+        When ``states_csv`` is set, :meth:`get_states` reads state dictionaries
+        from this file using the order of variables added with
+        :meth:`add_epistemic_variable`.
+
+        """
         self.states_csv=csv_path
 
     def add_epistemic_variable(self,name,interval):
+        """Add an epistemic variable to the analysis.
+
+        Parameters
+        ----------
+        name : str
+            Name of the UAM4X state variable. Nested state variables can be
+            referenced with dotted paths.
+        interval : ndarray
+            One-dimensional NumPy array with shape ``(2,)`` containing the
+            lower and upper bounds as ``[low, high]``.
+
+        Raises
+        ------
+        ValueError
+            If ``interval`` is not a NumPy array, does not have shape ``(2,)``,
+            contains nonnumeric or nonfinite entries, or has ``low > high``.
+
+        """
         if not isinstance(interval,np.ndarray):
             raise ValueError("Epistemic interval must be a numpy array with shape (2,).")
         if interval.shape != (2,):
@@ -644,6 +868,22 @@ class EpistemicAnalysis:
         self.epistemic_var_to_vals[name]=interval
 
     def get_states(self):
+        """Generate epistemic state dictionaries.
+
+        Returns
+        -------
+        list of dict
+            State dictionaries for the configured epistemic variables. Each
+            dictionary maps variable names to sampled values. If CSV points were
+            configured with :meth:`add_csv_points`, the states are read from
+            that CSV file instead of generated by the workflow.
+
+        Notes
+        -----
+        The OpenTURNS random generator is reset and seeded before states are
+        generated.
+
+        """
         ot.RandomGenerator.Reset()
         ot.RandomGenerator.SetSeed(self.seed)
         if self.states_csv is not None:
@@ -651,6 +891,16 @@ class EpistemicAnalysis:
         return self.UQ_workflow._get_states(self)
 
     def _to_dict(self):
+        """Serialize the analysis to a dictionary.
+
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary containing the analysis type, random
+            seed, epistemic variables, workflow configuration, and optional CSV
+            state file.
+
+        """
         base_dict = {
             "type":self.__class__.__name__,
             "seed":self.seed,
@@ -664,6 +914,21 @@ class EpistemicAnalysis:
 
     @classmethod
     def _from_dict(cls,epistemic_dict):
+        """Reconstruct an epistemic analysis from a dictionary.
+
+        Parameters
+        ----------
+        epistemic_dict : dict
+            Serialized epistemic analysis dictionary, typically produced by
+            :meth:`_to_dict`.
+
+        Returns
+        -------
+        EpistemicAnalysis
+            Reconstructed epistemic analysis with workflow, seed, variables,
+            and optional CSV state file restored.
+
+        """
         seed=epistemic_dict['seed']
         workflow_dict=epistemic_dict['analysis_workflow']
         workflow=workflow_name_to_class_registry[workflow_dict["name"]]._from_dict(
@@ -679,11 +944,55 @@ class EpistemicAnalysis:
 
 @register_workflow
 class BasicEpistemic:
+    """Generate epistemic states with a sampling class.
+
+    This workflow treats each epistemic interval as a uniform distribution over
+    its bounds, samples those distributions, and returns one UAM4X state
+    dictionary per sample.
+
+    Parameters
+    ----------
+    num_samples : int
+        Number of epistemic samples to generate.
+    SamplingClass : type
+        Sampler class used to generate samples.
+
+    """
+
     def __init__(self,num_samples,SamplingClass):
+        """Initialize a basic epistemic workflow.
+
+        Parameters
+        ----------
+        num_samples : int
+            Number of epistemic samples to generate.
+        SamplingClass : type
+            Sampler class used to generate samples.
+
+        """
         self.num_samples=num_samples
         self.SamplingClass=SamplingClass
 
     def _get_states(self,EpistemicAnalysisObj):
+        """Generate sampled epistemic state dictionaries.
+
+        Parameters
+        ----------
+        EpistemicAnalysisObj : EpistemicAnalysis
+            Analysis object containing the epistemic variable intervals.
+
+        Returns
+        -------
+        list of dict
+            State dictionaries generated from sampled epistemic intervals. Each
+            dictionary maps variable names to one sampled value.
+
+        Notes
+        -----
+        Each epistemic interval is sampled as a uniform distribution over its
+        lower and upper bounds.
+
+        """
 
         epistemic_to_vals=EpistemicAnalysisObj.epistemic_var_to_vals
 
@@ -707,6 +1016,15 @@ class BasicEpistemic:
         return all_states
 
     def _to_dict(self):
+        """Serialize the workflow to a dictionary.
+
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary containing the workflow name, sampler
+            name, and number of samples.
+
+        """
         return {
             "name":self.__class__.__name__,
             "sampler": self.SamplingClass.__name__,
@@ -715,14 +1033,70 @@ class BasicEpistemic:
 
     @classmethod
     def _from_dict(cls,workflow_dict):
+        """Reconstruct a basic epistemic workflow from a dictionary.
+
+        Parameters
+        ----------
+        workflow_dict : dict
+            Serialized workflow dictionary, typically produced by
+            :meth:`_to_dict`.
+
+        Returns
+        -------
+        BasicEpistemic
+            Reconstructed basic epistemic workflow.
+
+        """
         sampler=sampler_name_to_class_registry[workflow_dict["sampler"]]
         num_samples=workflow_dict['num_samples']
         return cls(num_samples,sampler)
 
 #--------------------Mixed Analysis Suite-------------------------------------
 class MixedAnalysis:
+    """Configure a mixed aleatory-epistemic uncertainty analysis.
+
+    A mixed analysis combines aleatory variables described by probability
+    distributions with epistemic variables described by bounded intervals. The
+    configured mixed workflow determines how those variables are sampled and
+    combined into UAM4X state dictionaries.
+
+    Parameters
+    ----------
+    UQ_workflow : BasicMixedIVP, BasicSOP, or MixedRegressionPCE
+        Mixed workflow object used to generate states.
+    seed : int, optional
+        Random seed used by OpenTURNS sample generation. If omitted, the seed
+        defaults to 42.
+
+    Raises
+    ------
+    ValueError
+        If ``UQ_workflow`` is not a supported mixed workflow type.
+
+    Notes
+    -----
+    Epistemic intervals must be one-dimensional NumPy arrays with shape ``(2,)``
+    and values ``[low, high]``.
+
+    """
 
     def __init__(self,UQ_workflow,seed=None):
+        """Initialize a mixed uncertainty analysis.
+
+        Parameters
+        ----------
+        UQ_workflow : BasicMixedIVP, BasicSOP, or MixedRegressionPCE
+            Mixed workflow object used to generate states.
+        seed : int, optional
+            Random seed used by OpenTURNS sample generation. If omitted, the
+            seed defaults to 42.
+
+        Raises
+        ------
+        ValueError
+            If ``UQ_workflow`` is not a supported mixed workflow type.
+
+        """
 
         if not isinstance(UQ_workflow,(BasicMixedIVP,BasicSOP,MixedRegressionPCE)):
             raise ValueError(
@@ -736,12 +1110,57 @@ class MixedAnalysis:
         self.states_csv=None
 
     def add_csv_points(self,csv_path):
+        """Use state points from a CSV file instead of sampling a workflow.
+
+        Parameters
+        ----------
+        csv_path : str or path-like
+            Path to a CSV file containing one column for each registered
+            epistemic and aleatory variable.
+
+        Notes
+        -----
+        When ``states_csv`` is set, :meth:`get_states` reads state dictionaries
+        from this file using the order of epistemic variables followed by the
+        order of aleatory variables.
+
+        """
         self.states_csv=csv_path
 
     def add_aleatory_variable(self,name,PDFObject):
+        """Add an aleatory variable to the mixed analysis.
+
+        Parameters
+        ----------
+        name : str
+            Name of the UAM4X state variable to sample. Nested state variables
+            can be referenced with dotted paths.
+        PDFObject : object
+            Distribution object used to sample ``name``. The object must
+            provide ``_OT_Dist`` and ``_to_dict`` methods.
+
+        """
         self.aleatory_var_to_dist[name]=PDFObject
 
     def add_epistemic_variable(self,name,interval):
+        """Add an epistemic variable to the mixed analysis.
+
+        Parameters
+        ----------
+        name : str
+            Name of the UAM4X state variable. Nested state variables can be
+            referenced with dotted paths.
+        interval : ndarray
+            One-dimensional NumPy array with shape ``(2,)`` containing the
+            lower and upper bounds as ``[low, high]``.
+
+        Raises
+        ------
+        ValueError
+            If ``interval`` is not a NumPy array, does not have shape ``(2,)``,
+            contains nonnumeric or nonfinite entries, or has ``low > high``.
+
+        """
         if not isinstance(interval,np.ndarray):
             raise ValueError("Epistemic interval must be a numpy array with shape (2,).")
         if interval.shape != (2,):
@@ -755,6 +1174,22 @@ class MixedAnalysis:
         self.epistemic_var_to_vals[name]=interval
 
     def get_states(self):
+        """Generate mixed uncertainty state dictionaries.
+
+        Returns
+        -------
+        list of dict
+            State dictionaries for the configured epistemic and aleatory
+            variables. If CSV points were configured with
+            :meth:`add_csv_points`, the states are read from that CSV file
+            instead of generated by the workflow.
+
+        Notes
+        -----
+        The OpenTURNS random generator is reset and seeded before states are
+        generated.
+
+        """
         ot.RandomGenerator.Reset()
         ot.RandomGenerator.SetSeed(self.seed)
         if self.states_csv is not None:
@@ -764,6 +1199,16 @@ class MixedAnalysis:
 
 
     def _to_dict(self):
+        """Serialize the analysis to a dictionary.
+
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary containing the analysis type, random
+            seed, aleatory variables, epistemic variables, workflow
+            configuration, and optional CSV state file.
+
+        """
         base_dict={
             "type":self.__class__.__name__,
             "seed":self.seed,
@@ -781,6 +1226,21 @@ class MixedAnalysis:
 
     @classmethod
     def _from_dict(cls,IVPdict):
+        """Reconstruct a mixed analysis from a dictionary.
+
+        Parameters
+        ----------
+        IVPdict : dict
+            Serialized mixed analysis dictionary, typically produced by
+            :meth:`_to_dict`.
+
+        Returns
+        -------
+        MixedAnalysis
+            Reconstructed mixed analysis with workflow, seed, variables, and
+            optional CSV state file restored.
+
+        """
         seed = IVPdict["seed"]
         workflow_dict = IVPdict["analysis_workflow"]
         workflow = workflow_name_to_class_registry[workflow_dict["name"]]._from_dict(
@@ -805,15 +1265,77 @@ class MixedAnalysis:
 
 @register_workflow
 class BasicSOP:
+    """Generate nested samples for second-order probability analysis.
+
+    This workflow samples epistemic variables in an outer loop and aleatory
+    variables in an inner loop. Epistemic variables are interpreted as
+    uncertain parameters of aleatory distributions.
+
+    Parameters
+    ----------
+    num_epistemic_samples : int
+        Number of outer-loop epistemic samples to generate.
+    EpistemicSamplingClass : type
+        Sampler class used to sample epistemic intervals.
+    num_aleatory_samples : int
+        Number of inner-loop aleatory samples to generate for each epistemic
+        sample.
+    AleatorySamplingClass : type
+        Sampler class used to sample aleatory distributions.
+
+    Notes
+    -----
+    Epistemic variable names are expected to identify distribution parameters
+    using dotted names, where the final component is the parameter name and the
+    preceding components identify the aleatory variable.
+
+    """
 
     def __init__(self,num_epistemic_samples,EpistemicSamplingClass,
                num_aleatory_samples,AleatorySamplingClass):
+        """Initialize a second-order probability workflow.
+
+        Parameters
+        ----------
+        num_epistemic_samples : int
+            Number of outer-loop epistemic samples to generate.
+        EpistemicSamplingClass : type
+            Sampler class used to sample epistemic intervals.
+        num_aleatory_samples : int
+            Number of inner-loop aleatory samples to generate for each
+            epistemic sample.
+        AleatorySamplingClass : type
+            Sampler class used to sample aleatory distributions.
+
+        """
         self.num_epistemic_samples=num_epistemic_samples
         self.num_aleatory_samples=num_aleatory_samples
         self.EpistemicSamplingClass=EpistemicSamplingClass
         self.AleatorySamplingClass=AleatorySamplingClass
 
     def _get_states(self,IVPAnalysisObj):
+        """Generate nested epistemic-aleatory state dictionaries.
+
+        Parameters
+        ----------
+        IVPAnalysisObj : MixedAnalysis
+            Mixed analysis containing aleatory distributions and epistemic
+            intervals for distribution parameters.
+
+        Returns
+        -------
+        list of dict
+            State dictionaries for all epistemic and aleatory sample
+            combinations.
+
+        Notes
+        -----
+        For each epistemic sample, the corresponding aleatory distribution
+        parameters are updated before generating the inner-loop aleatory
+        samples. The total number of returned states is
+        ``num_epistemic_samples * num_aleatory_samples``.
+
+        """
         # SOPIVP uses epistemic entries as distribution-parameter uncertainty.
         epistemic_to_vals = IVPAnalysisObj.epistemic_var_to_vals
         aleatory_to_distribution = IVPAnalysisObj.aleatory_var_to_dist
@@ -884,6 +1406,15 @@ class BasicSOP:
         return all_states
 
     def _to_dict(self):
+        """Serialize the workflow to a dictionary.
+
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary containing the workflow name, epistemic
+            sampler name, aleatory sampler name, and sample counts.
+
+        """
         return {
             "name":self.__class__.__name__,
             "epistemic_sampler":self.EpistemicSamplingClass.__name__,
@@ -894,6 +1425,20 @@ class BasicSOP:
 
     @classmethod
     def _from_dict(cls,workflow_dict):
+        """Reconstruct a second-order probability workflow from a dictionary.
+
+        Parameters
+        ----------
+        workflow_dict : dict
+            Serialized workflow dictionary, typically produced by
+            :meth:`_to_dict`.
+
+        Returns
+        -------
+        BasicSOP
+            Reconstructed second-order probability workflow.
+
+        """
         e_sampler=sampler_name_to_class_registry[workflow_dict["epistemic_sampler"]]
         a_sampler=sampler_name_to_class_registry[workflow_dict["aleatory_sampler"]]
         ne_samps=workflow_dict["num_epistemic_samples"]
@@ -903,15 +1448,70 @@ class BasicSOP:
 
 @register_workflow
 class BasicMixedIVP:
+    """Generate nested samples for mixed interval-probability analysis.
+
+    This workflow samples epistemic variables in an outer loop and aleatory
+    variables in an inner loop. Unlike :class:`BasicSOP`, epistemic samples are
+    included directly in each state and do not modify aleatory distribution
+    parameters.
+
+    Parameters
+    ----------
+    num_epistemic_samples : int
+        Number of outer-loop epistemic samples to generate.
+    EpistemicSamplingClass : type
+        Sampler class used to sample epistemic intervals.
+    num_aleatory_samples : int
+        Number of inner-loop aleatory samples to generate for each epistemic
+        sample.
+    AleatorySamplingClass : type
+        Sampler class used to sample aleatory distributions.
+
+    """
 
     def __init__(self,num_epistemic_samples,EpistemicSamplingClass,
                num_aleatory_samples,AleatorySamplingClass):
+        """Initialize a mixed interval-probability workflow.
+
+        Parameters
+        ----------
+        num_epistemic_samples : int
+            Number of outer-loop epistemic samples to generate.
+        EpistemicSamplingClass : type
+            Sampler class used to sample epistemic intervals.
+        num_aleatory_samples : int
+            Number of inner-loop aleatory samples to generate for each
+            epistemic sample.
+        AleatorySamplingClass : type
+            Sampler class used to sample aleatory distributions.
+
+        """
         self.num_epistemic_samples=num_epistemic_samples
         self.num_aleatory_samples=num_aleatory_samples
         self.EpistemicSamplingClass=EpistemicSamplingClass
         self.AleatorySamplingClass=AleatorySamplingClass
 
     def _get_states(self,IVPAnalysisObj):
+        """Generate nested mixed state dictionaries.
+
+        Parameters
+        ----------
+        IVPAnalysisObj : MixedAnalysis
+            Mixed analysis containing aleatory distributions and epistemic
+            intervals.
+
+        Returns
+        -------
+        list of dict
+            State dictionaries for all epistemic and aleatory sample
+            combinations.
+
+        Notes
+        -----
+        The total number of returned states is
+        ``num_epistemic_samples * num_aleatory_samples``.
+
+        """
         #generate the epistemic to distribution here
         aleatory_to_distribution=IVPAnalysisObj.aleatory_var_to_dist
         epistemic_to_vals=IVPAnalysisObj.epistemic_var_to_vals
@@ -959,6 +1559,15 @@ class BasicMixedIVP:
         return all_states
 
     def _to_dict(self):
+        """Serialize the workflow to a dictionary.
+
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary containing the workflow name, epistemic
+            sampler name, aleatory sampler name, and sample counts.
+
+        """
         return {
             "name":self.__class__.__name__,
             "epistemic_sampler":self.EpistemicSamplingClass.__name__,
@@ -969,6 +1578,20 @@ class BasicMixedIVP:
 
     @classmethod
     def _from_dict(cls,workflow_dict):
+        """Reconstruct a mixed interval-probability workflow from a dictionary.
+
+        Parameters
+        ----------
+        workflow_dict : dict
+            Serialized workflow dictionary, typically produced by
+            :meth:`_to_dict`.
+
+        Returns
+        -------
+        BasicMixedIVP
+            Reconstructed mixed interval-probability workflow.
+
+        """
         e_sampler=sampler_name_to_class_registry[workflow_dict["epistemic_sampler"]]
         a_sampler=sampler_name_to_class_registry[workflow_dict["aleatory_sampler"]]
         ne_samps=workflow_dict["num_epistemic_samples"]
@@ -978,13 +1601,68 @@ class BasicMixedIVP:
 
 @register_workflow
 class MixedRegressionPCE:
+    """Generate samples for a mixed regression polynomial chaos expansion.
+
+    This workflow samples both epistemic intervals and aleatory distributions
+    together as inputs for fitting a polynomial chaos expansion by regression.
+
+    Parameters
+    ----------
+    SamplingClass : type
+        Sampler class used to generate samples.
+    num_samples : int
+        Number of mixed samples to generate.
+    poly_order : int
+        Total polynomial order of the polynomial chaos basis.
+
+    Notes
+    -----
+    Epistemic intervals are sampled as uniform distributions over their lower
+    and upper bounds. The workflow checks that the number of samples is at
+    least the number of basis terms required for the requested polynomial order
+    and total number of mixed variables.
+
+    """
+
     def __init__(self,SamplingClass,num_samples,
                  poly_order):
+        """Initialize a mixed regression PCE workflow.
+
+        Parameters
+        ----------
+        SamplingClass : type
+            Sampler class used to generate samples.
+        num_samples : int
+            Number of mixed samples to generate.
+        poly_order : int
+            Total polynomial order of the polynomial chaos basis.
+
+        """
         self.SamplingClass=SamplingClass
         self.num_samples=num_samples
         self.poly_order = poly_order
 
     def _get_states(self,IVPAnalysisObj):
+        """Generate sampled mixed state dictionaries.
+
+        Parameters
+        ----------
+        IVPAnalysisObj : MixedAnalysis
+            Mixed analysis containing aleatory distributions and epistemic
+            intervals.
+
+        Returns
+        -------
+        list of dict
+            State dictionaries generated from sampled epistemic and aleatory
+            variables. Each dictionary maps variable names to one sampled value.
+
+        Notes
+        -----
+        Epistemic intervals are sampled as uniform distributions over their
+        lower and upper bounds.
+
+        """
         #generate the epistemic to distribution here
         aleatory_to_distribution=IVPAnalysisObj.aleatory_var_to_dist
         epistemic_to_vals=IVPAnalysisObj.epistemic_var_to_vals
@@ -1013,15 +1691,27 @@ class MixedRegressionPCE:
         return all_states
 
     def _check_analysis(self, SOPAnalysis):
-        # check order and number of aleatory vs. num samples
-        # from XIU Polynomial expansion, dimension of space is C(order+number of random vars,number of random vars)
-        # should oversample 2-3x
-        """Validate that workflow settings are consistent with requested analysis.
+        """Validate the mixed regression PCE sample count.
 
         Parameters
         ----------
-        UQAnalysis : Any
-            Input value for `UQAnalysis`.
+        SOPAnalysis : MixedAnalysis
+            Analysis object containing the aleatory and epistemic variables used
+            to determine the polynomial basis size.
+
+        Raises
+        ------
+        ValueError
+            If ``num_samples`` is smaller than the number of required
+            polynomial basis terms.
+
+        Notes
+        -----
+        The number of basis terms is computed as
+        ``comb(poly_order + num_vars, poly_order)``, where ``num_vars`` is the
+        total number of aleatory and epistemic variables. A warning is logged
+        when ``num_samples`` is less than three times the number of required
+        basis terms.
 
         """
         num_vars = len(SOPAnalysis.aleatory_var_to_dist) + len(
@@ -1043,6 +1733,15 @@ class MixedRegressionPCE:
             )
 
     def _to_dict(self):
+        """Serialize the workflow to a dictionary.
+
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary containing the workflow name, sampler
+            name, number of samples, and polynomial order.
+
+        """
         return{
             "name":self.__class__.__name__,
             "sampler":self.SamplingClass.__name__,
@@ -1052,34 +1751,43 @@ class MixedRegressionPCE:
 
     @classmethod
     def _from_dict(cls, workflow_dict):
+        """Reconstruct a mixed regression PCE workflow from a dictionary.
+
+        Parameters
+        ----------
+        workflow_dict : dict
+            Serialized workflow dictionary, typically produced by
+            :meth:`_to_dict`.
+
+        Returns
+        -------
+        MixedRegressionPCE
+            Reconstructed mixed regression PCE workflow.
+
+        """
         sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
         num_samples = workflow_dict["num_samples"]
         poly_order = workflow_dict["polynomial_order"]
         return cls(sampler,num_samples, poly_order)
 
 
-
-
-#--------------------Dempster-Shafer Analysis-------------------------------------
-class DempsterShafer:
-    pass
 #--------------------Samplers-------------------------------------
 class BaseSampler:
-    """Define a base interface for basesampler.
+    """Define the sampler interface for uncertainty workflows.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    Sampler classes generate numeric samples from a mapping of variable names
+    to distribution objects and return both the sample array and a
+    variable-to-column mapping.
 
     """
 
     @staticmethod
     def sample():
-        """Generate new surrogate samples using a selected sampling strategy.
+        """Generate samples from configured distributions.
 
         Notes
         -----
-        This method performs class-internal setup or validation logic.
+        Subclasses implement this method.
 
         """
         pass
@@ -1087,31 +1795,28 @@ class BaseSampler:
 
 @register_sampler
 class MonteCarloSampler(BaseSampler):
-    """Provide montecarlosampler behavior for uncertainty workflows.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Generate independent Monte Carlo samples."""
 
     _OT_ResourceMapName = "MonteCarlo"
 
     @staticmethod
     def sample(aleatory_to_dist, num_samples):
-        """Generate new surrogate samples using a selected sampling strategy.
+        """Sample distributions with an OpenTURNS Monte Carlo experiment.
 
         Parameters
         ----------
-        aleatory_to_dist : Any
-            Mapping from aleatory variable names to distributions.
-        num_samples : Any
+        aleatory_to_dist : dict
+            Mapping from variable names to distribution objects.
+        num_samples : int
             Number of samples to generate.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        samples : ndarray
+            Array of sampled values with one row per sample and one column per
+            variable.
+        var_name_to_col : dict
+            Mapping from variable names to column indices in ``samples``.
 
         """
         if len(aleatory_to_dist) == 1:
@@ -1133,32 +1838,29 @@ class MonteCarloSampler(BaseSampler):
 
 @register_sampler
 class LatinHypercubeSampler(BaseSampler):
-    """Provide latinhypercubesampler behavior for uncertainty workflows.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Generate Latin hypercube samples."""
 
     _OT_ResourceMapName = "LHS"
 
     @staticmethod
     def sample(aleatory_to_dist, num_samples):
         # first generate the evenly spaced values on [0,1]
-        """Generate new surrogate samples using a selected sampling strategy.
+        """Sample distributions with an OpenTURNS Latin hypercube experiment.
 
         Parameters
         ----------
-        aleatory_to_dist : Any
-            Mapping from aleatory variable names to distributions.
-        num_samples : Any
+        aleatory_to_dist : dict
+            Mapping from variable names to distribution objects.
+        num_samples : int
             Number of samples to generate.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        samples : ndarray
+            Array of sampled values with one row per sample and one column per
+            variable.
+        var_name_to_col : dict
+            Mapping from variable names to column indices in ``samples``.
 
         """
         if len(aleatory_to_dist) == 1:
@@ -1183,30 +1885,27 @@ class SobolSampler(BaseSampler):
 
     # Note this use here is for SobolExperiment, where the
     # Quasi monte carlo uses the Sobol sampler
-    """Provide sobolsampler behavior for uncertainty workflows.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Generate low-discrepancy Sobol sequence samples."""
     _OT_ResourceMapName = "QMC"
 
     @staticmethod
     def sample(aleatory_to_dist, num_samples):
-        """Generate new surrogate samples using a selected sampling strategy.
+        """Sample distributions with an OpenTURNS Sobol sequence experiment.
 
         Parameters
         ----------
-        aleatory_to_dist : Any
-            Mapping from aleatory variable names to distributions.
-        num_samples : Any
+        aleatory_to_dist : dict
+            Mapping from variable names to distribution objects.
+        num_samples : int
             Number of samples to generate.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        samples : ndarray
+            Array of sampled values with one row per sample and one column per
+            variable.
+        var_name_to_col : dict
+            Mapping from variable names to column indices in ``samples``.
 
         """
         if len(aleatory_to_dist) == 1:
@@ -1229,29 +1928,26 @@ class SobolSampler(BaseSampler):
 
 @register_sampler
 class HaltonSampler(BaseSampler):
-    """Provide haltonsampler behavior for uncertainty workflows.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Generate low-discrepancy Halton sequence samples."""
 
     @staticmethod
     def sample(aleatory_to_dist, num_samples):
-        """Generate new surrogate samples using a selected sampling strategy.
+        """Sample distributions with an OpenTURNS Halton sequence experiment.
 
         Parameters
         ----------
-        aleatory_to_dist : Any
-            Mapping from aleatory variable names to distributions.
-        num_samples : Any
+        aleatory_to_dist : dict
+            Mapping from variable names to distribution objects.
+        num_samples : int
             Number of samples to generate.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        samples : ndarray
+            Array of sampled values with one row per sample and one column per
+            variable.
+        var_name_to_col : dict
+            Mapping from variable names to column indices in ``samples``.
 
         """
         if len(aleatory_to_dist) == 1:
@@ -1275,22 +1971,25 @@ class HaltonSampler(BaseSampler):
 #--------------------Distributions-------------------------------------
 @register_distribution
 class NormalDistribution:
-    """Represent a normaldistribution with serialization and sampling support.
+    """Represent a normal probability distribution.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    Parameters
+    ----------
+    mean : float
+        Mean of the normal distribution.
+    std : float
+        Standard deviation of the normal distribution.
 
     """
 
     def __init__(self, mean, std):
-        """Initialize object state and configuration.
+        """Initialize a normal distribution.
 
         Parameters
         ----------
-        mean : Any
-            Mean value of the normal distribution.
-        std : Any
+        mean : float
+            Mean of the normal distribution.
+        std : float
             Standard deviation of the normal distribution.
 
         """
@@ -1298,40 +1997,43 @@ class NormalDistribution:
         self.std = std
 
     def _OT_Dist(self):
-        """Return the equivalent OpenTurns distribution object.
+        """Create the equivalent OpenTURNS distribution.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        openturns.Normal
+            OpenTURNS normal distribution with the configured mean and standard
+            deviation.
 
         """
         return ot.Normal(self.mean, self.std)
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the distribution to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the distribution name, mean,
+            and standard deviation.
 
         """
         return {"name": self.__class__.__name__, "mean": self.mean, "std": self.std}
 
     @classmethod
     def _from_dict(cls, data):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a normal distribution from a dictionary.
 
         Parameters
         ----------
-        data : Any
-            Input value for `data`.
+        data : dict
+            Serialized normal distribution dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        NormalDistribution
+            Reconstructed normal distribution.
 
         """
         return cls(data["mean"], data["std"])
@@ -1339,22 +2041,25 @@ class NormalDistribution:
 
 @register_distribution
 class UniformDistribution:
-    """Represent a uniformdistribution with serialization and sampling support.
+    """Represent a uniform probability distribution.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    Parameters
+    ----------
+    low : float
+        Lower bound of the uniform distribution.
+    high : float
+        Upper bound of the uniform distribution.
 
     """
 
     def __init__(self, low, high):
-        """Initialize object state and configuration.
+        """Initialize a uniform distribution.
 
         Parameters
         ----------
-        low : Any
+        low : float
             Lower bound of the uniform distribution.
-        high : Any
+        high : float
             Upper bound of the uniform distribution.
 
         """
@@ -1362,40 +2067,43 @@ class UniformDistribution:
         self.high = high
 
     def _OT_Dist(self):
-        """Return the equivalent OpenTurns distribution object.
+        """Create the equivalent OpenTURNS distribution.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        openturns.Uniform
+            OpenTURNS uniform distribution with the configured lower and upper
+            bounds.
 
         """
         return ot.Uniform(self.low, self.high)
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the distribution to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the distribution name and
+            bounds.
 
         """
         return {"name": self.__class__.__name__, "low": self.low, "high": self.high}
 
     @classmethod
     def _from_dict(cls, data):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a uniform distribution from a dictionary.
 
         Parameters
         ----------
-        data : Any
-            Input value for `data`.
+        data : dict
+            Serialized uniform distribution dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        UniformDistribution
+            Reconstructed uniform distribution.
 
         """
         return cls(data["low"], data["high"])
@@ -1403,25 +2111,32 @@ class UniformDistribution:
 
 @register_distribution
 class LogNormalDistribution:
-    """Represent a lognormaldistribution with serialization and sampling support.
+    """Represent a shifted log-normal probability distribution.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    Parameters
+    ----------
+    mu_log : float
+        Mean parameter of the underlying normal distribution in log space.
+    sigma_log : float
+        Standard deviation parameter of the underlying normal distribution in
+        log space.
+    gamma : float, optional
+        Shift parameter of the log-normal distribution. The default is 0.0.
 
     """
 
     def __init__(self, mu_log, sigma_log, gamma=0.0):
-        """Initialize object state and configuration.
+        """Initialize a shifted log-normal distribution.
 
         Parameters
         ----------
-        mu_log : Any
-            Log-space mean parameter for the log-normal distribution.
-        sigma_log : Any
-            Log-space standard deviation for the log-normal distribution.
-        gamma : Any, optional
-            Shift parameter for the log-normal distribution.
+        mu_log : float
+            Mean parameter of the underlying normal distribution in log space.
+        sigma_log : float
+            Standard deviation parameter of the underlying normal distribution
+            in log space.
+        gamma : float, optional
+            Shift parameter of the log-normal distribution. The default is 0.0.
 
         """
         self.mu_log = mu_log
@@ -1429,23 +2144,25 @@ class LogNormalDistribution:
         self.gamma = gamma
 
     def _OT_Dist(self):
-        """Return the equivalent OpenTurns distribution object.
+        """Create the equivalent OpenTURNS distribution.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        openturns.LogNormal
+            OpenTURNS log-normal distribution with the configured log-space
+            parameters and shift.
 
         """
         return ot.LogNormal(self.mu_log, self.sigma_log, self.gamma)
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the distribution to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the distribution name,
+            log-space parameters, and shift.
 
         """
         return {
@@ -1457,17 +2174,18 @@ class LogNormalDistribution:
 
     @classmethod
     def _from_dict(cls, data):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a log-normal distribution from a dictionary.
 
         Parameters
         ----------
-        data : Any
-            Input value for `data`.
+        data : dict
+            Serialized log-normal distribution dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        LogNormalDistribution
+            Reconstructed log-normal distribution.
 
         """
         return cls(data["mu"], data["sigma"], data.get("gamma", 0.0))

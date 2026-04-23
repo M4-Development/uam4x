@@ -12,7 +12,11 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('.'))
+from pathlib import Path
+
+DOCS_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = DOCS_ROOT.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # -- Project information -----------------------------------------------------
 
@@ -48,7 +52,7 @@ templates_path = ['_templates']
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', '_autosummary', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -95,7 +99,18 @@ html_static_path = ['_static']
 # external dependencies are not available at build time and cause import
 # errors.
 autodoc_mock_imports = [
-
+    'cpylog',
+    'matplotlib',
+    'matplotlib.pyplot',
+    'numpy',
+    'openmdao',
+    'openmdao.api',
+    'openturns',
+    'pandas',
+    'pygit2',
+    'scipy',
+    'scipy.stats',
+    'sympy',
 ]
 
 # This value controls the behavior of sphinx-build -W during importing modules.
@@ -104,7 +119,7 @@ autodoc_warningiserror = False
 
 # This value controls whether to scan all found documents for autosummary
 # generation, and to generate stub files for each.
-autosummary_generate = False
+autosummary_generate = True
 
 # Default autodoc behavior: include full API surfaces.
 autodoc_default_options = {
@@ -112,6 +127,7 @@ autodoc_default_options = {
     'undoc-members': True,
     'show-inheritance': True,
 }
+autodoc_member_order = 'bysource'
 
 # -- Options for intersphinx extension ---------------------------------------
 

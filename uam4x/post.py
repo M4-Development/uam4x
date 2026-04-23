@@ -11,7 +11,24 @@ import sympy as sp
 
 #--------------------------Basic Post Process Class
 class BasicPost:
+    """Provide basic post-processing utilities for a trade study.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
+
+    """
+
     def __init__(self, tradestudy: Tradestudy):
+        """Initialize a basic post-processing helper.
+
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
+
+        """
         self.tradestudy = tradestudy
         trade_name=self.tradestudy.trade_name
         self.post_storage=tradestudy.study._post_data[trade_name]
@@ -19,27 +36,28 @@ class BasicPost:
     def scatter(
         self, var1, var2, xlabel=None, ylabel=None, title="default_title", save_dir=None
     ):
-        """Plot a scatter chart for two variables across stored result points.
+        """Plot a scatter chart for two trade-study variables.
 
         Parameters
         ----------
-        var1 : Any
+        var1 : str
             Variable name to plot on the x-axis.
-        var2 : Any
+        var2 : str
             Variable name to plot on the y-axis.
-        xlabel : Any, optional
-            Input value for `xlabel`.
-        ylabel : Any, optional
-            Input value for `ylabel`.
-        title : Any, optional
-            Input value for `title`.
-        save_dir : Any, optional
-            Input value for `save_dir`.
+        xlabel : str, optional
+            Label for the x-axis. If omitted, ``var1`` is used.
+        ylabel : str, optional
+            Label for the y-axis. If omitted, ``var2`` is used.
+        title : str, optional
+            Plot title and, when saving, the base filename.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
 
         Returns
         -------
-        Any
-            Matplotlib axes object for the generated plot.
+        matplotlib.axes.Axes
+            Axes object for the generated scatter plot.
 
         """
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -64,6 +82,30 @@ class BasicPost:
         return ax
 
     def linear_regression(self,var1,var2):
+        """Fit a linear regression between two trade-study variables.
+
+        Parameters
+        ----------
+        var1 : str
+            Variable name used as the independent variable.
+        var2 : str
+            Variable name used as the dependent variable.
+
+        Returns
+        -------
+        slope : float
+            Slope of the fitted regression line.
+        intercept : float
+            Intercept of the fitted regression line.
+        r_value : float
+            Pearson correlation coefficient.
+        p_value : float
+            Two-sided p-value for a hypothesis test whose null hypothesis is
+            that the slope is zero.
+        std_err : float
+            Standard error of the estimated slope.
+
+        """
         x_values = self.tradestudy.get_variable(var1)
         y_values = self.tradestudy.get_variable(var2)
         slope, intercept, r_value, p_value, std_err = stats.linregress(x_values, y_values)
@@ -74,16 +116,21 @@ class BasicPost:
 #--------------------------Aleatory Post Process Classes
 # Define post process classes:
 class BasicAleatoryPost:
-    """Represent the basicstatspost component in the UAM4X workflow.
+    """Post-process aleatory trade-study results.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    This class provides descriptive statistics, empirical distribution tools,
+    and correlation metrics for variables stored in a completed aleatory trade
+    study.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
 
     """
 
     def __init__(self, tradestudy: Tradestudy):
-        """Initialize object state and configuration.
+        """Initialize an aleatory post-processing helper.
 
         Parameters
         ----------
@@ -100,13 +147,13 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
+        var_name : str
+            Variable name to analyze.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        float
+            Arithmetic mean of the stored variable values.
 
         """
         vals = self.tradestudy.get_variable(var_name)
@@ -117,15 +164,21 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        method : Any, optional
-            Method identifier controlling algorithm behavior.
+        var_name : str
+            Variable name to analyze.
+        method : {"sample", "s", "population", "pop", "p"}, optional
+            Variance convention. Sample variance uses ``ddof=1`` and population
+            variance uses ``ddof=0``.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        float
+            Variance of the stored variable values.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is not a supported variance convention.
 
         """
         vals = self.tradestudy.get_variable(var_name)
@@ -146,15 +199,21 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        method : Any, optional
-            Method identifier controlling algorithm behavior.
+        var_name : str
+            Variable name to analyze.
+        method : {"sample", "s", "population", "pop", "p"}, optional
+            Standard-deviation convention. Sample standard deviation uses
+            ``ddof=1`` and population standard deviation uses ``ddof=0``.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        float
+            Standard deviation of the stored variable values.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is not a supported standard-deviation convention.
 
         """
         vals = self.tradestudy.get_variable(var_name)
@@ -177,15 +236,15 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        bias : Any, optional
-            Input value for `bias`.
+        var_name : str
+            Variable name to analyze.
+        bias : bool, optional
+            If False, apply SciPy's bias correction.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        float
+            Skewness of the stored variable values.
 
         """
         vals = np.array(self.tradestudy.get_variable(var_name))
@@ -197,17 +256,19 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        fisher : Any, optional
-            Input value for `fisher`.
-        bias : Any, optional
-            Input value for `bias`.
+        var_name : str
+            Variable name to analyze.
+        fisher : bool, optional
+            If True, use Fisher's definition where a normal distribution has
+            kurtosis 0. If False, use Pearson's definition where a normal
+            distribution has kurtosis 3.
+        bias : bool, optional
+            If False, apply SciPy's bias correction.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        float
+            Kurtosis of the stored variable values.
 
         """
         vals = np.array(self.tradestudy.get_variable(var_name))
@@ -222,27 +283,34 @@ class BasicAleatoryPost:
         bins=20,
         save_dir=None,
     ):
-        """Plot a PDF from previously generated surrogate samples.
+        """Plot an estimated probability density for a variable.
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        x_axis_title : Any, optional
-            Input value for `x_axis_title`.
-        plot_title : Any, optional
-            Input value for `plot_title`.
-        method : Any, optional
-            Method identifier controlling algorithm behavior.
-        bins : Any, optional
+        var_name : str
+            Variable name to analyze.
+        x_axis_title : str, optional
+            Label for the x-axis. If omitted, ``var_name`` is used.
+        plot_title : str, optional
+            Plot title. If omitted, a title is generated from ``var_name``.
+        method : {"histogram", "h", "kde", "kernel_density_estimate", "kernel", "k"}, optional
+            Density estimation method. Histogram methods plot counts; kernel
+            methods plot a Gaussian KDE.
+        bins : int, optional
             Number of bins used for histogram-based plots.
-        save_dir : Any, optional
-            Optional directory where plots are saved.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
 
         Returns
         -------
-        Any
-            Plot artifact (axes object or plotted data).
+        matplotlib.axes.Axes
+            Axes object for the generated PDF plot.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is not a supported PDF plotting method.
 
         """
         histo = ["histogram", "h"]
@@ -293,23 +361,25 @@ class BasicAleatoryPost:
         return ax
 
     def plot_cdf(self, var_name, x_axis_title=None, plot_title="", save_dir=None):
-        """Plot a CDF from previously generated surrogate samples.
+        """Plot the empirical cumulative distribution for a variable.
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        x_axis_title : Any, optional
-            Input value for `x_axis_title`.
-        plot_title : Any, optional
-            Input value for `plot_title`.
-        save_dir : Any, optional
-            Optional directory where plots are saved.
+        var_name : str
+            Variable name to analyze.
+        x_axis_title : str, optional
+            Label for the x-axis. If omitted, ``var_name`` is used.
+        plot_title : str, optional
+            Plot title. If omitted, a title is generated from ``x_axis_title``.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
 
         Returns
         -------
-        Any
-            Plot artifact (axes object or plotted data).
+        ndarray
+            Array containing the empirical CDF quantiles followed by the
+            corresponding probabilities.
 
         """
         vals = np.array(self.tradestudy.get_variable(var_name))
@@ -341,15 +411,22 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        method : Any, optional
-            Method identifier controlling algorithm behavior.
+        var_name : str
+            Variable name to analyze.
+        method : {"empirical", "smooth"}, optional
+            CDF approximation method. ``"empirical"`` uses SciPy's empirical CDF
+            evaluator, and ``"smooth"`` linearly interpolates between empirical
+            quantiles.
 
         Returns
         -------
-        Any
-            Requested value.
+        callable
+            Function that evaluates the selected CDF approximation.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is not ``"empirical"`` or ``"smooth"``.
 
         """
         vals = np.array(self.tradestudy.get_variable(var_name))
@@ -359,17 +436,17 @@ class BasicAleatoryPost:
         if method == "empirical":
 
             def cdf(x):
-                """Execute cdf.
+                """Evaluate the empirical CDF.
 
                 Parameters
                 ----------
-                x : Any
-                    Input value for `x`.
+                x : float or array-like
+                    Value or values at which to evaluate the CDF.
 
                 Returns
                 -------
-                Any
-                    Return value produced by this operation.
+                float or ndarray
+                    Empirical CDF value or values.
 
                 """
                 return ecdf.cdf.evaluate(x)
@@ -377,17 +454,17 @@ class BasicAleatoryPost:
         elif method == "smooth":
 
             def cdf(x):
-                """Execute cdf.
+                """Evaluate the interpolated CDF.
 
                 Parameters
                 ----------
-                x : Any
-                    Input value for `x`.
+                x : float or array-like
+                    Value or values at which to evaluate the CDF.
 
                 Returns
                 -------
-                Any
-                    Return value produced by this operation.
+                float or ndarray
+                    Interpolated CDF value or values.
 
                 """
                 return np.interp(x, quantiles, probabilities, left=0.0, right=1.0)
@@ -403,17 +480,22 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        value : Any
+        var_name : str
+            Variable name to analyze.
+        value : float or array-like
             Value at which to evaluate a distribution/CDF.
-        method : Any, optional
-            Method identifier controlling algorithm behavior.
+        method : {"empirical", "smooth"}, optional
+            CDF approximation method.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        float or ndarray
+            CDF value or values evaluated at ``value``.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is not ``"empirical"`` or ``"smooth"``.
 
         """
         vals = np.array(self.tradestudy.get_variable(var_name))
@@ -434,17 +516,25 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name : Any
-            Variable name to analyze or evaluate.
-        quantile : Any
+        var_name : str
+            Variable name to analyze.
+        quantile : float
             Requested quantile level in the interval [0, 1].
-        method : Any, optional
-            Method identifier controlling algorithm behavior.
+        method : str, optional
+            NumPy quantile method. Supported values are ``"inverted_cdf"``,
+            ``"averaged_inverted_cdf"``, ``"closest_observation"``,
+            ``"interpolated_inverted_cdf"``, ``"hazen"``, ``"weibull"``,
+            ``"linear"``, ``"median_unbiased"``, and ``"normal_unbiased"``.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        float
+            Quantile value for the stored variable values.
+
+        Raises
+        ------
+        ValueError
+            If ``quantile`` is outside [0, 1] or ``method`` is unsupported.
 
         """
         if quantile < 0.0 or quantile > 1.0:
@@ -480,15 +570,18 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name1 : Any
+        var_name1 : str
             First variable name for correlation calculations.
-        var_name2 : Any
+        var_name2 : str
             Second variable name for correlation calculations.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        correlation : float
+            Spearman rank correlation coefficient.
+        p_value : float
+            Two-sided p-value for a hypothesis test whose null hypothesis is
+            that the variables are uncorrelated.
 
         """
         var1_vals = np.array(self.tradestudy.get_variable(var_name1))
@@ -503,15 +596,18 @@ class BasicAleatoryPost:
 
         Parameters
         ----------
-        var_name1 : Any
+        var_name1 : str
             First variable name for correlation calculations.
-        var_name2 : Any
+        var_name2 : str
             Second variable name for correlation calculations.
 
         Returns
         -------
-        Any
-            Computed statistic or metric.
+        correlation : float
+            Pearson correlation coefficient.
+        p_value : float
+            Two-sided p-value for a hypothesis test whose null hypothesis is
+            that the variables are uncorrelated.
 
         """
         var1_vals = np.array(self.tradestudy.get_variable(var_name1))
@@ -521,16 +617,20 @@ class BasicAleatoryPost:
         return significance_res, p_val
 
 class RegressionPCEPost(BasicAleatoryPost):
-    """Represent the regressionpcepost component in the UAM4X workflow.
+    """Post-process regression PCE trade-study results.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    This class builds polynomial-chaos surrogate models from completed
+    :class:`uam4x.UQ.RegressionPCE` trade-study results.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
 
     """
 
     def __init__(self, tradestudy: Tradestudy):
-        """Initialize object state and configuration.
+        """Initialize a regression PCE post-processing helper.
 
         Parameters
         ----------
@@ -545,13 +645,18 @@ class RegressionPCEPost(BasicAleatoryPost):
 
         Parameters
         ----------
-        output_name : Any
-            Output variable name used for surrogate or Sobol calculations.
+        output_name : str
+            Output variable name used to fit the surrogate.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        AleatorySurrogate
+            Surrogate model fitted to ``output_name``.
+
+        Notes
+        -----
+        Log-normal input variables are transformed to their underlying normal
+        variables before fitting the OpenTURNS functional chaos model.
 
         """
         trade_name = self.tradestudy.trade_name
@@ -632,16 +737,21 @@ class RegressionPCEPost(BasicAleatoryPost):
 
 
 class GaussQuadtraturePCEPost(BasicAleatoryPost):
-    """Represent the gaussquadtraturepcepost component in the UAM4X workflow.
+    """Post-process Gauss quadrature PCE trade-study results.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    This class builds polynomial-chaos surrogate models from completed
+    :class:`uam4x.UQ.GaussQuadraturePCE` trade-study results using quadrature
+    weights stored in each state.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
 
     """
 
     def __init__(self, tradestudy: Tradestudy):
-        """Initialize object state and configuration.
+        """Initialize a Gauss quadrature PCE post-processing helper.
 
         Parameters
         ----------
@@ -656,13 +766,19 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
 
         Parameters
         ----------
-        output_name : Any
-            Output variable name used for surrogate or Sobol calculations.
+        output_name : str
+            Output variable name used to fit the surrogate.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        AleatorySurrogate
+            Surrogate model fitted to ``output_name``.
+
+        Notes
+        -----
+        The fitted OpenTURNS functional chaos model uses the quadrature
+        ``weight`` stored in each trade-study state. Log-normal input variables
+        are transformed to their underlying normal variables before fitting.
 
         """
         trade_name = self.tradestudy.trade_name
@@ -750,25 +866,36 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
 
 
 class AleatorySurrogate:
-    """Represent the surrogate component in the UAM4X workflow.
+    """Represent an aleatory polynomial-chaos surrogate.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    The surrogate wraps an OpenTURNS functional-chaos result and provides
+    prediction, analytical moments, Sobol indices, symbolic metamodels, and
+    sampling-based plots.
+
+    Parameters
+    ----------
+    aleatory_var_to_dist : dict
+        Mapping from aleatory variable names to distribution objects.
+    result : openturns.FunctionalChaosResult
+        OpenTURNS functional-chaos result object.
+    post_storage : dict
+        Post-processing storage dictionary associated with the trade study.
 
     """
 
     def __init__(self, aleatory_var_to_dist, result,post_storage):
         # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
         # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
-        """Initialize object state and configuration.
+        """Initialize an aleatory surrogate.
 
         Parameters
         ----------
-        aleatory_var_to_dist : Any
-            Mapping from aleatory variable names to distributions.
-        result : Any
-            OpenTurns functional-chaos result object.
+        aleatory_var_to_dist : dict
+            Mapping from aleatory variable names to distribution objects.
+        result : openturns.FunctionalChaosResult
+            OpenTURNS functional-chaos result object.
+        post_storage : dict
+            Post-processing storage dictionary associated with the trade study.
 
         """
         self.aleatory_var_to_dist = aleatory_var_to_dist
@@ -780,16 +907,48 @@ class AleatorySurrogate:
 
 
     def get_symbolic_metamodel(self, model_type='physical'):
+        """Return a symbolic expression for the surrogate metamodel.
+
+        Parameters
+        ----------
+        model_type : {"physical", "probabilistic"}, optional
+            Coordinate system for the symbolic expression. ``"physical"``
+            expresses the model in physical input variables. ``"probabilistic"``
+            returns the OpenTURNS probability-space expression.
+
+        Returns
+        -------
+        model : sympy expression
+            Symbolic surrogate expression.
+        aleatory_to_sympy_map : dict
+            Mapping from aleatory variable names to SymPy symbols.
+
+        Raises
+        ------
+        ValueError
+            If ``model_type`` is not ``"physical"`` or ``"probabilistic"``.
+
+        """
         if model_type == 'physical':
             return self._get_physical_symbolic_metamodel()
-        elif model_type == 'probabalistic':
+        elif model_type in ('probabilistic', 'probabalistic'):
             return self._get_probability_symbolic_metamodel()
         else:
             raise ValueError(
-                "model_type must be either 'physical' or 'probabalistic'."
+                "model_type must be either 'physical' or 'probabilistic'."
             )
 
     def _get_probability_symbolic_metamodel(self):
+        """Build the symbolic metamodel in probability space.
+
+        Returns
+        -------
+        model : sympy expression
+            Symbolic expression in OpenTURNS basis variables.
+        aleatory_to_sympy_map : dict
+            Mapping from aleatory variable names to SymPy symbols.
+
+        """
         result=self._ot_res
         coeffs=np.array(result.getCoefficients()).reshape(-1)
         indices=result.getIndices()
@@ -808,6 +967,22 @@ class AleatorySurrogate:
         return model, aleatory_to_sympy_map
 
     def _get_physical_symbolic_metamodel(self):
+        """Build the symbolic metamodel in physical input variables.
+
+        Returns
+        -------
+        model : sympy expression
+            Symbolic expression in physical aleatory variables.
+        aleatory_to_sympy_map : dict
+            Mapping from aleatory variable names to SymPy symbols.
+
+        Raises
+        ------
+        ValueError
+            If an input distribution type cannot be transformed to the
+            OpenTURNS basis variable.
+
+        """
         result=self._ot_res
         coeffs=np.array(result.getCoefficients()).reshape(-1)
         indices=result.getIndices()
@@ -858,6 +1033,19 @@ class AleatorySurrogate:
 
 
     def get_first_order_sobol(self,var_name):
+        """Return the first-order Sobol index for one variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Aleatory variable name.
+
+        Returns
+        -------
+        float
+            First-order Sobol sensitivity index.
+
+        """
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
             if var_name==name:
                 val=self._Chaos_SI.getSobolIndex(i)
@@ -865,12 +1053,38 @@ class AleatorySurrogate:
 
 
     def get_total_order_sobol(self,var_name):
+        """Return the total-order Sobol index for one variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Aleatory variable name.
+
+        Returns
+        -------
+        float
+            Total-order Sobol sensitivity index.
+
+        """
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
             if var_name==name:
                 val=self._Chaos_SI.getSobolTotalIndex(i)
                 return val
 
     def get_interaction_sobol(self,var_names:list):
+        """Return the grouped Sobol index for a set of variables.
+
+        Parameters
+        ----------
+        var_names : list of str
+            Aleatory variable names included in the interaction group.
+
+        Returns
+        -------
+        float
+            Grouped Sobol sensitivity index.
+
+        """
         inds=[]
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
             for var_name in var_names:
@@ -881,6 +1095,19 @@ class AleatorySurrogate:
         return vals
 
     def get_total_interaction_sobol(self,var_names:list):
+        """Return the grouped total-order Sobol index for a set of variables.
+
+        Parameters
+        ----------
+        var_names : list of str
+            Aleatory variable names included in the interaction group.
+
+        Returns
+        -------
+        float
+            Grouped total-order Sobol sensitivity index.
+
+        """
         inds=[]
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
             for var_name in var_names:
@@ -892,6 +1119,21 @@ class AleatorySurrogate:
         return vals
 
     def plot_total_order_sobol(self,plot_title="",save_dir=None):
+        """Plot total-order Sobol indices for all aleatory variables.
+
+        Parameters
+        ----------
+        plot_title : str, optional
+            Plot title. If omitted, a default title is used.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
+
+        Returns
+        -------
+        None
+
+        """
         name_to_inds={}
         names=[]
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
@@ -915,18 +1157,18 @@ class AleatorySurrogate:
 
     def predict(self, name_to_value_dict):
         # Note, name_to_value_dict should be PHYSICAL inputs, not
-        # probabalistic based inputs
+        # probabilistic based inputs
         """Evaluate the surrogate at one dictionary of input variable values.
 
         Parameters
         ----------
-        name_to_value_dict : Any
-            Mapping from variable names to surrogate input values.
+        name_to_value_dict : dict
+            Mapping from aleatory variable names to physical input values.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        openturns.Point
+            Surrogate prediction at the provided input point.
 
         """
         vals = []
@@ -941,12 +1183,12 @@ class AleatorySurrogate:
 
     @property
     def analytical_mean(self):
-        """Execute analytical mean.
+        """Analytical mean of the surrogate output.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        float
+            Mean computed from the OpenTURNS functional-chaos random vector.
 
         """
         mean=ot.FunctionalChaosRandomVector(self._ot_res).getMean()[0]
@@ -955,12 +1197,18 @@ class AleatorySurrogate:
 
     @property
     def analytical_variance(self):
-        """Execute analytical variance.
+        """Analytical variance of the surrogate output.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        float
+            Variance computed from the polynomial-chaos coefficients.
+
+        Raises
+        ------
+        ValueError
+            If the coefficient-based variance does not match the OpenTURNS
+            covariance result.
 
         """
         ot_var = np.array(ot.FunctionalChaosRandomVector(self._ot_res).getCovariance())[
@@ -978,12 +1226,12 @@ class AleatorySurrogate:
 
     @property
     def analytical_std(self):
-        """Execute analytical std.
+        """Analytical standard deviation of the surrogate output.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        float
+            Square root of :attr:`analytical_variance`.
 
         """
         std=np.sqrt(self.analytical_variance)
@@ -994,15 +1242,17 @@ class AleatorySurrogate:
 
         Parameters
         ----------
-        num_samples : Any
+        num_samples : int
             Number of samples to generate.
-        method : Any, optional
-            Method identifier controlling algorithm behavior.
+        method : {"MC", "LHS", "Sobol", "Halton"}, optional
+            Sampling method used to generate surrogate input points.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        sample_points : ndarray
+            Sampled input points in physical variable space.
+        sample_values : ndarray
+            Surrogate output values evaluated at ``sample_points``.
 
         """
         model = self._ot_res.getMetaModel()
@@ -1044,13 +1294,24 @@ class AleatorySurrogate:
 
         Parameters
         ----------
-        save_dir : Any, optional
-            Optional directory where plots are saved.
+        xlabel : str, optional
+            Label for the x-axis. If omitted, ``"Output value"`` is used.
+        plot_title : str, optional
+            Plot title. If omitted, a default title is used.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
 
         Returns
         -------
-        Any
-            Plot artifact (axes object or plotted data).
+        ndarray
+            Array containing the empirical CDF quantiles followed by the
+            corresponding probabilities.
+
+        Raises
+        ------
+        ValueError
+            If surrogate samples have not been generated with :meth:`sample`.
 
         """
         if self.new_sample_values is None:
@@ -1083,15 +1344,25 @@ class AleatorySurrogate:
 
         Parameters
         ----------
-        bins : Any, optional
+        bins : int, optional
             Number of bins used for histogram-based plots.
-        save_dir : Any, optional
-            Optional directory where plots are saved.
+        xlabel : str, optional
+            Label for the x-axis. If omitted, ``"Output value"`` is used.
+        plot_title : str, optional
+            Plot title. If omitted, a default title is used.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
 
         Returns
         -------
-        Any
-            Plot artifact (axes object or plotted data).
+        matplotlib.axes.Axes
+            Axes object for the generated PDF plot.
+
+        Raises
+        ------
+        ValueError
+            If surrogate samples have not been generated with :meth:`sample`.
 
         """
         if self.new_sample_values is None:
@@ -1120,11 +1391,15 @@ class AleatorySurrogate:
 
 
 class SobolSensitivityPost(BasicAleatoryPost):
-    """Represent the sobolsensitivitypost component in the UAM4X workflow.
+    """Post-process Sobol sensitivity trade-study results.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    This class computes Sobol sensitivity indices from the structured sample
+    design generated by :class:`uam4x.UQ.SobolSensitivity`.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
 
     """
 
@@ -1136,12 +1411,12 @@ class SobolSensitivityPost(BasicAleatoryPost):
     }
 
     def __init__(self, tradestudy):
-        """Execute init.
+        """Initialize a Sobol sensitivity post-processing helper.
 
         Parameters
         ----------
-        tradestudy : Any
-            Input value for `tradestudy`.
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
 
         """
         super().__init__(tradestudy)
@@ -1152,15 +1427,20 @@ class SobolSensitivityPost(BasicAleatoryPost):
 
         Parameters
         ----------
-        output_name : Any
-            Output variable name used for surrogate or Sobol calculations.
-        algo : Any, optional
-            Sobol index algorithm name supported by OpenTurns.
+        output_name : str
+            Output variable name used for Sobol calculations.
+        algo : {"Jansen", "Saltelli", "Martinez", "MauntzKucherenko"}, optional
+            OpenTURNS Sobol sensitivity algorithm to use.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        results : dict
+            Dictionary with ``"first_order"``, ``"second_order"``, and
+            ``"total_order"`` entries. First- and total-order entries are keyed
+            by variable name; second-order entries are keyed by variable-name
+            tuples.
+        otSobol : object
+            OpenTURNS Sobol sensitivity algorithm object.
 
         """
         outs = np.array(self.tradestudy.get_variable(output_name))[:, None]
@@ -1227,15 +1507,15 @@ class SobolSensitivityPost(BasicAleatoryPost):
 
         Parameters
         ----------
-        output_name : Any
-            Output variable name used for surrogate or Sobol calculations.
-        algo : Any, optional
-            Sobol index algorithm name supported by OpenTurns.
+        output_name : str
+            Output variable name used for Sobol calculations.
+        algo : {"Jansen", "Saltelli", "Martinez", "MauntzKucherenko"}, optional
+            OpenTURNS Sobol sensitivity algorithm to use.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            First-order Sobol indices keyed by aleatory variable name.
 
         """
         results, _ = self.generate_Sobol_indices(output_name, algo)
@@ -1246,15 +1526,21 @@ class SobolSensitivityPost(BasicAleatoryPost):
 
         Parameters
         ----------
-        output_name : Any
-            Output variable name used for surrogate or Sobol calculations.
-        algo : Any, optional
-            Sobol index algorithm name supported by OpenTurns.
+        output_name : str
+            Output variable name used for Sobol calculations.
+        algo : {"Jansen", "Saltelli", "Martinez", "MauntzKucherenko"}, optional
+            OpenTURNS Sobol sensitivity algorithm to use.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Second-order Sobol indices keyed by aleatory variable-name tuples.
+
+        Raises
+        ------
+        ValueError
+            If the underlying Sobol workflow was not configured to compute
+            second-order indices.
 
         """
         UQ_Distrubutor = self.tradestudy.study.control.trade_studies[
@@ -1272,21 +1558,41 @@ class SobolSensitivityPost(BasicAleatoryPost):
 
         Parameters
         ----------
-        output_name : Any
-            Output variable name used for surrogate or Sobol calculations.
-        algo : Any, optional
-            Sobol index algorithm name supported by OpenTurns.
+        output_name : str
+            Output variable name used for Sobol calculations.
+        algo : {"Jansen", "Saltelli", "Martinez", "MauntzKucherenko"}, optional
+            OpenTURNS Sobol sensitivity algorithm to use.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Total-order Sobol indices keyed by aleatory variable name.
 
         """
         results, _ = self.generate_Sobol_indices(output_name, algo)
         return results["total_order"]
 
     def plot_total_order_indices(self,output_name,plot_title="",algo="Jansen",save_dir=None):
+        """Plot total-order Sobol indices for one output.
+
+        Parameters
+        ----------
+        output_name : str
+            Output variable name used for Sobol calculations.
+        plot_title : str, optional
+            Plot title. If omitted, a default title is generated from
+            ``output_name``.
+        algo : {"Jansen", "Saltelli", "Martinez", "MauntzKucherenko"}, optional
+            OpenTURNS Sobol sensitivity algorithm to use.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
+
+        Returns
+        -------
+        None
+
+        """
         results,_=self.generate_Sobol_indices(output_name,algo)
         total_results=results["total_order"]
         fig,ax=plt.subplots(figsize=(10,6))
@@ -1308,12 +1614,43 @@ class SobolSensitivityPost(BasicAleatoryPost):
 
 #--------------------------Epistemic Post Process Classes
 class BasicEpistemicPost:
+    """Post-process epistemic trade-study results.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
+
+    """
+
     def __init__(self,tradestudy:Tradestudy):
+        """Initialize an epistemic post-processing helper.
+
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
+
+        """
         self.tradestudy=tradestudy
         trade_name=self.tradestudy.trade_name
         self.post_storage=tradestudy.study._post_data[trade_name]
 
     def compute_bounds(self,var_name):
+        """Compute minimum and maximum observed values for a variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Variable name to analyze.
+
+        Returns
+        -------
+        dict
+            Dictionary with ``"minimum"`` and ``"maximum"`` entries. Each entry
+            contains the observed value and the corresponding state dictionary.
+
+        """
         vals = np.array(self.tradestudy.get_variable(var_name), dtype=float)
         #max loc
         max_val=np.max(vals)
@@ -1336,18 +1673,57 @@ class BasicEpistemicPost:
         }
 #--------------------------Mixed Aleatory-Epistemic Post Process Classes
 class BasicMixedPost:
+    """Post-process mixed aleatory-epistemic trade-study results.
+
+    This class provides p-box, p-level bound, and horsetail utilities for mixed
+    analyses where each epistemic state contains a group of aleatory samples.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
+
+    """
+
     def __init__(self, tradestudy: Tradestudy):
-        """Initialize object state and configuration.
+        """Initialize a mixed post-processing helper.
+
         Parameters
         ----------
         tradestudy : Tradestudy
             Trade-study results container used for post-processing.
+
         """
         self.tradestudy = tradestudy
         trade_name=self.tradestudy.trade_name
         self.post_storage=tradestudy.study._post_data[trade_name]
 
     def _generate_output_var_data(self,var_name):
+        """Group output values by epistemic state and compute empirical CDFs.
+
+        Parameters
+        ----------
+        var_name : str
+            Output variable name to analyze.
+
+        Returns
+        -------
+        state_to_cdf : dict
+            Mapping from epistemic state tuples to SciPy empirical CDF objects.
+        quantiles_data : ndarray
+            Matrix of empirical CDF quantiles. Columns correspond to epistemic
+            states.
+        probabilities_data : ndarray
+            Matrix of empirical CDF probabilities. Columns correspond to
+            epistemic states.
+
+        Raises
+        ------
+        ValueError
+            If epistemic states do not all contain the same number of aleatory
+            samples.
+
+        """
         trade_name=self.tradestudy.trade_name
         trade_base=self.tradestudy.study.control.trade_studies[trade_name]
         out_vals= np.array(self.tradestudy.get_variable(var_name))
@@ -1380,6 +1756,25 @@ class BasicMixedPost:
 
 
     def plot_pbox(self,var_name,x_axis_title=None,plot_title="",save_dir=None):
+        """Plot a probability box for one output variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Output variable name to analyze.
+        x_axis_title : str, optional
+            Label for the x-axis. If omitted, ``var_name`` is used.
+        plot_title : str, optional
+            Plot title. If omitted, a default title is generated.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
+
+        Returns
+        -------
+        None
+
+        """
 
         _,quantiles_data,probabilities_data=self._generate_output_var_data(var_name=var_name)
 
@@ -1414,6 +1809,28 @@ class BasicMixedPost:
             )
 
     def get_plevel_bounds(self,var_name,p_level):
+        """Return p-box bounds at one probability level.
+
+        Parameters
+        ----------
+        var_name : str
+            Output variable name to analyze.
+        p_level : float
+            Probability level in the interval [0, 1].
+
+        Returns
+        -------
+        min_quantile : float
+            Lower p-box quantile bound at ``p_level``.
+        max_quantile : float
+            Upper p-box quantile bound at ``p_level``.
+
+        Raises
+        ------
+        ValueError
+            If ``p_level`` is outside [0, 1].
+
+        """
         _,quantiles,probabilities=self._generate_output_var_data(var_name)
         if p_level<0.0 or p_level>1.0:
             raise ValueError(
@@ -1459,6 +1876,25 @@ class BasicMixedPost:
 
 
     def plot_horsetails(self,var_name,x_axis_title=None,plot_title="",save_dir=None):
+        """Plot horsetail empirical CDF curves for one output variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Output variable name to analyze.
+        x_axis_title : str, optional
+            Label for the x-axis. If omitted, ``var_name`` is used.
+        plot_title : str, optional
+            Plot title. If omitted, a default title is generated.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
+
+        Returns
+        -------
+        None
+
+        """
         _,quantiles,probabilities=self._generate_output_var_data(var_name)
         fig,ax=plt.subplots(figsize=(10, 6))
         ax.plot(quantiles,probabilities,color="blue")
@@ -1481,10 +1917,45 @@ class BasicMixedPost:
 
 
 class MixedRegressionPCEPost(BasicMixedPost):
+    """Post-process mixed regression PCE trade-study results.
+
+    This class builds polynomial-chaos surrogate models from completed
+    :class:`uam4x.UQ.MixedRegressionPCE` trade-study results.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
+
+    Notes
+    -----
+    Epistemic intervals are represented as uniform distributions when fitting
+    the mixed surrogate.
+
+    """
+
     def __init__(self, tradestudy: Tradestudy):
+        """Initialize a mixed regression PCE post-processing helper.
+
+        Parameters
+        ----------
+        tradestudy : Tradestudy
+            Trade-study results container used for post-processing.
+
+        """
         super().__init__(tradestudy)
 
     def _get_mixed_var_to_dist(self):
+        """Build a distribution mapping for all mixed variables.
+
+        Returns
+        -------
+        dict
+            Mapping from epistemic and aleatory variable names to distribution
+            objects. Epistemic intervals are converted to uniform
+            distributions.
+
+        """
         trade_name = self.tradestudy.trade_name
         ts = self.tradestudy.study.control.trade_studies[trade_name]
         mixed_var_to_dist = {}
@@ -1495,6 +1966,24 @@ class MixedRegressionPCEPost(BasicMixedPost):
         return mixed_var_to_dist
 
     def generate_surrogate(self, output_name):
+        """Build and return a mixed polynomial-chaos surrogate.
+
+        Parameters
+        ----------
+        output_name : str
+            Output variable name used to fit the surrogate.
+
+        Returns
+        -------
+        MixedSurrogate
+            Surrogate model fitted to ``output_name``.
+
+        Notes
+        -----
+        Log-normal input variables are transformed to their underlying normal
+        variables before fitting the OpenTURNS functional chaos model.
+
+        """
         trade_name = self.tradestudy.trade_name
         ts = self.tradestudy.study.control.trade_studies[trade_name]
         num_samples = ts.UQ_workflow.num_samples
@@ -1574,19 +2063,47 @@ class MixedRegressionPCEPost(BasicMixedPost):
                               aleatory_var_to_dist,self.post_storage)
 
 class MixedSurrogate:
+    """Represent a mixed aleatory-epistemic polynomial-chaos surrogate.
+
+    The surrogate wraps an OpenTURNS functional-chaos result with both
+    epistemic and aleatory input variables. It provides prediction, sampling,
+    p-box and horsetail plots, symbolic metamodels, and Sobol indices.
+
+    Parameters
+    ----------
+    all_var_to_dist : dict
+        Mapping from all mixed variable names to distribution objects.
+    result : openturns.FunctionalChaosResult
+        OpenTURNS functional-chaos result object.
+    epistemic_var_to_interval : dict
+        Mapping from epistemic variable names to interval bounds.
+    aleatory_var_to_dist : dict
+        Mapping from aleatory variable names to distribution objects.
+    post_storage : dict
+        Post-processing storage dictionary associated with the trade study.
+
+    """
 
     _META_STATE_NAME="__IVP__STATE__META"
     def __init__(self, all_var_to_dist, result,epistemic_var_to_interval,
                  aleatory_var_to_dist,post_storage):
         # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
         # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
-        """Initialize object state and configuration.
+        """Initialize a mixed surrogate.
+
         Parameters
         ----------
-        aleatory_var_to_dist : Any
-            Mapping from aleatory variable names to distributions.
-        result : Any
-            OpenTurns functional-chaos result object.
+        all_var_to_dist : dict
+            Mapping from all mixed variable names to distribution objects.
+        result : openturns.FunctionalChaosResult
+            OpenTURNS functional-chaos result object.
+        epistemic_var_to_interval : dict
+            Mapping from epistemic variable names to interval bounds.
+        aleatory_var_to_dist : dict
+            Mapping from aleatory variable names to distribution objects.
+        post_storage : dict
+            Post-processing storage dictionary associated with the trade study.
+
         """
         self.epistemic_var_to_interval=epistemic_var_to_interval
         self.aleatory_var_to_dist=aleatory_var_to_dist
@@ -1599,14 +2116,48 @@ class MixedSurrogate:
 
 
     def get_symbolic_metamodel(self,model_type='physical'):
+        """Return a symbolic expression for the surrogate metamodel.
+
+        Parameters
+        ----------
+        model_type : {"physical", "probabilistic"}, optional
+            Coordinate system for the symbolic expression. ``"physical"``
+            expresses the model in physical input variables. ``"probabilistic"``
+            returns the OpenTURNS probability-space expression.
+
+        Returns
+        -------
+        model : sympy expression
+            Symbolic surrogate expression.
+        all_var_to_sympy_map : dict
+            Mapping from mixed variable names to SymPy symbols.
+
+        Raises
+        ------
+        ValueError
+            If ``model_type`` is not ``"physical"`` or ``"probabilistic"``.
+
+        """
         if model_type=='physical':
             return self._get_physical_symbolic_metamodel()
-        elif model_type=='probabalistic':
+        elif model_type in ('probabilistic', 'probabalistic'):
             return self._get_probability_symbolic_metamodel()
         else:
-            raise ValueError(f'h')
+            raise ValueError(
+                "model_type must be either 'physical' or 'probabilistic'."
+            )
 
     def _get_probability_symbolic_metamodel(self):
+        """Build the symbolic metamodel in probability space.
+
+        Returns
+        -------
+        model : sympy expression
+            Symbolic expression in OpenTURNS basis variables.
+        all_var_to_sympy_map : dict
+            Mapping from mixed variable names to SymPy symbols.
+
+        """
         result=self._ot_res
         result=self._ot_res
         coeffs=np.array(result.getCoefficients()).reshape(-1)
@@ -1628,6 +2179,22 @@ class MixedSurrogate:
         return model, all_var_to_sympy_map
 
     def _get_physical_symbolic_metamodel(self):
+        """Build the symbolic metamodel in physical input variables.
+
+        Returns
+        -------
+        model : sympy expression
+            Symbolic expression in physical mixed variables.
+        all_var_to_sympy_map : dict
+            Mapping from mixed variable names to SymPy symbols.
+
+        Raises
+        ------
+        ValueError
+            If an input distribution type cannot be transformed to the
+            OpenTURNS basis variable.
+
+        """
         result=self._ot_res
         coeffs=np.array(result.getCoefficients()).reshape(-1)
         indices=result.getIndices()
@@ -1676,16 +2243,19 @@ class MixedSurrogate:
 
     def predict(self, name_to_value_dict):
         # Note, name_to_value_dict should be PHYSICAL inputs, not
-        # probabalistic based inputs
+        # probabilistic based inputs
         """Evaluate the surrogate at one dictionary of input variable values.
+
         Parameters
         ----------
-        name_to_value_dict : Any
-            Mapping from variable names to surrogate input values.
+        name_to_value_dict : dict
+            Mapping from mixed variable names to physical input values.
+
         Returns
         -------
-        Any
-            Return value produced by this method.
+        openturns.Point
+            Surrogate prediction at the provided input point.
+
         """
         vals = []
         for name, distribution in self.all_var_to_dist.items():
@@ -1700,17 +2270,30 @@ class MixedSurrogate:
 
     def sample(self, num_epistemic_samples,
                 num_aleatory_samples,method="MC"):
-        """Generate new surrogate samples using a selected sampling strategy.
+        """Generate nested mixed surrogate samples.
+
         Parameters
         ----------
-        num_samples : Any
-            Number of samples to generate.
-        method : Any, optional
-            Method identifier controlling algorithm behavior.
+        num_epistemic_samples : int
+            Number of outer-loop epistemic samples to generate.
+        num_aleatory_samples : int
+            Number of inner-loop aleatory samples to generate for each
+            epistemic sample.
+        method : {"MC", "LHS", "Sobol", "Halton"}, optional
+            Sampling method used for both epistemic and aleatory samples.
+
         Returns
         -------
-        Any
-            Return value produced by this method.
+        sample_points : ndarray
+            Sampled input points in physical variable space.
+        sample_values : ndarray
+            Surrogate output values evaluated at ``sample_points``.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is not a supported sampling method.
+
         """
         aleatory_to_distribution=self.aleatory_var_to_dist
         epistemic_to_vals=self.epistemic_var_to_interval
@@ -1791,6 +2374,21 @@ class MixedSurrogate:
 
 
     def _aggregate_predicted_vals(self):
+        """Aggregate sampled surrogate outputs by epistemic sample.
+
+        Returns
+        -------
+        meta_to_cdf : dict
+            Mapping from internal epistemic sample identifiers to empirical CDF
+            objects.
+        quantiles_data : ndarray
+            Matrix of empirical CDF quantiles. Columns correspond to epistemic
+            samples.
+        probabilities_data : ndarray
+            Matrix of empirical CDF probabilities. Columns correspond to
+            epistemic samples.
+
+        """
         ivp_meta=self._new_sample_points_with_meta[:,0]
         u,inv=np.unique(ivp_meta,return_inverse=True)
         indices_per_value = {
@@ -1814,17 +2412,26 @@ class MixedSurrogate:
         return meta_to_cdf,quantiles_data,probabilities_data
 
     def plot_horsetails(self,xlabel=None,plot_title="", save_dir=None):
-        """Plot a CDF from previously generated surrogate samples.
+        """Plot horsetail empirical CDF curves for surrogate samples.
 
         Parameters
         ----------
-        save_dir : Any, optional
-            Optional directory where plots are saved.
+        xlabel : str, optional
+            Label for the x-axis. If omitted, ``"Output value"`` is used.
+        plot_title : str, optional
+            Plot title. If omitted, a default title is used.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
 
         Returns
         -------
-        Any
-            Plot artifact (axes object or plotted data).
+        None
+
+        Raises
+        ------
+        ValueError
+            If surrogate samples have not been generated with :meth:`sample`.
 
         """
         if self.new_sample_values is None:
@@ -1849,6 +2456,23 @@ class MixedSurrogate:
             )
 
     def plot_pbox(self, xlabel=None, plot_title="", save_dir=None):
+        """Plot a probability box for surrogate samples.
+
+        Parameters
+        ----------
+        xlabel : str, optional
+            Label for the x-axis. If omitted, ``"Output value"`` is used.
+        plot_title : str, optional
+            Plot title. If omitted, a default title is used.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
+
+        Returns
+        -------
+        None
+
+        """
 
         _,quantiles_data,probabilities_data=self._aggregate_predicted_vals()
 
@@ -1884,6 +2508,26 @@ class MixedSurrogate:
             )
 
     def get_plevel_bounds(self,p_level):
+        """Return surrogate p-box bounds at one probability level.
+
+        Parameters
+        ----------
+        p_level : float
+            Probability level in the interval [0, 1].
+
+        Returns
+        -------
+        min_quantile : float
+            Lower p-box quantile bound at ``p_level``.
+        max_quantile : float
+            Upper p-box quantile bound at ``p_level``.
+
+        Raises
+        ------
+        ValueError
+            If ``p_level`` is outside [0, 1].
+
+        """
         _,quantiles,probabilities=self._aggregate_predicted_vals()
         if p_level<0.0 or p_level>1.0:
             raise ValueError(
@@ -1928,16 +2572,55 @@ class MixedSurrogate:
         return (min_quantile,max_quantile)
 
     def get_first_order_sobol(self,var_name):
+        """Return the first-order Sobol index for one mixed variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Mixed variable name.
+
+        Returns
+        -------
+        float
+            First-order Sobol sensitivity index.
+
+        """
         for i,name in enumerate(self.all_var_to_dist.keys()):
             if var_name==name:
                 return self._Chaos_SI.getSobolIndex(i)
 
     def get_total_order_sobol(self,var_name):
+        """Return the total-order Sobol index for one mixed variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Mixed variable name.
+
+        Returns
+        -------
+        float
+            Total-order Sobol sensitivity index.
+
+        """
         for i,name in enumerate(self.all_var_to_dist.keys()):
             if var_name==name:
                 return self._Chaos_SI.getSobolTotalIndex(i)
 
     def get_interaction_sobol(self,var_names:list):
+        """Return the grouped Sobol index for a set of mixed variables.
+
+        Parameters
+        ----------
+        var_names : list of str
+            Mixed variable names included in the interaction group.
+
+        Returns
+        -------
+        float
+            Grouped Sobol sensitivity index.
+
+        """
         inds=[]
         for i,name in enumerate(self.all_var_to_dist.keys()):
             for var_name in var_names:
@@ -1947,6 +2630,19 @@ class MixedSurrogate:
         return self._Chaos_SI.getSobolGroupedIndex(inds)
 
     def get_total_interaction_sobol(self,var_names:list):
+        """Return the grouped total-order Sobol index for mixed variables.
+
+        Parameters
+        ----------
+        var_names : list of str
+            Mixed variable names included in the interaction group.
+
+        Returns
+        -------
+        float
+            Grouped total-order Sobol sensitivity index.
+
+        """
         inds=[]
         for i,name in enumerate(self.all_var_to_dist.keys()):
             for var_name in var_names:
@@ -1956,6 +2652,21 @@ class MixedSurrogate:
         return self._Chaos_SI.getSobolGroupedTotalIndex(inds)
 
     def plot_total_order_sobol(self,plot_title="",save_dir=None):
+        """Plot total-order Sobol indices for all mixed variables.
+
+        Parameters
+        ----------
+        plot_title : str, optional
+            Plot title. If omitted, a default title is used.
+        save_dir : str or path-like, optional
+            Directory where the plot image is saved. If omitted, the plot is not
+            written to disk.
+
+        Returns
+        -------
+        None
+
+        """
         name_to_inds={}
         names=[]
         for i,name in enumerate(self.all_var_to_dist.keys()):
@@ -1980,39 +2691,53 @@ class MixedSurrogate:
 
 #--------------------------Local one at a time sensitivity post process class
 class LocalSensitivityPost:
-    """Represent the localsensitivitypost component in the UAM4X workflow.
+    """Post-process local one-at-a-time sensitivity results.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    This class computes finite-difference sensitivities from trade-study
+    results generated by a local sensitivity workflow.
+
+    Parameters
+    ----------
+    tradestudy : Tradestudy
+        Trade-study results container used for post-processing.
 
     """
 
     def __init__(self, tradestudy: Tradestudy):
-        """Initialize object state and default configuration.
+        """Initialize a local sensitivity post-processing helper.
 
         Parameters
         ----------
         tradestudy : Tradestudy
-            Input value for `tradestudy`.
+            Trade-study results container used for post-processing.
 
         """
         self.tradestudy = tradestudy
 
     def compute_sensitivity(self, output_name, method="forward"):
-        """Compute sensitivity.
+        """Compute local sensitivities for one output variable.
 
         Parameters
         ----------
-        output_name : Any
-            Identifier used by this operation.
-        method : Any, optional
-            Input value for `method`.
+        output_name : str
+            Output variable name to analyze.
+        method : {"forward", "backward", "central"}, optional
+            Finite-difference method used to compute sensitivities.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        var_to_sens : dict
+            Nested dictionary mapping ``output_name`` to local sensitivities for
+            each perturbed input variable.
+        max_dict : dict
+            Dictionary containing the variable with the largest absolute
+            sensitivity and that sensitivity magnitude.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is not ``"forward"``, ``"backward"``, or
+            ``"central"``.
 
         """
         trade_name = self.tradestudy.trade_name

@@ -11,10 +11,34 @@ Package Interface
    :undoc-members:
    :show-inheritance:
 
-Module: ``uam4x.UQ``
---------------------
+Module: ``uam4x.study``
+-----------------------
 
-.. automodule:: uam4x.UQ
+.. automodule:: uam4x.study
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.vehicle``
+-------------------------
+
+.. automodule:: uam4x.vehicle
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.subsystems``
+----------------------------
+
+.. automodule:: uam4x.subsystems
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module: ``uam4x.solution``
+--------------------------
+
+.. automodule:: uam4x.solution
    :members:
    :undoc-members:
    :show-inheritance:
@@ -27,18 +51,10 @@ Module: ``uam4x.control``
    :undoc-members:
    :show-inheritance:
 
-Module: ``uam4x.custom_errors``
--------------------------------
+Module: ``uam4x.UQ``
+--------------------
 
-.. automodule:: uam4x.custom_errors
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module: ``uam4x.execution_engine``
-----------------------------------
-
-.. automodule:: uam4x.execution_engine
+.. automodule:: uam4x.UQ
    :members:
    :undoc-members:
    :show-inheritance:
@@ -51,10 +67,10 @@ Module: ``uam4x.local_sensitivity``
    :undoc-members:
    :show-inheritance:
 
-Module: ``uam4x.log``
----------------------
+Module: ``uam4x.execution_engine``
+----------------------------------
 
-.. automodule:: uam4x.log
+.. automodule:: uam4x.execution_engine
    :members:
    :undoc-members:
    :show-inheritance:
@@ -75,26 +91,25 @@ Module: ``uam4x.results``
    :undoc-members:
    :show-inheritance:
 
-Module: ``uam4x.solution``
---------------------------
+Module: ``uam4x.post``
+-------------------------
 
-.. automodule:: uam4x.solution
+.. automodule:: uam4x.post
+   :members:
+   :undoc-members:
+   :show-inheritance:
+Module: ``uam4x.custom_errors``
+-------------------------------
+
+.. automodule:: uam4x.custom_errors
    :members:
    :undoc-members:
    :show-inheritance:
 
-Module: ``uam4x.study``
------------------------
+Module: ``uam4x.log``
+---------------------
 
-.. automodule:: uam4x.study
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module: ``uam4x.subsystems``
-----------------------------
-
-.. automodule:: uam4x.subsystems
+.. automodule:: uam4x.log
    :members:
    :undoc-members:
    :show-inheritance:
@@ -115,10 +130,3 @@ Module: ``uam4x.utils``
    :undoc-members:
    :show-inheritance:
 
-Module: ``uam4x.vehicle``
--------------------------
-
-.. automodule:: uam4x.vehicle
-   :members:
-   :undoc-members:
-   :show-inheritance:
