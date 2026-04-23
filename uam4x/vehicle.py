@@ -5,35 +5,37 @@ from collections import Counter
 
 
 class VehicleManager:
-    """Manage vehiclemanager entities and related operations.
+    """Manage the collection of vehicles in a study.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    A ``VehicleManager`` stores named :class:`Vehicle` objects, enforces unique
+    vehicle names, and provides lookup and iteration helpers.
 
     """
 
     log = get_log(log, object_name="vehicle manager")
 
     def __init__(self):
-        """Initialize object state and default configuration.
-
-        Notes
-        -----
-        This method performs internal setup or validation logic.
-
-        """
+        """Initialize an empty vehicle manager."""
         self.log = VehicleManager.log
         self.log.debug("initialize")
         self._vehicles = []
 
     def add_vehicle(self, vehicle):
-        """Add vehicle.
+        """Add a vehicle to the manager.
 
         Parameters
         ----------
-        vehicle : Any
-            Input value for `vehicle`.
+        vehicle : Vehicle
+            Vehicle object to add.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If a vehicle with the same name is already present.
 
         """
         self.log.debug(f"add vehicle: {vehicle.name}")
@@ -46,17 +48,22 @@ class VehicleManager:
         self._vehicles.append(vehicle)
 
     def get_vehicle(self, name):
-        """Return vehicle.
+        """Return a vehicle by name.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
+        name : str
+            Vehicle name.
 
         Returns
         -------
-        Any
-            Requested value.
+        Vehicle
+            Vehicle object registered under ``name``.
+
+        Raises
+        ------
+        ValueError
+            If no vehicle with name ``name`` is present.
 
         """
         self.log.debug(f"get vehicle: {name}")
@@ -68,61 +75,68 @@ class VehicleManager:
         raise ValueError(f"Vehicle with name {name} not found in vehicle manager")
 
     def append(self, vehicle):
-        """Execute append.
+        """Append a vehicle to the manager.
 
         Parameters
         ----------
-        vehicle : Any
-            Input value for `vehicle`.
+        vehicle : Vehicle
+            Vehicle object to add.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        None
+
+        Notes
+        -----
+        This is an alias for :meth:`add_vehicle`.
 
         """
         return self.add_vehicle(vehicle)
 
     def __getattr__(self, item):
         # Allow attribute access to components by their name
-        """Execute getattr.
+        """Return a vehicle by attribute-style access.
 
         Parameters
         ----------
-        item : Any
-            Input value for `item`.
+        item : str
+            Vehicle name requested through attribute-style access.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        Vehicle
+            Vehicle object registered under ``item``.
+
+        Raises
+        ------
+        ValueError
+            If no vehicle with name ``item`` is present.
+
+        Notes
+        -----
+        This allows attribute-style access such as ``manager.my_vehicle``.
 
         """
-        for veh in self._vehicles:
-            if veh.name == item:
-                return veh
-        raise AttributeError(
-            f"'{self.__class__.__name__}' object has no attribute '{item}'"
-        )
+        return self.get_vehicle(item)
 
     def __iter__(self):
-        """Execute iter.
+        """Return an iterator over stored vehicles.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        iterator of Vehicle
+            Iterator over vehicles in insertion order.
 
         """
         return iter(self._vehicles)
 
     def __len__(self):
-        """Execute len.
+        """Return the number of stored vehicles.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        int
+            Number of vehicles in the manager.
 
         """
         return len(self._vehicles)
@@ -132,8 +146,8 @@ class VehicleManager:
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        str
+            Representation including the stored vehicle names.
 
         """
         names = [v.name for v in self._vehicles]
@@ -141,25 +155,37 @@ class VehicleManager:
 
 
 class Vehicle:
-    """Represent the vehicle component in the UAM4X workflow.
+    """Represent a vehicle composed of named subsystems.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    A ``Vehicle`` stores a collection of subsystem components, enforces unique
+    component names, and provides helpers for component lookup, parameter type
+    validation, and serialization.
+
+    Parameters
+    ----------
+    name : str
+        Vehicle name.
+    components : sequence of Subsystem, optional
+        Initial subsystem components to attach to the vehicle.
 
     """
 
     log = get_log(log, object_name="vehicle")
 
     def __init__(self, name, components=None):
-        """Initialize object state and default configuration.
+        """Initialize a vehicle.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        components : Any, optional
-            Input value for `components`.
+        name : str
+            Vehicle name.
+        components : sequence of Subsystem, optional
+            Initial subsystem components to attach to the vehicle.
+
+        Raises
+        ------
+        NameError
+            If ``components`` contains duplicate component names.
 
         """
         self.log = Vehicle.log
@@ -171,12 +197,21 @@ class Vehicle:
 
     @staticmethod
     def check_component_names(components_list):
-        """Validate component names.
+        """Validate that component names are unique.
 
         Parameters
         ----------
-        components_list : Any
-            Input value for `components_list`.
+        components_list : sequence of Subsystem
+            Components whose names are checked for duplicates.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        NameError
+            If duplicate component names are found.
 
         """
         c_dict = Counter([c.name for c in components_list])
@@ -190,24 +225,29 @@ class Vehicle:
 
     @property
     def name(self):
-        """Execute name.
+        """Vehicle name.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        str
+            Name of the vehicle.
 
         """
         return self._name
 
     @name.setter
     def name(self, value):
-        """Execute name.
+        """Set the vehicle name.
 
         Parameters
         ----------
-        value : Any
-            Input value for `value`.
+        value : str
+            New vehicle name.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is not a string or contains ``"["`` or ``"]"``.
 
         """
         if not isinstance(value, str):
@@ -226,23 +266,37 @@ class Vehicle:
 
     @property
     def components(self):
-        """Execute components.
+        """Return the attached subsystem components.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        list of Subsystem
+            Components attached to the vehicle.
 
         """
         return self._components
 
     def add_component(self, component):
-        """Add component.
+        """Add a subsystem component to the vehicle.
 
         Parameters
         ----------
-        component : Any
-            Input value for `component`.
+        component : Subsystem
+            Component to attach to the vehicle.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``component`` already belongs to another vehicle.
+
+        Notes
+        -----
+        Component names must remain unique within the vehicle. The component
+        parent reference is updated when the add succeeds.
 
         """
         parent = getattr(component, "_parent")
@@ -257,29 +311,47 @@ class Vehicle:
         component._parent = self
 
     def remove_component(self, component):
-        """Remove component.
+        """Remove a subsystem component from the vehicle.
 
         Parameters
         ----------
-        component : Any
-            Input value for `component`.
-
-        """
-        self.log.debug("remove component")
-        self._components.remove(component)
-
-    def get_component(self, name):
-        """Return component.
-
-        Parameters
-        ----------
-        name : Any
-            Identifier used by this operation.
+        component_name : str
+            Name of the component to remove.
 
         Returns
         -------
-        Any
-            Requested value.
+        None
+
+        Raises
+        ------
+        ValueError
+            If no component with name ``component_name`` is attached to the
+            vehicle.
+
+        """
+        self.log.debug("remove component")
+        if isinstance(component, str):
+            component = self.get_component(component)
+        self._components.remove(component)
+        component._parent = None
+
+    def get_component(self, name):
+        """Return a component by name.
+
+        Parameters
+        ----------
+        name : str
+            Component name.
+
+        Returns
+        -------
+        Subsystem
+            Component registered under ``name``.
+
+        Raises
+        ------
+        ValueError
+            If no component with name ``name`` is attached to the vehicle.
 
         """
         self.log.debug(f"get component: {name}")
@@ -296,8 +368,8 @@ class Vehicle:
 
         Returns
         -------
-        Any
-            Requested value.
+        list of str
+            Names of components attached to the vehicle.
 
         """
         self.log.debug("get component names")
@@ -305,17 +377,26 @@ class Vehicle:
 
     def __getattr__(self, item):
         # Allow attribute access to components by their name
-        """Execute getattr.
+        """Return a component by attribute-style access.
 
         Parameters
         ----------
-        item : Any
-            Input value for `item`.
+        item : str
+            Component name requested through attribute-style access.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        Subsystem
+            Component registered under ``item``.
+
+        Raises
+        ------
+        AttributeError
+            If no component with name ``item`` is attached to the vehicle.
+
+        Notes
+        -----
+        This allows attribute-style access such as ``vehicle.wing``.
 
         """
         for comp in self._components:
@@ -326,12 +407,20 @@ class Vehicle:
         )
 
     def check_all_parameter_types(self):
-        """Validate all parameter types.
+        """Validate parameter types for all attached components.
 
         Returns
         -------
-        Any
-            Boolean status for the requested check.
+        all_ok : bool
+            True if all component and mode parameters have valid types.
+        result : dict
+            Nested dictionary containing per-component and per-mode validation
+            results.
+
+        Notes
+        -----
+        This delegates parameter-type validation to each component attached to
+        the vehicle.
 
         """
         self.log.debug("check all parameter types")
@@ -350,12 +439,13 @@ class Vehicle:
         return all_ok, result
 
     def __str__(self):
-        """Return a human-readable string representation.
+        """Return a human-readable string representation of the vehicle.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        str
+            String representation including the vehicle name and component
+            names.
 
         """
         self.log.debug("write to string")
@@ -365,12 +455,13 @@ class Vehicle:
         return f"Vehicle(name={self._name}, components=[{comp_info}])"
 
     def _to_dict(self) -> dict:
-        """Execute to dict.
+        """Serialize the vehicle to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the vehicle name and
+            serialized component data.
 
         """
         self.log.debug("write to dict")
@@ -381,17 +472,17 @@ class Vehicle:
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Vehicle":
-        """Execute from dict.
+        """Reconstruct a vehicle from a dictionary.
 
         Parameters
         ----------
         data : dict
-            Input value for `data`.
+            Serialized vehicle dictionary, typically produced by :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Vehicle
+            Reconstructed vehicle with restored components.
 
         """
         cls.log.debug("vehicle from dict")

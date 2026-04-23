@@ -26,23 +26,40 @@ import hashlib
 
 
 class Study:
-    """Represent the study component in the UAM4X workflow.
+    """Represent a UAM4X study and its associated data.
+
+    A study owns the vehicles, solution, control configuration, results, and
+    runtime metadata for a UAM4X workflow. It also provides serialization,
+    persistence, and dotted-path access helpers for study data.
+
+    Parameters
+    ----------
+    log_dir : str or path-like, optional
+        Directory where the study log file is written. If omitted, the existing
+        logging configuration is used.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    The class initializes empty vehicle, solution, control, and result
+    containers on construction.
 
     """
 
     log = get_log(log, object_name="study")
 
     def __init__(self, log_dir=None) -> None:
-        """Initialize a study with vehicles, solution, control, and results containers.
+        """Initialize a study.
 
         Parameters
         ----------
-        log_dir : Any, optional
-            Input value for `log_dir`.
+        log_dir : str or path-like, optional
+            Directory where the study log file is written. If omitted, the
+            existing logging configuration is used.
+
+        Notes
+        -----
+        Construction initializes empty vehicle, solution, control, result, and
+        runtime metadata containers.
 
         """
         if log_dir:
@@ -62,14 +79,20 @@ class Study:
         self._post_data={}
 
     def _add_runtime_plugin_checksums(self, trade_name, plugin_to_checksum):
-        """Store runtime plugin checksums for a trade execution.
+        """Store plugin checksum metadata for a trade execution.
 
         Parameters
         ----------
-        trade_name : Any
-            Trade-study name under `Study.control.trade_studies`.
-        plugin_to_checksum : Any
-            Input value for `plugin_to_checksum`.
+        trade_name : str
+            Name of the trade study associated with the recorded runtime
+            metadata.
+        plugin_to_checksum : dict
+            Mapping from plugin identifiers to checksum strings captured during
+            execution.
+
+        Returns
+        -------
+        None
 
         """
         self._runtime_meta_data[trade_name]["step_plugin_hashes"] = plugin_to_checksum
@@ -77,14 +100,20 @@ class Study:
     def _add_runtime_external_executable_data(
         self, trade_name, external_executable_to_data
     ):
-        """Store runtime external executable metadata for a trade execution.
+        """Store external executable metadata for a trade execution.
 
         Parameters
         ----------
-        trade_name : Any
-            Trade-study name under `Study.control.trade_studies`.
-        external_executable_to_data : Any
-            Input value for `external_executable_to_data`.
+        trade_name : str
+            Name of the trade study associated with the recorded runtime
+            metadata.
+        external_executable_to_data : dict
+            Mapping from external executable identifiers to execution metadata
+            captured during the run.
+
+        Returns
+        -------
+        None
 
         """
         self._runtime_meta_data[trade_name][
@@ -92,12 +121,23 @@ class Study:
         ] = external_executable_to_data
 
     def _capture_environment(self, trade_name):
-        """Execute capture environment.
+        """Capture runtime environment metadata for a trade execution.
 
         Parameters
         ----------
-        trade_name : Any
-            Identifier used by this operation.
+        trade_name : str
+            Name of the trade study associated with the recorded runtime
+            metadata.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The captured metadata includes machine information, Python interpreter
+        details, installed package versions, and a formatted start-time string
+        in the America/Los_Angeles time zone.
 
         """
 
@@ -151,14 +191,18 @@ class Study:
             self._runtime_meta_data[trade_name]["time_info"] = {"Start_Time": message}
 
     def add_trade(self, trade_name: str, trade) -> None:
-        """Register a trade workflow under study control.
+        """Register a trade study with the study control object.
 
         Parameters
         ----------
         trade_name : str
-            Trade-study name under `Study.control.trade_studies`.
-        trade : Any
-            Input value for `trade`.
+            Name used to register the trade study.
+        trade : object
+            Trade-study workflow object to register with :attr:`control`.
+
+        Returns
+        -------
+        None
 
         """
         self.log.debug(f"add trade: {trade_name}")
@@ -169,42 +213,52 @@ class Study:
 
         Parameters
         ----------
-        vehicle : Any
-            Input value for `vehicle`.
+        vehicle : Vehicle
+            Vehicle object to add to the study vehicle manager.
 
         Returns
         -------
-        Any
-            Return value from `VehicleManager.add_vehicle`.
+        None
+
+        Raises
+        ------
+        ValueError
+            If a vehicle with the same name is already registered.
 
         """
         self.log.debug(f"add vehicle: {vehicle.name}")
         return self.vehicles.add_vehicle(vehicle)
 
     def get_vehicle(self, vehicle_name: str):
-        """Return vehicle.
+        """Return a vehicle definition by name.
 
         Parameters
         ----------
         vehicle_name : str
-            Identifier used by this operation.
+            Name of the vehicle to retrieve.
 
         Returns
         -------
-        Any
-            Requested value.
+        Vehicle
+            Vehicle object registered under ``vehicle_name``.
+
+        Raises
+        ------
+        ValueError
+            If no vehicle with name ``vehicle_name`` is registered.
 
         """
         self.log.debug(f"get vehicle: {vehicle_name}")
         return self.vehicles.get_vehicle(vehicle_name)
 
     def _to_dict(self) -> dict:
-        """Convert the study to a dictionary representation.
+        """Serialize the study to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the study control data,
+            vehicles, solution data, results data, and execution metadata.
 
         """
         self.log.debug("write to dict")
@@ -223,19 +277,21 @@ class Study:
 
     @classmethod
     def _from_dict(cls, data: dict, work_dir=None) -> "Study":
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a study from a dictionary.
 
         Parameters
         ----------
         data : dict
-            Input value for `data`.
-        work_dir : Any, optional
-            Input value for `work_dir`.
+            Serialized study dictionary, typically produced by :meth:`_to_dict`.
+        work_dir : str or path-like, optional
+            Directory used for study logging during reconstruction. If omitted,
+            the existing logging configuration is used.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Study
+            Reconstructed study containing vehicles, solution, control,
+            results, and execution metadata.
 
         """
         cls.log.debug("study from dict")
@@ -255,10 +311,18 @@ class Study:
 
         Parameters
         ----------
-        data : Any
+        data : dict
             JSON-serializable data payload to write.
-        json_path : str
+        json_path : str or path-like
             Output path for the JSON file.
+        commit : bool, optional
+            If True, commit the written file to the current git branch.
+        commit_message : str, optional
+            Commit message used when ``commit`` is True.
+
+        Returns
+        -------
+        None
 
         """
         self.log.debug("save to json")
@@ -267,14 +331,26 @@ class Study:
             json.dump(data, f, indent=4)
 
     def save_to_json(self,variant_dir:str,commit=False):
-        """Write model and optional results JSON files for a variant.
+        """Write study model data and, when available, results data to JSON files.
 
         Parameters
         ----------
-        variant_dir : str
-            Variant directory where `model.json` and `results.json` are written.
+        variant_dir : str or path-like
+            Variant directory where ``model.json`` and, if results exist,
+            ``results.json`` are written.
         commit : bool, optional
-            If `True`, commit the written JSON file(s) in a single git commit.
+            If True, commit the written JSON file or files to the current git
+            branch.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        If the current model hash differs from the loaded model hash, only
+        ``model.json`` is rewritten and existing results are discarded rather
+        than saved.
         """
 
         #Paths
@@ -325,6 +401,26 @@ class Study:
 
     @staticmethod
     def _update_control(model_dict,model_hash):
+        """Insert the model hash into serialized control data.
+
+        Parameters
+        ----------
+        model_dict : dict
+            Serialized model dictionary containing a ``"control"`` entry.
+        model_hash : str
+            Hash string to insert into the serialized control data.
+
+        Returns
+        -------
+        dict
+            Updated control dictionary including ``"model_hash"``.
+
+        Notes
+        -----
+        The method preserves the original control key order and inserts
+        ``"model_hash"`` after the fourth existing control entry.
+
+        """
         new_control_dict={}
         for i,(name,data) in enumerate(model_dict["control"].items()):
             new_control_dict[name]=data
@@ -333,14 +429,18 @@ class Study:
         return new_control_dict
 
     def save_model_to_json(self, variant_dir: str, commit=False):
-        """Write model configuration data to JSON.
+        """Write model configuration data to ``model.json``.
 
         Parameters
         ----------
-        variant_dir : str
-            Variant directory where `model.json` is written.
-        commit : Any, optional
-            If `True`, create a git commit for the generated JSON artifact.
+        variant_dir : str or path-like
+            Variant directory where ``model.json`` is written.
+        commit : bool, optional
+            If True, commit the generated JSON file to the current git branch.
+
+        Returns
+        -------
+        None
 
         """
         msg = f"AutoCommit: Created data for variant {self.control.variant_name}"
@@ -362,6 +462,25 @@ class Study:
 
     @staticmethod
     def _generate_header_dict(control_dict,model_hash,results_hash):
+        """Build header metadata for serialized results or post-processing data.
+
+        Parameters
+        ----------
+        control_dict : dict
+            Serialized control dictionary containing study metadata such as
+            title, author, description, repository root, and variant name.
+        model_hash : str
+            Hash of the serialized model data.
+        results_hash : str
+            Hash of the serialized results data.
+
+        Returns
+        -------
+        dict
+            Header dictionary containing study metadata together with the model
+            and results hashes.
+
+        """
         return {
             "title":control_dict['title'],
             "author":control_dict["author"],
@@ -374,14 +493,27 @@ class Study:
 
 
     def save_results_to_json(self, variant_path: str, commit=False):
-        """Write current results data to JSON.
+        """Write current study results to ``results.json``.
 
         Parameters
         ----------
-        variant_path : str
-            Variant directory where `results.json` is written.
-        commit : Any, optional
-            If `True`, create a git commit for the generated JSON artifact.
+        variant_path : str or path-like
+            Variant directory where ``results.json`` is written.
+        commit : bool, optional
+            If True, commit the generated JSON file to the current git branch.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If no results exist, if ``model.json`` does not exist, or if the
+            current model hash does not match the loaded model hash.
+        AttributeError
+            If the study was not loaded from JSON before attempting to save
+            results.
 
         """
         msg = f"AutoCommit: Writing results for variant {self.control.variant_name}"
@@ -427,6 +559,27 @@ class Study:
             self._commit_json_to_branch([results_path],commit_message=msg)
 
     def save_post_to_json(self,variant_path,commit=False):
+        """Write post-processing data to ``post.json``.
+
+        Parameters
+        ----------
+        variant_path : str or path-like
+            Variant directory where ``post.json`` is written.
+        commit : bool, optional
+            If True, commit the generated JSON file to the current git branch.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If results do not exist, if required ``model.json`` or
+            ``results.json`` files are missing, or if the current results hash
+            does not match the loaded results hash.
+
+        """
         msg=f"AutoCommit: Writing post processing data for variant {self.control.variant_name}"
         post_processing_path=os.path.join(variant_path,'post.json')
         study_dict=replace_none_with_empty_quotes(self._to_dict())
@@ -472,14 +625,32 @@ class Study:
             self._commit_json_to_branch([post_processing_path],msg)
 
     def _commit_json_to_branch(self, json_paths, commit_message):
-        """Commit one or more JSON artifacts into the configured git repository.
+        """Commit generated JSON artifacts to the configured git repository.
 
         Parameters
         ----------
-        json_paths : Iterable[str]
-            Paths to JSON file(s) to stage and commit.
-        commit_message : Any
-            Git commit message used when committing JSON output.
+        json_paths : iterable of str or path-like
+            Paths to JSON files to stage and commit.
+        commit_message : str
+            Git commit message used for the commit.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        NotADirectoryError
+            If :attr:`control.repo_root` is not a directory.
+        ValueError
+            If no git repository can be found at :attr:`control.repo_root`.
+        RuntimeError
+            If the repository is in a detached HEAD state.
+
+        Notes
+        -----
+        If staging the requested files produces no tree changes relative to
+        HEAD, no commit is created.
 
         """
         if not os.path.isdir(self.control.repo_root):
@@ -548,17 +719,18 @@ class Study:
 
     @classmethod
     def from_json(cls, variant_dir: str) -> "Study":
-        """Create a Study instance from a JSON file.
+        """Create a study from JSON artifacts in a variant directory.
 
         Parameters
         ----------
-        json_path : str
-            Path to the JSON file to read or write.
+        variant_dir : str or path-like
+            Variant directory containing ``model.json`` and, optionally,
+            ``results.json`` and ``post.json``.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Study
+            Study reconstructed from the JSON artifacts in ``variant_dir``.
 
         """
         cls.log.debug("create study from json")
@@ -610,6 +782,19 @@ class Study:
 
     @staticmethod
     def _generate_data_hash(model_dict):
+        """Generate a deterministic hash for serialized study data.
+
+        Parameters
+        ----------
+        model_dict : dict
+            JSON-serializable dictionary to hash.
+
+        Returns
+        -------
+        str
+            SHA-256 hash of the normalized serialized data.
+
+        """
         payload = json.dumps(
         model_dict,
         sort_keys=True,
@@ -620,19 +805,25 @@ class Study:
 
 
     def get_value(self, dotted_path: str):
-        """Retrieve a value from the study using a dotted path string, e.g.:.
-
-        'vehicles.multi_objective_vehicle.wing1.aspect_ratio'
+        """Retrieve a study value from a dotted path.
 
         Parameters
         ----------
         dotted_path : str
-            Dotted attribute path used to resolve nested values.
+            Dotted attribute path to resolve from the study. Paths may include a
+            trailing bracketed index or slice for array-like values, for
+            example ``"vehicles.my_vehicle.wing.span[0]"``.
 
         Returns
         -------
-        Any
-            Requested value.
+        object
+            Value resolved from ``dotted_path``.
+
+        Notes
+        -----
+        Dotted-path resolution uses :func:`operator.attrgetter`. If bracketed
+        indices are present, they are applied after the base attribute path is
+        resolved.
 
         """
         self.log.debug(f"get the value of {dotted_path}")
@@ -655,9 +846,24 @@ class Study:
         Parameters
         ----------
         dotted_path : str
-            Dotted attribute path used to resolve a study or group value.
-        value : Any
+            Vehicle parameter path in one of these forms:
+            ``"vehicles.vehicle.component.parameter"`` or
+            ``"vehicles.vehicle.component.mode.parameter"``.
+        value : object
             New value to assign.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``dotted_path`` is not a supported vehicle parameter path.
+
+        Notes
+        -----
+        Indexed paths are not currently supported by this method.
 
         """
         split_up_path = dotted_path.split(".")
@@ -673,17 +879,28 @@ class Study:
         attrgetter(comp)(self).set_parameter(param, value)
 
     def get_param_type(self, dotted_path: str):
-        """Return param type.
+        """Return the declared type of a vehicle parameter.
 
         Parameters
         ----------
         dotted_path : str
-            Dotted attribute path used to resolve a study or group value.
+            Vehicle parameter path in one of these forms:
+            ``"vehicles.vehicle.component.parameter"`` or
+            ``"vehicles.vehicle.component.mode.parameter"``.
 
         Returns
         -------
-        Any
-            Requested value.
+        type
+            Parameter type returned by the underlying component or mode object.
+
+        Raises
+        ------
+        ValueError
+            If ``dotted_path`` is not a supported vehicle parameter path.
+
+        Notes
+        -----
+        Indexed paths are not currently supported by this method.
 
         """
         split_up_path = dotted_path.split(".")
@@ -705,16 +922,19 @@ class Study:
         return param_type
 
     def get_all_vehicle_param_names(self):
-        """
-        Get all possible vehicle names and step input/output names that are links.
+        """Return all available vehicle parameter paths.
 
         Returns
         -------
-        dict
-            Dictionary containing:
-            - 'vehicle_names': List of all possible vehicle parameter names (e.g., 'vehicles.veh1.wing1.mode.span')
-            - 'step_inputs': List of all step input names (e.g., 'step1.weights.wing_weight')
-            - 'step_outputs': List of all step output names (e.g., 'step1.weights.wing_weight')
+        list of str
+            Sorted list of dotted vehicle parameter paths, including both
+            baseline component parameters and mode-specific parameters.
+
+        Notes
+        -----
+        Returned paths use the same naming convention accepted by
+        :meth:`get_value`, :meth:`set_value`, and :meth:`get_param_type`.
+
         """
         vehicle_names = []
 
@@ -742,23 +962,35 @@ class Study:
 
 
 class Variants:
-    """Represent the variants component in the UAM4X workflow.
+    """Manage generation of multiple study variants.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    A ``Variants`` object stores named variant definitions, where each variant
+    is described by a sequence of functions that modify a :class:`Study`
+    instance before it is saved to a variant directory.
+
+    Parameters
+    ----------
+    dir : str or path-like
+        Repository or project directory where the ``variants`` subdirectory is
+        created and variant artifacts are written.
 
     """
 
     log = get_log(log, object_name="variants")
 
     def __init__(self, dir: str) -> None:
-        """Initialize variant generation settings and output directories.
+        """Initialize a variant manager.
 
         Parameters
         ----------
-        dir : str
-            Input value for `dir`.
+        dir : str or path-like
+            Repository or project directory where the ``variants``
+            subdirectory is created.
+
+        Notes
+        -----
+        Construction creates the ``variants`` subdirectory if it does not
+        already exist.
 
         """
         self.dir = dir
@@ -774,22 +1006,34 @@ class Variants:
 
         Parameters
         ----------
-        repo_dir : str
-            Path to the repository root. Relative paths are resolved against
-            the current working directory and stored as an absolute path.
+        repo_dir : str or path-like
+            Path to the repository root. Relative paths are expanded and stored
+            as an absolute path.
+
+        Returns
+        -------
+        None
 
         """
         self.dir = os.path.abspath(os.path.expanduser(repo_dir))
 
     def add_variant(self, name, func_list: list,options:dict=None):
-        """Add variant.
+        """Register a named study variant.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        func_list : list
-            Input value for `func_list`.
+        name : str
+            Variant name.
+        func_list : list of callable
+            Sequence of functions applied to a new :class:`Study` instance to
+            configure the variant.
+        options : dict, optional
+            Optional dictionary passed as the second argument to each function
+            in ``func_list``.
+
+        Returns
+        -------
+        None
 
         """
         self.log.debug(f"add variant {name}")
@@ -800,13 +1044,18 @@ class Variants:
 
         Parameters
         ----------
-        commit : Any, optional
-            If `True`, also commit generated JSON artifacts to git.
+        commit : bool, optional
+            If True, also commit generated JSON artifacts to git.
 
         Returns
         -------
-        Any
-            List of generated `Study` objects, one per configured variant.
+        list of Study
+            Generated study objects, one per configured variant.
+
+        Notes
+        -----
+        Each generated study is written to ``<repo>/variants/<variant_name>``
+        using :meth:`Study.save_model_to_json`.
 
         """
         self.log.debug("generate variants")

@@ -37,23 +37,28 @@ _subsystem_to_param_name_type_list = {}
 
 
 class Parameter:
-    """
-    Represents a parameter with type, value, units, and description.
+    """Represent a typed subsystem parameter.
+
+    A ``Parameter`` stores a name, value, declared Python type, optional unit
+    metadata, and a free-text description. Parameter values are type-checked at
+    construction and when reassigned.
 
     Parameters
     ----------
     name : str
-        Name of the parameter.
-    default_value : Any
-        Default value for the parameter.
+        Parameter name.
+    default_value : object
+        Initial parameter value. The value must be an instance of ``dtype``.
     dtype : type
-        Python type for the parameter (e.g., float, int).
+        Declared Python type for the parameter value.
     unit_type : UnitType, optional
-        The type of unit (e.g., LENGTH, MASS).
+        Unit category associated with the parameter. If omitted, the parameter
+        uses :attr:`uam4x.units.UnitType.NONE`.
     unit : Enum or str, optional
-        The unit (e.g., METER, KG).
+        Unit label associated with the parameter value.
     description : str, optional
-        Description of the parameter.
+        Human-readable parameter description.
+
     """
 
     log = get_log(log, object_name=f"parameter")
@@ -67,22 +72,27 @@ class Parameter:
         unit: Enum = None,
         description: str = "",
     ):
-        """Initialize one subsystem parameter definition.
+        """Initialize a parameter.
 
         Parameters
         ----------
         name : str
-            Identifier used by this method.
-        default_value : Any
-            Input value for `default_value`.
-        dtype : Any
-            Input value for `dtype`.
+            Parameter name.
+        default_value : object
+            Initial parameter value. The value must be an instance of ``dtype``.
+        dtype : type
+            Declared Python type for the parameter value.
         unit_type : UnitType, optional
-            Input value for `unit_type`.
+            Unit category associated with the parameter.
         unit : Enum, optional
-            Unit label/value associated with the parameter value.
+            Unit label associated with the parameter value.
         description : str, optional
-            Input value for `description`.
+            Human-readable parameter description.
+
+        Raises
+        ------
+        TypeError
+            If ``default_value`` is not an instance of ``dtype``.
 
         """
         from uam4x.units import UnitType
@@ -104,48 +114,59 @@ class Parameter:
         self.description = description
 
     def __str__(self):
-        """
-        Returns a string representation of the parameter.
+        """Return a human-readable string representation of the parameter.
 
         Returns
         -------
         str
+            String representation including the parameter name, value, unit
+            metadata, and description.
+
         """
         unit_display = self.unit if self.unit else "—"
         self.log.debug(f"return string representation")
         return f"{self.name}: {self.value} [{self.unit_type}, {unit_display}] ({self.description})"
 
     def __repr__(self):
-        """
-        Returns a string representation of the parameter (same as __str__).
+        """Return a developer-oriented string representation of the parameter.
 
         Returns
         -------
         str
+            Representation of the parameter. This implementation matches
+            :meth:`__str__`.
+
         """
         self.log.debug(f"return string representation")
         return self.__str__()
 
     @property
     def value(self):
-        """
-        Get or set the value of the parameter.
+        """Parameter value.
 
         Returns
         -------
-        Any
+        object
+            Current parameter value.
+
         """
         return self._value
 
     @value.setter
     def value(self, v):
-        """
-        Set the value of the parameter, enforcing type.
+        """Set the parameter value.
 
         Parameters
         ----------
-        v : Any
-            Value to set. Must match dtype.
+        v : object
+            New parameter value. The value must be an instance of the declared
+            parameter type.
+
+        Raises
+        ------
+        TypeError
+            If ``v`` is not an instance of :attr:`dtype`.
+
         """
 
         if not isinstance(v, self.dtype):
@@ -158,12 +179,14 @@ class Parameter:
         self._value = v
 
     def _to_dict(self) -> dict:
-        """
-        Serialize the parameter to a JSON-serializable dictionary.
+        """Serialize the parameter to a dictionary.
 
         Returns
         -------
         dict
+            JSON-compatible dictionary containing the parameter name, value,
+            type, unit metadata, and description.
+
         """
         # Only include JSON-serializable fields, never include .dtype or any type/class
         # Ensure unit_type and unit are always serializable (string or None)
@@ -185,17 +208,19 @@ class Parameter:
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Parameter":
-        """
-        Deserialize a parameter from a dictionary.
+        """Reconstruct a parameter from a dictionary.
 
         Parameters
         ----------
         data : dict
-            Dictionary representation of the parameter.
+            Serialized parameter dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
         Parameter
+            Reconstructed parameter.
+
         """
         cls.log.debug("Deserialize a parameter from a dictionary")
         dtype = type_string_to_type(data["dtype"])
@@ -214,28 +239,32 @@ class Parameter:
 
 
 class _Mode:
-    """
-    Represents a mode for a component, allowing parameter overrides.
+    """Represent a subsystem operating mode with parameter overrides.
+
+    A ``_Mode`` stores parameter values that override the baseline parameters
+    of a parent :class:`Subsystem`. Parameters not explicitly overridden are
+    read from the parent subsystem.
 
     Parameters
     ----------
     name : str
-        Name of the mode.
-    component : Subsystem, optional
-        The parent component.
+        Mode name.
+    component : Subsystem
+        Parent subsystem whose baseline parameters are inherited.
+
     """
 
     log = get_log(log, object_name=f"mode")
 
     def __init__(self, name: str, component: "Subsystem"):
-        """Initialize a mode used to override subsystem baseline parameters.
+        """Initialize a mode.
 
         Parameters
         ----------
         name : str
-            Identifier used by this method.
+            Mode name.
         component : 'Subsystem'
-            Input value for `component`.
+            Parent subsystem whose baseline parameters are inherited.
 
         """
         self.name = name
@@ -244,15 +273,27 @@ class _Mode:
         self.log = _Mode.log
 
     def set_parameter(self, name: str, value):
-        """
-        Set a parameter override for this mode.
+        """Set a parameter override for this mode.
 
         Parameters
         ----------
         name : str
             Parameter name.
-        value : Any
-            Value to set.
+        value : object
+            Override value to assign.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        AttributeError
+            If ``name`` is not a parameter on the parent subsystem.
+        TypeError
+            If ``value`` is not an instance of the parent parameter's declared
+            type.
+
         """
         self.log.debug(f"set parameter")
         if name not in self.component._parameters:
@@ -273,8 +314,7 @@ class _Mode:
         self._overrides[name] = value
 
     def get_parameter(self, name: str):
-        """
-        Get the value of a parameter override or inherited from the component.
+        """Return a mode override or inherited subsystem parameter value.
 
         Parameters
         ----------
@@ -283,8 +323,15 @@ class _Mode:
 
         Returns
         -------
-        Any
-            The value of the parameter.
+        object
+            Override value if present, otherwise the parent subsystem parameter
+            value.
+
+        Raises
+        ------
+        AttributeError
+            If ``name`` is not a parameter on the parent subsystem.
+
         """
         self.log.debug(f"get parameter")
         if name in self._overrides:
@@ -299,8 +346,7 @@ class _Mode:
         )
 
     def __getattr__(self, item):
-        """
-        Get an attribute or parameter override from the mode or parent component.
+        """Return an override, inherited parameter, or parent attribute.
 
         Parameters
         ----------
@@ -309,7 +355,15 @@ class _Mode:
 
         Returns
         -------
-        Any
+        object
+            Override value, inherited parameter value, or parent subsystem
+            attribute.
+
+        Raises
+        ------
+        AttributeError
+            If ``item`` cannot be resolved on the mode or parent subsystem.
+
         """
         # Only called if attribute not found in normal places
         if item in self._overrides:
@@ -327,15 +381,25 @@ class _Mode:
         )
 
     def __setattr__(self, key, value):
-        """
-        Set a parameter override or attribute.
+        """Assign a mode override or regular attribute.
 
         Parameters
         ----------
         key : str
-            Attribute or parameter name.
-        value : Any
-            Value to set.
+            Attribute or parameter name to assign.
+        value : object
+            Value to assign.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        If ``key`` matches a parent subsystem parameter name, the assignment is
+        stored as a mode override. Otherwise, special attributes are assigned
+        directly and unknown names raise :class:`AttributeError`.
+
         """
         if key in ("name", "_overrides", "component"):
             object.__setattr__(self, key, value)
@@ -360,13 +424,14 @@ class _Mode:
 
     @property
     def parameters(self):
-        """
-        Get all effective parameters for this mode (overrides + inherited).
+        """Return effective parameter values for the mode.
 
         Returns
         -------
         dict
-            Mapping of parameter names to Parameter objects.
+            Mapping from parameter names to :class:`Parameter` objects,
+            including inherited subsystem defaults and mode overrides.
+
         """
         # Return a dict of all effective Parameter objects: overridden in mode, else from component
         self.log.debug(f"Get parameters for mode {self.name}")
@@ -405,12 +470,14 @@ class _Mode:
         return params
 
     def __str__(self):
-        """
-        Returns a string representation of the mode and its overrides.
+        """Return a human-readable string representation of the mode.
 
         Returns
         -------
         str
+            String representation including the mode name and active
+            overrides.
+
         """
         self.log.debug(f"return a string representation")
         if not self._overrides:
@@ -421,24 +488,45 @@ class _Mode:
 
 
 class Subsystem:
-    """
-    Base class for all subsystems. Supports parameters, modes, and dynamic properties.
+    """Represent a physical vehicle component with parameters and modes.
+
+    ``Subsystem`` is the base class for concrete physical component models such
+    as wings, rotors, and aircraft. A subsystem manages baseline parameters,
+    optional mode-specific overrides, parameter lookup and validation, and
+    serialization.
 
     Parameters
     ----------
     name : str
-        Name of the component.
+        Component name.
+
+    Notes
+    -----
+    Concrete subclasses typically implement :meth:`setup` to register their
+    component parameters.
+
     """
 
     log = get_log(log, object_name=f"component")
 
     def __init__(self, name: str):
-        """Initialize a subsystem instance and declare its baseline parameters.
+        """Initialize a physical component instance.
 
         Parameters
         ----------
         name : str
-            Identifier used by this method.
+            Component name.
+
+        Raises
+        ------
+        ValueError
+            If ``name`` contains ``"["``.
+
+        Notes
+        -----
+        Construction initializes parameter and mode storage, calls
+        :meth:`setup` to register baseline parameters, and creates a
+        ``baseline`` alias to the subsystem itself.
 
         """
         self.name = name
@@ -455,11 +543,16 @@ class Subsystem:
         self._parent = None
 
     def setup(self):
-        """Override in subclasses to add parameters using add_parameter().
+        """Register baseline parameters for the component.
+
+        Returns
+        -------
+        None
 
         Notes
         -----
-        This method performs internal setup/validation logic.
+        Subclasses override this method and call :meth:`add_parameter` to
+        declare their baseline parameters during construction.
 
         """
         self.log.debug(
@@ -469,23 +562,42 @@ class Subsystem:
     def add_parameter(
         self, name: str, default_value, dtype, unit_type=None, unit=None, description=""
     ):
-        """
-        Add a parameter to the subsystem (only allowed in setup()).
+        """Add a baseline parameter to the component.
 
         Parameters
         ----------
         name : str
-            Name of the parameter.
-        default_value : Any
-            Default value.
+            Parameter name.
+        default_value : object
+            Initial parameter value. The value must be an instance of ``dtype``.
         dtype : type
-            Python type (e.g., float, int).
+            Declared Python type for the parameter value.
         unit_type : UnitType, optional
-            Unit type (e.g., LENGTH, MASS).
+            Unit category associated with the parameter.
         unit : Enum or str, optional
-            Unit (e.g., METER, KG).
+            Unit label associated with the parameter value.
         description : str, optional
-            Description.
+            Human-readable parameter description.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RuntimeError
+            If called outside :meth:`setup`.
+        ValueError
+            If ``name`` contains ``"["`` or ``"]"``.
+        TypeError
+            If ``default_value`` is not an instance of ``dtype``.
+
+        Notes
+        -----
+        This method creates a :class:`Parameter` object and dynamically
+        installs a property on the subsystem class for attribute-style access
+        to the parameter.
+
         """
 
         self.log.debug(f"add parameter {name} to {type(self).__name__}")
@@ -514,7 +626,7 @@ class Subsystem:
 
             Returns
             -------
-            Any
+            object
                 Current parameter value.
 
             """
@@ -525,7 +637,7 @@ class Subsystem:
 
             Parameters
             ----------
-            v : Any
+            v : object
                 Value to assign to the parameter.
 
             """
@@ -535,17 +647,31 @@ class Subsystem:
         setattr(self.__class__, name, prop)
 
     def set_parameter(self, name: str, value: float, unit=None):
-        """
-        Set the value (and optionally unit) of a parameter.
+        """Set the value of a baseline parameter.
 
         Parameters
         ----------
         name : str
             Parameter name.
-        value : Any
-            Value to set.
+        value : object
+            New parameter value.
         unit : Enum or str, optional
-            Unit to set.
+            Unit label to assign to the parameter.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        AttributeError
+            If ``name`` is not a defined parameter on the component.
+        TypeError
+            If ``value`` is not an instance of the parameter's declared type.
+        ValueError
+            If ``unit`` is incompatible with the parameter's declared unit
+            type.
+
         """
         self.log.debug(f"set {type(self).__name__} parameter: {name}")
         from uam4x.units import UNIT_TYPE_TO_UNIT_CLASS
@@ -576,17 +702,30 @@ class Subsystem:
             )
 
     def add_mode(self, mode_name: str):
-        """
-        Add a mode to the component.
+        """Add an operating mode to the component.
 
         Parameters
         ----------
         mode_name : str
-            Name of the mode.
+            Mode name.
 
         Returns
         -------
-        Mode
+        _Mode
+            Newly created mode object.
+
+        Raises
+        ------
+        TypeError
+            If ``mode_name`` is not a string.
+        ValueError
+            If ``mode_name`` contains ``"["`` or ``"]"``.
+
+        Notes
+        -----
+        The created mode is attached as an attribute on the subsystem using
+        ``mode_name``.
+
         """
         self.log.debug(f"add mode: {mode_name}")
         # Only accept a string (mode name), auto-create a Mode
@@ -602,18 +741,23 @@ class Subsystem:
         return mode
 
     def get_parameter(self, param_name: str):
-        """
-        Get the value of a parameter by name.
+        """Return the value of a baseline parameter.
 
         Parameters
         ----------
         param_name : str
-            Name of the parameter.
+            Parameter name.
 
         Returns
         -------
-        Any or None
-            The value of the parameter, or None if not found.
+        object
+            Current parameter value.
+
+        Raises
+        ------
+        AttributeError
+            If ``param_name`` is not a defined parameter on the component.
+
         """
         self.log.debug(f"get parameter: {param_name}")
         if param_name not in self._parameters:
@@ -626,18 +770,23 @@ class Subsystem:
         return self._parameters[param_name].value
 
     def get_parameter_type(self, param_name: str):
-        """
-        Get the type of a parameter by name.
+        """Return the declared type of a baseline parameter.
 
         Parameters
         ----------
         param_name : str
-            Name of the parameter.
+            Parameter name.
 
         Returns
         -------
-        Any or None
-            The type of the parameter, or None if not found.
+        type
+            Declared Python type of the parameter.
+
+        Raises
+        ------
+        AttributeError
+            If ``param_name`` is not a defined parameter on the component.
+
         """
         self.log.debug(f"get parameter type: {param_name}")
         if param_name not in self._parameters:
@@ -650,13 +799,25 @@ class Subsystem:
         return self._parameters[param_name].dtype
 
     def check_all_parameter_types(self):
-        """
-        Check types of all parameters and mode overrides.
+        """Validate parameter types for all mode overrides.
 
         Returns
         -------
         dict
-            {'main': ..., mode_name: ...} for all parameters and all modes.
+            Mapping from mode names to dictionaries of parameter-name
+            validation results.
+
+        Raises
+        ------
+        AttributeError
+            If a mode override references a parameter that does not exist on
+            the baseline component.
+
+        Notes
+        -----
+        Baseline parameters are validated when they are created or reassigned.
+        This method checks only mode override values.
+
         """
         self.log.debug("check all parameter types")
         result = {}
@@ -676,12 +837,14 @@ class Subsystem:
         return result
 
     def __str__(self):
-        """
-        Returns a string representation of the component and its parameters.
+        """Return a human-readable string representation of the component.
 
         Returns
         -------
         str
+            String representation including the component type, name, and
+            baseline parameters.
+
         """
         self.log.debug(
             "returns a string representation of the component and its parameters."
@@ -691,12 +854,15 @@ class Subsystem:
         return f"{self.__class__.__name__}('{self.name}')\n    {params}"
 
     def _to_dict(self) -> dict:
-        """
-        Serialize the component to a JSON-serializable dictionary.
+        """Serialize the component to a dictionary.
 
         Returns
         -------
         dict
+            JSON-compatible dictionary containing the component name, concrete
+            subsystem type, serialized parameters, and serialized mode
+            overrides.
+
         """
         self.log.debug("write to dict")
         return {
@@ -711,17 +877,20 @@ class Subsystem:
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Subsystem":
-        """
-        Deserialize a component from a dictionary.
+        """Reconstruct a component from a dictionary.
 
         Parameters
         ----------
         data : dict
-            Dictionary representation of the component.
+            Serialized component dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
         Subsystem
+            Reconstructed concrete subsystem with restored parameters and
+            modes.
+
         """
         cls.log.debug("Deserialize a component from a dictionary")
         # Parameters
@@ -739,25 +908,37 @@ class Subsystem:
         return comp
 
     def get_param_dict(self) -> dict:
-        """
-        Get a dictionary of all parameters and their values.
+        """Return a dictionary of parameter values.
 
         Returns
         -------
         dict
-            Mapping of parameter names to their values.
+            Mapping from parameter names to their current baseline values.
+
         """
         self.log.debug("get dictionary of parameters and their values")
         return {name: param.value for name, param in self._parameters.items()}
 
 
 def register_subsystem(cls):
-    """Register a subsystem class for deserialization and lookup.
+    """Register a subsystem class for lookup and deserialization.
+
+    Parameters
+    ----------
+    cls : type
+        Subsystem class to register.
 
     Returns
     -------
-    Any
-        Registered subsystem class (usable as a class decorator).
+    type
+        Registered subsystem class. This allows the function to be used as a
+        class decorator.
+
+    Notes
+    -----
+    Built-in subsystem classes are added to the in-memory registry only.
+    External subsystem classes may also update ``conf.json`` so they can be
+    discovered in future sessions.
 
     """
     subsystem = cls.__name__
@@ -795,14 +976,23 @@ def register_subsystem(cls):
 
 
 def _update_consts(subsystem, subsystem_class):
-    """Update cached subsystem metadata tables used by helper queries.
+    """Update cached subsystem metadata tables.
 
     Parameters
     ----------
-    subsystem : Any
-        Input value for `subsystem`.
-    subsystem_class : Any
-        Input value for `subsystem_class`.
+    subsystem : str
+        Registered subsystem class name.
+    subsystem_class : type
+        Subsystem class associated with ``subsystem``.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    This helper instantiates a dummy subsystem to collect parameter names and
+    declared types for metadata queries.
 
     """
     if not subsystem in _subsystem_names:
@@ -817,17 +1007,22 @@ def _update_consts(subsystem, subsystem_class):
 
 
 def get_subsystem_class(subsystem_class_name):
-    """Return subsystem class.
+    """Return a registered subsystem class by name.
 
     Parameters
     ----------
-    subsystem_class_name : Any
-        Identifier used by this method.
+    subsystem_class_name : str
+        Registered subsystem class name.
 
     Returns
     -------
-    Any
-        Requested value.
+    type
+        Registered subsystem class.
+
+    Raises
+    ------
+    ImportError
+        If ``subsystem_class_name`` is not registered.
 
     """
     if not subsystem_class_name in _subsystem_registry:
@@ -840,12 +1035,12 @@ def get_subsystem_class(subsystem_class_name):
 
 
 def get_subsystem_names():
-    """Return subsystem names.
+    """Return registered subsystem names.
 
     Returns
     -------
-    Any
-        Requested value.
+    list of str
+        Registered subsystem class names.
 
     """
     return _subsystem_names
@@ -856,13 +1051,13 @@ def get_param_name_and_type_list(subsystem):
 
     Parameters
     ----------
-    subsystem : Any
-        Input value for `subsystem`.
+    subsystem : str
+        Registered subsystem class name.
 
     Returns
     -------
-    Any
-        Requested value.
+    list of tuple[str, str]
+        Sequence of ``(parameter_name, dtype_name)`` pairs for the subsystem.
 
     """
     return _subsystem_to_param_name_type_list[subsystem]
@@ -871,20 +1066,14 @@ def get_param_name_and_type_list(subsystem):
 # Wing subsystem with only span, chord, and sweep
 @register_subsystem
 class Wing(Subsystem):
-    """Represent the wing component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Represent a wing component."""
 
     def setup(self):
-        """Declare baseline geometric parameters used by the wing subsystem.
+        """Register baseline wing parameters.
 
-        Notes
-        -----
-        This method performs internal setup/validation logic.
+        Returns
+        -------
+        None
 
         """
         self.add_parameter(
@@ -914,20 +1103,14 @@ class Wing(Subsystem):
 
 @register_subsystem
 class Rotor(Subsystem):
-    """Represent the rotor component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Represent a rotor component."""
 
     def setup(self):
-        """Declare baseline geometric and operating parameters for the rotor subsystem.
+        """Register baseline rotor parameters.
 
-        Notes
-        -----
-        This method performs internal setup/validation logic.
+        Returns
+        -------
+        None
 
         """
         self.add_parameter(
@@ -969,20 +1152,14 @@ class Rotor(Subsystem):
 
 @register_subsystem
 class RotorBladeRegion(Subsystem):
-    """Represent the rotorbladeregion component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Represent a rotor blade region component."""
 
     def setup(self):
-        """Declare sectional blade parameters for one rotor blade spanwise region.
+        """Register baseline rotor blade region parameters.
 
-        Notes
-        -----
-        This method performs internal setup/validation logic.
+        Returns
+        -------
+        None
 
         """
         self.add_parameter(
@@ -1089,20 +1266,14 @@ class RotorBladeRegion(Subsystem):
 
 @register_subsystem
 class Aircraft(Subsystem):
-    """Represent the aircraft component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Represent an aircraft-level component."""
 
     def setup(self):
-        """Declare top-level aircraft payload parameters.
+        """Register baseline aircraft parameters.
 
-        Notes
-        -----
-        This method performs internal setup/validation logic.
+        Returns
+        -------
+        None
 
         """
         self.add_parameter("npass", 4, int, description="Number of passengers")
