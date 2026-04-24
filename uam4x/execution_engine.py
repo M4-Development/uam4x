@@ -22,47 +22,38 @@ from zoneinfo import ZoneInfo
 
 
 class Engine:
-    """
-    Execution engine for running UAM4X studies and trade studies.
+    """Execute UAM4X analyses.
 
-    The Engine class manages the execution of study solutions, including
-    optimization runs, single-point analyses, and trade studies. It handles
-    plugin initialization, state management, and result processing.
+    An ``Engine`` runs single-point analyses, parameter sweeps, uncertainty
+    studies, local sensitivity studies, and optimization-based analyses. It
+    manages plugin execution, model validation, runtime metadata capture, and
+    result assembly.
 
     Parameters
     ----------
     study : Study
-        The study object containing all configuration and data.
-    work_dir : str
-        Working directory for execution outputs.
-    num_processes : int, optional
-        Number of processes for parallel execution, by default 1.
+        Study object containing vehicles, solution, control configuration, and
+        results storage.
+    work_dir : str or path-like
+        Working directory used for execution outputs and per-step work
+        directories.
 
-    Attributes
-    ----------
-    study : Study
-        The study object being executed.
-    num_processes : int
-        Number of processes for parallel execution.
-    study_results : dict
-        Dictionary storing study execution results.
-    sweep_combos : dict
-        Dictionary storing parameter sweep combinations.
-    current_sweep_values : dict
-        Dictionary storing current sweep parameter values.
-    work_dir : str
-        Working directory for execution outputs.
     """
 
     def __init__(self, study: Study, work_dir) -> None:
-        """Initialize object state and default configuration.
+        """Initialize an execution engine.
 
         Parameters
         ----------
         study : Study
-            Input value for `study`.
-        work_dir : Any
-            Input value for `work_dir`.
+            Study object to execute.
+        work_dir : str or path-like
+            Working directory used for execution outputs.
+
+        Notes
+        -----
+        Construction creates ``work_dir`` if it does not already exist and enables
+        per-step work directories by default.
 
         """
         self.study = study
@@ -75,27 +66,27 @@ class Engine:
         self.create_step_work_dirs = True
 
     def check_partials(self, trade_name, form="forward", step=1.0e-6):
-        """
-        Check partial derivatives for a trade study.
-
-        This method validates the partial derivatives of the optimization
-        problem by running a finite difference check. It creates a temporary
-        directory and runs the optimization with partial checking enabled.
+        """Check optimization partial derivatives for one analysis.
 
         Parameters
         ----------
         trade_name : str
-            Name of the trade study to check partials for.
-        form : str, optional
-            Form of finite difference ('forward', 'backward', 'central'),
-            by default 'forward'.
+            Name of the analysis to check.
+        form : {"forward", "backward", "central"}, optional
+            Finite-difference form used for the partial check.
         step : float, optional
-            Step size for finite difference calculation, by default 1.e-6.
+            Finite-difference step size used for the partial check.
 
-        Raises
-        ------
-        RuntimeError
-            If circular solution sequence is detected.
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Partial checking is available only for optimization-based analyses. If the
+        named analysis does not resolve to an optimization, the method returns
+        without running a check.
+
         """
         self.log.debug("check partials")
 
@@ -137,25 +128,27 @@ class Engine:
         os.chdir(cwd)
 
     def _run_state(self, state, iteration=None, resort_steps=False):
-        """
-        Run a solution for a given state.
-
-        Executes either an optimization or single-point analysis based on the
-        state configuration.
+        """Execute one analysis state.
 
         Parameters
         ----------
         state : dict
-            State dictionary containing all parameters and configuration.
+            State dictionary containing input values and execution flags.
         iteration : int, optional
-            Iteration number for output directory naming, by default None.
+            Iteration index used to name per-state output directories.
         resort_steps : bool, optional
-            If True, regenerate the solution execution order before running.
+            If True, recompute the solution execution order before running.
+
+        Returns
+        -------
+        Result
+            Result object for the executed state.
 
         Notes
         -----
-        If iteration is provided, outputs will be saved to 'out_{iteration}'
-        subdirectory. Otherwise, outputs go to the main work directory.
+        If ``iteration`` is provided and per-step work directories are enabled,
+        outputs are written under ``out_<iteration>``.
+
         """
         self.log.debug("run solution")
         # Parallel workers rebuild Study from a serialized form, which does not
@@ -185,28 +178,31 @@ class Engine:
     def _run_state_parallel(
         study_dict, state, iteration=None, work_dir=None, create_step_work_dirs=True
     ):
-        """
-        Static method to run a solution in parallel.
-
-        This method is designed to be used with concurrent execution
-        frameworks. It reconstructs the Study object from a dictionary
-        and runs the solution for the given state.
+        """Execute one analysis state in a worker process.
 
         Parameters
         ----------
         study_dict : dict
-            Dictionary representation of the Study object.
+            Serialized study dictionary used to reconstruct the study in the worker.
         state : dict
-            State dictionary containing all parameters and configuration.
+            State dictionary containing input values and execution flags.
         iteration : int, optional
-            Iteration number for output directory naming, by default None.
-        work_dir : str, optional
-            Working directory for execution outputs, by default None.
+            Iteration index used to name per-state output directories.
+        work_dir : str or path-like, optional
+            Working directory used for execution outputs.
+        create_step_work_dirs : bool, optional
+            Whether to create per-step work directories inside the worker.
 
         Returns
         -------
         Result
-            The result object containing outputs from the solution.
+            Result object for the executed state.
+
+        Notes
+        -----
+        The study is reconstructed from ``study_dict`` inside the worker process
+        before execution.
+
         """
 
         study = Study._from_dict(study_dict, work_dir)
@@ -216,20 +212,28 @@ class Engine:
         return result
 
     def _run_optimization(self, state, plugins, out_dir):
-        """
-        Run an optimization analysis.
-
-        Executes an optimization problem using the OpenMDAO optimization
-        framework. Changes to the output directory during execution.
+        """Execute an optimization analysis.
 
         Parameters
         ----------
         state : dict
-            State dictionary containing optimization parameters.
+            State dictionary containing optimization settings and bounds.
         plugins : dict
-            Dictionary of plugin instances for the optimization.
-        out_dir : str
-            Output directory for optimization results.
+            Generated plugin-instance mapping for the current solution.
+        out_dir : str or path-like
+            Output directory for optimization artifacts.
+
+        Returns
+        -------
+        Result
+            Result object containing tracked outputs, design-variable values, and
+            optimization convergence status.
+
+        Notes
+        -----
+        The current working directory is changed to ``out_dir`` for the duration of
+        the optimization run.
+
         """
         self.log.debug("run optimization")
         temp_state = copy.deepcopy(state)
@@ -243,21 +247,28 @@ class Engine:
         return opt_result
 
     def _run_single_point(self, state, plugins, out_dir):
-        """
-        Run a single-point analysis.
-
-        Executes each plugin in sequence for a single-point analysis.
-        Creates individual work directories for each step and updates
-        the state with results from each plugin.
+        """Execute a single-point analysis.
 
         Parameters
         ----------
         state : dict
-            State dictionary containing analysis parameters.
+            State dictionary containing analysis inputs.
         plugins : dict
-            Dictionary of plugin instances for the analysis.
-        out_dir : str
-            Output directory for analysis results.
+            Generated plugin-instance mapping for the current solution.
+        out_dir : str or path-like
+            Output directory for analysis artifacts.
+
+        Returns
+        -------
+        Result
+            Result object containing tracked solution outputs for the executed
+            state.
+
+        Notes
+        -----
+        Plugins are executed in global solution order. Their returned outputs are
+        written back into the temporary state using fully qualified variable names.
+
         """
         self.log.debug("run single point")
         temp_state = copy.deepcopy(state)
@@ -311,11 +322,16 @@ class Engine:
         return result
 
     def run_solution(self):
-        """Run solution.
+        """Execute the default single-point analysis.
+
+        Returns
+        -------
+        None
 
         Notes
         -----
-        This method performs internal setup or validation logic.
+        Results are stored under the reserved analysis name ``"Default State"`` and
+        runtime execution metadata is captured before and after execution.
 
         """
         start_time = time.perf_counter()
@@ -343,14 +359,23 @@ class Engine:
         self.add_end_time_meta_data(trade_name, elapsed_time)
 
     def add_end_time_meta_data(self, trade_name, elapsed_time):
-        """Add end time meta data.
+        """Record completion-time metadata for an analysis.
 
         Parameters
         ----------
-        trade_name : Any
-            Identifier used by this operation.
-        elapsed_time : Any
-            Input value for `elapsed_time`.
+        trade_name : str
+            Name of the completed analysis.
+        elapsed_time : float
+            Elapsed execution time in seconds.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Completion metadata is written into ``study._runtime_meta_data`` using the
+        America/Los_Angeles time zone.
 
         """
         self.study._runtime_meta_data[trade_name]["time_info"][
@@ -378,12 +403,21 @@ class Engine:
 
     def capture_execution_data(self, trade_name):
         # populate environment at execution time
-        """Execute capture execution data.
+        """Capture runtime metadata for an analysis.
 
         Parameters
         ----------
-        trade_name : Any
-            Identifier used by this operation.
+        trade_name : str
+            Name of the analysis whose execution metadata is being recorded.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Captured metadata includes environment information, runtime plugin
+        checksums, and any external executable metadata declared by plugins.
 
         """
         self.study._capture_environment(trade_name)
@@ -434,20 +468,30 @@ class Engine:
     def run_tradestudy(
         self, trade_name, num_processors=None, check=True, create_step_work_dirs=True
     ):
-        """
-        Run an analysis.
-        Executes a trade study, which can be either a parameter sweep
-        or an optimization. Sorts solution steps, captures execution data,
-        and manages parallel execution if specified.
+        """Execute a named analysis.
+
         Parameters
         ----------
-
         trade_name : str
-            Name of the trade study to run.
+            Name of the analysis to run.
         num_processors : int, optional
-            Number of processors for parallel execution, by default None.
+            Number of worker processes to use for state-based analyses. If omitted
+            or set to 1, execution is serial.
         check : bool, optional
-            Whether to perform model validation checks, by default True.
+            If True, perform model validation before execution.
+        create_step_work_dirs : bool, optional
+            If True, create per-step work directories during execution.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Optimization analyses run as a single optimization state. State-based
+        analyses, such as parameter sweeps and uncertainty studies, are expanded
+        into states and executed serially or in parallel.
+
         """
         self.create_step_work_dirs = create_step_work_dirs
         start_time = time.perf_counter()
@@ -500,16 +544,31 @@ class Engine:
         self.add_end_time_meta_data(trade_name, elapsed_time)
 
     def _run_parameter_sweep(self, trade_name, trade_states, num_processors=None):
-        """Run parameter sweep.
+        """Execute a state-based analysis over multiple states.
 
         Parameters
         ----------
-        trade_name : Any
-            Identifier used by this operation.
-        trade_states : Any
-            Input value for `trade_states`.
-        num_processors : Any, optional
-            Input value for `num_processors`.
+        trade_name : str
+            Name of the analysis being executed.
+        trade_states : sequence of dict
+            State dictionaries to execute.
+        num_processors : int, optional
+            Number of worker processes to use. If omitted or set to 1, execution is
+            serial.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``num_processors`` is not None and is less than 1.
+
+        Notes
+        -----
+        Failed plugin states are captured as placeholder :class:`Result` objects
+        with a failure message stored in the corresponding state dictionary.
 
         """
         failed_states = []
@@ -702,30 +761,46 @@ class Engine:
         self.study.solution._check_link_types(plugins, self.study)
 
     def check_link_indices(self, plugins):
-        """Validate link indices.
+        """Validate indexed solution links.
 
         Parameters
         ----------
-        plugins : Any
-            Input value for `plugins`.
+        plugins : dict
+            Generated plugin-instance mapping for the current solution.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If indexed source links are incompatible with the referenced source or
+            destination shapes.
 
         """
         self.study.solution._check_link_indices(plugins, self.study)
 
     def _get_analysis_var_data(self, var_name, plugins):
-        """Return analysis var data.
+        """Return type, value, and shape metadata for an analysis variable.
 
         Parameters
         ----------
-        var_name : Any
-            Identifier used by this operation.
-        plugins : Any
-            Input value for `plugins`.
+        var_name : str
+            Fully qualified analysis variable name.
+        plugins : dict
+            Generated plugin-instance mapping for the current solution.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        dict
+            Metadata dictionary containing ``"type"``, ``"value"``, and ``"shape"``
+            for the requested variable.
+
+        Notes
+        -----
+        Vehicle parameters are resolved from the study directly. Other variables are
+        resolved from the solution/plugin metadata.
 
         """
         if var_name.startswith("vehicles."):
@@ -737,23 +812,27 @@ class Engine:
         return self.study.solution.get_var_data(var_name, plugins)
 
     def check_desvars(self, plugins, state):
-        """
-        Validate design variables for optimization.
-
-        Checks that all design variables are of continuous type (float)
-        as required for gradient-based optimization.
+        """Validate optimization design variables.
 
         Parameters
         ----------
         plugins : dict
-            Dictionary of plugin instances to validate.
+            Generated plugin-instance mapping for the current solution.
         state : dict
-            State dictionary containing design variable information.
+            Optimization state dictionary containing design-variable definitions.
+
+        Returns
+        -------
+        None
 
         Raises
         ------
         TypeError
-            If any design variable is not of continuous type.
+            If any design variable is not continuous-valued.
+        ValueError
+            If declared design-variable bounds are incompatible with the variable
+            shape or value metadata.
+
         """
         # add desvars
         for name, data in state["des_vars"].items():
@@ -778,14 +857,26 @@ class Engine:
             )
 
     def check_constraints(self, plugins, state):
-        """Validate constraints.
+        """Validate optimization constraints.
 
         Parameters
         ----------
-        plugins : Any
-            Input value for `plugins`.
-        state : Any
-            Input value for `state`.
+        plugins : dict
+            Generated plugin-instance mapping for the current solution.
+        state : dict
+            Optimization state dictionary containing constraint definitions.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If any constraint variable is not continuous-valued.
+        ValueError
+            If declared constraint bounds are incompatible with the variable shape
+            or value metadata.
 
         """
         for name, data in state["constraints"].items():
@@ -808,22 +899,38 @@ class Engine:
     def check_upper_lower(
         self, var_type, data_lower, data_upper, dv_or_const, var_name, var_data
     ):
-        """Validate upper lower.
+        """Validate optimization bound shapes against variable metadata.
 
         Parameters
         ----------
-        var_type : Any
-            Input value for `var_type`.
-        data_lower : Any
-            Input value for `data_lower`.
-        data_upper : Any
-            Input value for `data_upper`.
-        dv_or_const : Any
-            Input value for `dv_or_const`.
-        var_name : Any
-            Identifier used by this operation.
-        var_data : Any
-            Input value for `var_data`.
+        var_type : type
+            Declared Python type of the variable being validated.
+        data_lower : object
+            Lower bound data supplied for the variable.
+        data_upper : object
+            Upper bound data supplied for the variable.
+        dv_or_const : str
+            Label describing the variable role, such as ``"Design Variable"`` or
+            ``"Constraint"``.
+        var_name : str
+            Variable name.
+        var_data : dict
+            Metadata dictionary containing the variable type, value, and shape.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If array bounds have incompatible shapes, or if scalar variables are
+            given nonscalar lower and upper bounds.
+
+        Notes
+        -----
+        For array-valued variables, scalar bounds are accepted and interpreted as
+        broadcastable bounds.
 
         """
         var_value = var_data["value"]

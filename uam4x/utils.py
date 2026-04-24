@@ -26,41 +26,55 @@ TYPE_MAP = {
 
 
 def is_main_process():
-    """Check whether main process.
+    """Return whether the current process is the Python main process.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if the current multiprocessing process name is ``"MainProcess"``,
+        otherwise False.
 
     """
     return mp.current_process().name == "MainProcess"
 
 
 def registry_writes_enabled():
-    """Execute registry writes enabled.
+    """Return whether runtime registry writes are enabled.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    bool
+        True unless the environment variable
+        ``UAM4X_DISABLE_REGISTRY_WRITES`` is set to ``"1"``.
 
     """
     return os.getenv("UAM4X_DISABLE_REGISTRY_WRITES") != "1"
 
 
 def check_and_get_config(conf_path):
-    """Validate and get config.
+    """Load a UAM4X registry configuration file, creating defaults if needed.
 
     Parameters
     ----------
-    conf_path : Any
-        Path used by this operation.
+    conf_path : str or path-like
+        Path to the JSON configuration file.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    dict
+        Configuration dictionary containing at least ``"SUBSYSTEMS"`` and
+        ``"PLUGINS"`` sections.
+
+    Raises
+    ------
+    IOError
+        If the configuration file exists but cannot be parsed as JSON.
+
+    Notes
+    -----
+    When registry writes are enabled and the current process is the main
+    process, missing config files or missing top-level sections are created on
+    disk automatically.
 
     """
     if not os.path.exists(conf_path):
@@ -105,17 +119,19 @@ def check_and_get_config(conf_path):
 
 def is_continuous_type_or_value(val_or_type):
     # Handle values (e.g 1, 2.0, np.array([0.0,0.0,...]),np.array([0,0,...]))
-    """Validate continuous type or value.
+    """Return whether a value or type is continuous-valued.
 
     Parameters
     ----------
-    val_or_type : Any
-        Input value for `val_or_type`.
+    val_or_type : object
+        Value or Python type to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True for floating-point scalars, floating-point NumPy arrays, the
+        ``float`` type, NumPy floating subclasses, and ``numpy.ndarray``.
+        Otherwise False.
 
     """
     if is_float(val_or_type):
@@ -132,17 +148,18 @@ def is_continuous_type_or_value(val_or_type):
 
 
 def is_scalar_type_or_value(val_or_type):
-    """Validate if scalar type or value.
+    """Return whether a value or type is a numeric scalar.
 
     Parameters
     ----------
-    val_or_type : Any
-        Input value for `val_or_type`.
+    val_or_type : object
+        Value or Python type to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True for real-valued scalar numbers and scalar numeric types, excluding
+        booleans. Otherwise False.
 
     """
     if isinstance(val_or_type, (Real)) and not is_bool(val_or_type):
@@ -157,34 +174,41 @@ def is_scalar_type_or_value(val_or_type):
 
 
 def type_string_to_type(type_name: str):
-    """Execute type string to type.
+    """Return a Python type from a serialized type name.
 
     Parameters
     ----------
     type_name : str
-        Identifier used by this operation.
+        Serialized type name, such as ``"int"``, ``"float"``, or
+        ``"ndarray"``.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    type
+        Python type associated with ``type_name``.
+
+    Raises
+    ------
+    KeyError
+        If ``type_name`` is not in the supported type map.
 
     """
     return TYPE_MAP[type_name.lower()]
 
 
 def convert_numpy_to_python(value):
-    """Convert numpy to python.
+    """Convert NumPy scalar and array values to Python-serializable objects.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value to convert recursively.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    object
+        Converted value with NumPy scalars converted to Python scalars and
+        NumPy arrays converted to nested Python lists.
 
     """
     if isinstance(value, (np.integer, np.floating, np.bool_)):
@@ -201,17 +225,18 @@ def convert_numpy_to_python(value):
 
 def check_numpy_shape(shape):
     # Integer shapes are allowed
-    """Validate numpy shape.
+    """Return whether a shape specification is valid for a NumPy array.
 
     Parameters
     ----------
-    shape : Any
-        Input value for `shape`.
+    shape : object
+        Candidate shape specification.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if ``shape`` is a nonnegative integer or a tuple of nonnegative
+        integers, excluding booleans. Otherwise False.
 
     """
     if is_bool(shape):
@@ -232,17 +257,17 @@ def check_numpy_shape(shape):
 
 
 def normalize_shape(shape):
-    """Normalize shape.
+    """Normalize a scalar or tuple shape into tuple form.
 
     Parameters
     ----------
-    shape : Any
-        Input value for `shape`.
+    shape : int or tuple
+        Shape specification to normalize.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    tuple
+        Tuple form of ``shape``.
 
     """
     if is_tuple(shape):
@@ -255,85 +280,85 @@ def normalize_shape(shape):
 
 
 def is_bool(value):
-    """Check whether a value is boolean-like.
+    """Return whether a value is boolean-like.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if ``value`` is a Python or NumPy boolean, otherwise False.
 
     """
     return isinstance(value, (bool, np.bool_))
 
 
 def is_integer(value):
-    """Check whether a value is an integer.
+    """Return whether a value is an integer.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if ``value`` is a Python or NumPy integer, excluding booleans.
 
     """
     return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
 
 
 def is_float(value):
-    """Check whether a value is a floating-point number.
+    """Return whether a value is a floating-point number.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if ``value`` is a Python or NumPy floating-point value.
 
     """
     return isinstance(value, (float, np.floating))
 
 
 def is_tuple(value):
-    """Check whether a value is a tuple.
+    """Return whether a value is a tuple.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if ``value`` is a tuple, otherwise False.
 
     """
     return isinstance(value, tuple)
 
 
 def is_numpy_array(value):
-    """Check whether a value is a NumPy array.
+    """Return whether a value is a NumPy array.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if ``value`` is a NumPy ndarray, otherwise False.
 
     """
     return isinstance(value, np.ndarray)
@@ -341,17 +366,19 @@ def is_numpy_array(value):
 
 # Get type name from a value
 def value_to_type_name(value):
-    """Execute value to type name.
+    """Return a readable type name for a value.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value whose type name should be reported.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    str or None
+        ``__name__`` of the value's type when available, otherwise the string
+        form of the type. Returns None only if neither representation is
+        available.
 
     """
     value_type = type(value)
@@ -364,17 +391,19 @@ def value_to_type_name(value):
 
 
 def _canonicalize_state(x):
-    """Execute canonicalize state.
+    """Convert a state object into a deterministic, hashable form.
 
     Parameters
     ----------
-    x : Any
-        Input value for `x`.
+    x : object
+        Value to canonicalize recursively.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    object
+        Canonicalized representation with dictionaries sorted by key, NumPy
+        arrays converted to lists, NumPy scalars converted to Python scalars,
+        and floating-point values rounded for stable hashing.
 
     """
     if isinstance(x, dict):
@@ -396,17 +425,23 @@ def _canonicalize_state(x):
 
 
 def hash_state(state):
-    """Execute hash state.
+    """Return a deterministic SHA-256 hash for a state dictionary.
 
     Parameters
     ----------
-    state : Any
-        Input value for `state`.
+    state : dict
+        State dictionary to hash.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    str
+        SHA-256 hash of the canonicalized state.
+
+    Notes
+    -----
+    States are canonicalized with :func:`_canonicalize_state` before hashing so
+    that equivalent states produce the same hash regardless of dictionary key
+    order or NumPy container types.
 
     """
     canon = _canonicalize_state(state)
@@ -423,17 +458,22 @@ def hash_state(state):
 
 
 def _is_valid_square_brackets(string):
-    """Check whether valid square brackets.
+    """Validate that square brackets in an index string are balanced.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Index string to validate.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if square brackets are balanced.
+
+    Raises
+    ------
+    ValueError
+        If the bracket structure is invalid.
 
     """
     stack = []
@@ -451,17 +491,22 @@ def _is_valid_square_brackets(string):
 
 
 def _is_valid_index(string: str):
-    """Check whether valid index.
+    """Validate the syntax of a bracketed index expression.
 
     Parameters
     ----------
     string : str
-        Input value for `string`.
+        Bracketed index expression, such as ``"[0]"`` or ``"[1:5, [0, 2]]"``.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if the index expression is syntactically valid.
+
+    Raises
+    ------
+    ValueError
+        If the index expression violates the supported indexing grammar.
 
     """
 
@@ -520,17 +565,18 @@ def _is_valid_index(string: str):
 
 
 def _is_simple(string):
-    """Check whether simple.
+    """Return whether an index fragment is simple integer indexing.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Index fragment to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if the fragment contains only integer-style indexing and no
+        slicing or nested fancy indexing.
 
     """
     for letter in string:
@@ -542,17 +588,17 @@ def _is_simple(string):
 
 
 def _is_slice(string):
-    """Check whether slice.
+    """Return whether an index fragment contains slice notation.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Index fragment to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if the fragment contains ``":"``, otherwise False.
 
     """
     if ":" in string:
@@ -561,17 +607,22 @@ def _is_slice(string):
 
 
 def _is_fancy(string):
-    """Check whether fancy.
+    """Return whether an index fragment uses nested fancy indexing.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Index fragment to test.
 
     Returns
     -------
-    Any
-        Boolean status for the requested check.
+    bool
+        True if the fragment uses bracketed fancy indexing.
+
+    Raises
+    ------
+    ValueError
+        If slicing syntax is mixed into a fancy-index fragment.
 
     """
     if "[" in string and "]" in string:
@@ -583,17 +634,17 @@ def _is_fancy(string):
 
 
 def _parse_simple(string):
-    """Parse simple.
+    """Parse a simple integer index fragment.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Index fragment containing one or more integer indices.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    int or tuple of int
+        Parsed integer index or tuple of integer indices.
 
     """
     indices = re.findall(r"[-]?\d+", string)
@@ -605,17 +656,17 @@ def _parse_simple(string):
 
 
 def _parse_fancy(string):
-    """Parse fancy.
+    """Parse a fancy-index fragment into a list of integers.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Fancy-index fragment.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    list of int
+        Parsed fancy-index values.
 
     """
     indices = re.findall(r"[-]?\d+", string)
@@ -623,17 +674,22 @@ def _parse_fancy(string):
 
 
 def _parse_slice(string):
-    """Parse slice.
+    """Parse a slice fragment into a Python ``slice`` object.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Slice fragment, such as ``"1:5"`` or ``"::2"``.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    slice
+        Parsed Python slice object.
+
+    Raises
+    ------
+    ValueError
+        If the slice syntax is invalid or the slice step is zero.
 
     """
     if string.count(":") > 2:
@@ -673,17 +729,23 @@ def _parse_slice(string):
 
 
 def _parse_complicated(string):
-    """Parse complicated.
+    """Parse a multi-part index expression.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Bracketed index expression containing multiple comma-separated parts.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    tuple
+        Parsed index tuple containing integers, slices, and/or fancy-index
+        lists.
+
+    Raises
+    ------
+    ValueError
+        If any index fragment cannot be parsed.
 
     """
     comma_inds = []
@@ -723,17 +785,22 @@ def _parse_complicated(string):
 
 
 def _parse_index(string):
-    """Parse index.
+    """Parse a validated bracketed index expression.
 
     Parameters
     ----------
-    string : Any
-        Input value for `string`.
+    string : str
+        Bracketed index expression.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    object
+        Parsed index object suitable for NumPy-style indexing.
+
+    Raises
+    ------
+    ValueError
+        If the bracket structure or index syntax is invalid.
 
     """
     _is_valid_square_brackets(string)
@@ -750,13 +817,16 @@ def split_dotted_path_and_indices(dotted_path):
 
     Parameters
     ----------
-    dotted_path : Any
-        Input value for `dotted_path`.
+    dotted_path : str
+        Dotted variable path with a trailing index expression, such as
+        ``"solution.step.output[0, 1:3]"``.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    base_path : str
+        Dotted path with the trailing index expression removed.
+    inds : object
+        Parsed index object suitable for NumPy-style indexing.
 
     """
     bracket_ind = dotted_path.find("[")
@@ -767,17 +837,18 @@ def split_dotted_path_and_indices(dotted_path):
 
 
 def replace_none_with_empty_quotes(value):
-    """Execute replace none with empty quotes.
+    """Replace None values recursively with empty strings.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value to transform recursively.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    object
+        Transformed value with None replaced by ``""`` inside nested arrays,
+        lists, and dictionaries.
 
     """
     if value is None:
@@ -793,17 +864,18 @@ def replace_none_with_empty_quotes(value):
 
 
 def replace_empty_quotes_with_none(value):
-    """Execute replace empty quotes with none.
+    """Replace empty strings recursively with None.
 
     Parameters
     ----------
-    value : Any
-        Input value for `value`.
+    value : object
+        Value to transform recursively.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    object
+        Transformed value with ``""`` replaced by None inside nested arrays,
+        lists, and dictionaries.
 
     """
     if isinstance(value, str) and value == "":

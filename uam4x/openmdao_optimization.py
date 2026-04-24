@@ -25,11 +25,27 @@ cycle_solver_name_to_solver = {"NonlinearBlockGS": om.NonlinearBlockGS}
 
 
 class Optimization:
-    """Represent the optimization component in the UAM4X workflow.
+    """Build and execute an OpenMDAO optimization for a UAM4X analysis.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    This class is the internal bridge between the user-facing UAM4X
+    optimization definition and the OpenMDAO problem that executes it. It
+    constructs the OpenMDAO model from study data, plugins, links, and
+    optimization settings, then returns a :class:`uam4x.results.Result`.
+
+    Parameters
+    ----------
+    study : Study
+        Study object containing vehicles, solution, and optimization settings.
+    state : dict
+        Optimization state dictionary for the current analysis.
+    plugins : dict
+        Generated plugin-instance mapping aligned with the solution structure.
+    out_dir : str or path-like
+        Directory used for OpenMDAO and plugin execution artifacts.
+    check_partials : bool, optional
+        Flag set by the execution engine during its one-off partial-check run.
+        When True, partial-check-specific logic is enabled inside the OpenMDAO
+        execution path.
 
     """
 
@@ -38,20 +54,22 @@ class Optimization:
     def __init__(
         self, study: Study, state, plugins, out_dir, check_partials=False
     ) -> None:
-        """Initialize object state and configuration.
+        """Initialize an OpenMDAO optimization wrapper.
 
         Parameters
         ----------
         study : Study
-            Study instance containing control, solution, and vehicle definitions.
-        state : Any
-            State dictionary for the current optimization/evaluation point.
-        plugins : Any
-            Instantiated plugin mapping aligned with the solution structure.
-        out_dir : Any
-            Directory used for component/group execution artifacts.
-        check_partials : Any, optional
-            Flag indicating whether derivative checks should be enabled.
+            Study object containing vehicles, solution, and optimization settings.
+        state : dict
+            Optimization state dictionary for the current analysis.
+        plugins : dict
+            Generated plugin-instance mapping aligned with the solution structure.
+        out_dir : str or path-like
+            Directory used for OpenMDAO and plugin execution artifacts.
+        check_partials : bool, optional
+            Flag set by the execution engine during its one-off partial-check run.
+            When True, partial-check-specific logic is enabled inside the OpenMDAO
+            execution path.
 
         """
         self.study = study
@@ -62,12 +80,20 @@ class Optimization:
         self.log = Optimization.log
 
     def run_problem(self):
-        """Build, execute, and collect results from an OpenMDAO optimization problem.
+        """Build, execute, and collect results from an OpenMDAO optimization.
 
         Returns
         -------
-        Any
-            Return value produced by this method.
+        Result
+            Result object containing tracked outputs, design-variable values,
+            convergence status, and template checksums captured during the
+            optimization run.
+
+        Notes
+        -----
+        The OpenMDAO problem is built from the current study solution, including
+        vehicle parameters, plugin steps, links, design variables, constraints,
+        and the objective.
 
         """
         problem = om.Problem()
@@ -257,35 +283,24 @@ class Optimization:
 
 
 class OpenmdaoPreComp(om.IndepVarComp):
-    """Represent the openmdaoprecomp component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Expose study vehicle parameters to OpenMDAO as independent variables."""
 
     log = get_log(log, object_name="OpenmdaoPreComp")
 
     def initialize(self):
-        """Declare OpenMDAO options required before setup.
-
-        Notes
-        -----
-        This method performs class-internal setup or validation logic.
-
-        """
+        """Declare OpenMDAO options for vehicle values and declared types."""
         self.log = get_log(log, object_name="OpenmdaoPreComp")
         self.log.debug("initialize")
         self.options.declare("vehicle_val_dict")
         self.options.declare("vehicle_type_dict")
 
     def setup(self):
-        """Define OpenMDAO variables, subsystems, and derivative declarations.
+        """Add OpenMDAO outputs for vehicle parameters.
 
         Notes
         -----
-        This method performs class-internal setup or validation logic.
+        Continuous-valued vehicle parameters are added as standard outputs.
+        Discrete-valued parameters are added as discrete outputs.
 
         """
         self.log.debug("setup")
@@ -300,24 +315,12 @@ class OpenmdaoPreComp(om.IndepVarComp):
 
 
 class UniversalOpenmdaoComp(om.ExplicitComponent):
-    """Represent the universalopenmdaocomp component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Wrap a UAM4X plugin as an OpenMDAO explicit component."""
 
     log = get_log(log, object_name="UniversalOpenmdaoComp")
 
     def initialize(self):
-        """Declare OpenMDAO options required before setup.
-
-        Notes
-        -----
-        This method performs class-internal setup or validation logic.
-
-        """
+        """Declare OpenMDAO options for the wrapped plugin and execution context."""
         self.log = UniversalOpenmdaoComp.log
         self.log.debug("initialize")
         self.options.declare("plugin")
@@ -327,11 +330,13 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         self.options.declare("step_name")
 
     def setup(self):
-        """Define OpenMDAO variables, subsystems, and derivative declarations.
+        """Declare OpenMDAO variables and partials for the wrapped plugin.
 
         Notes
         -----
-        This method performs class-internal setup or validation logic.
+        Plugin inputs and outputs are mapped to continuous or discrete OpenMDAO
+        variables based on their declared UAM4X types. If the plugin declares
+        partials, those declarations are converted into OpenMDAO partials here.
 
         """
         self.log.debug("setup")
@@ -405,18 +410,13 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 )
 
     def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
-        """Run the wrapped plugin using OpenMDAO-provided inputs.
+        """Execute the wrapped plugin from OpenMDAO-provided inputs.
 
-        Parameters
-        ----------
-        inputs : Any
-            Continuous OpenMDAO input vector.
-        outputs : Any
-            Continuous OpenMDAO output vector.
-        discrete_inputs : Any, optional
-            Discrete OpenMDAO input mapping.
-        discrete_outputs : Any, optional
-            Discrete OpenMDAO output mapping.
+        Notes
+        -----
+        OpenMDAO variable names are converted back to the plugin's local UAM4X
+        names before calling ``run_plugin``. Returned plugin outputs are then
+        written into continuous or discrete OpenMDAO outputs.
 
         """
         self.log.debug("compute")
@@ -449,16 +449,12 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                     outputs[name_with_plugin.replace(".", "~")] = value
 
     def compute_partials(self, inputs, partials, discrete_inputs={}):
-        """Populate OpenMDAO partial-derivative entries from plugin results.
+        """Populate OpenMDAO partial derivatives from plugin-provided values.
 
-        Parameters
-        ----------
-        inputs : Any
-            Continuous OpenMDAO input vector.
-        partials : Any
-            OpenMDAO partial-derivative accumulator.
-        discrete_inputs : Any, optional
-            Discrete OpenMDAO input mapping.
+        Notes
+        -----
+        Plugin-reported partial derivatives are written into the OpenMDAO
+        partial accumulator using fully qualified OpenMDAO variable names.
 
         """
         self.log.debug("compute partials")
@@ -480,22 +476,10 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
 
 
 class UniversalOpenMDAOGroup(om.Group):
-    """Represent the universalopenmdaogroup component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Wrap a UAM4X solution group as an OpenMDAO group."""
 
     def initialize(self):
-        """Declare OpenMDAO options required before setup.
-
-        Notes
-        -----
-        This method performs class-internal setup or validation logic.
-
-        """
+        """Declare OpenMDAO options for the wrapped solution group."""
         self.options.declare("group")
         self.options.declare("step_name")
         self.options.declare("sub_plugins")
@@ -503,11 +487,14 @@ class UniversalOpenMDAOGroup(om.Group):
         self.options.declare("links")
 
     def setup(self):
-        """Define OpenMDAO variables, subsystems, and derivative declarations.
+        """Build OpenMDAO subsystems and connections for the wrapped solution group.
 
         Notes
         -----
-        This method performs class-internal setup or validation logic.
+        Nested UAM4X groups are wrapped recursively. Group links are converted into
+        OpenMDAO connections. If the wrapped group is cyclic, the declared
+        nonlinear solver is attached. Approximate total derivatives are enabled
+        when requested by the UAM4X group settings.
 
         """
         group_name = self.options["step_name"]

@@ -1,82 +1,40 @@
 class PluginException(Exception):
-    """Represent the pluginexception component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Base exception for plugin execution errors."""
 
     pass
 
 
 class PluginExternalException(PluginException):
-    """Represent the pluginexternalexception component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Base exception for plugin errors caused by external tools."""
 
     pass
 
 
 class NdarcExternalException(PluginExternalException):
-    """Represent the ndarcexternalexception component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Exception raised for NDARC-related external execution errors."""
 
     pass
 
 
 class IxgenExternalException(PluginExternalException):
-    """Represent the ixgenexternalexception component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Exception raised for IXGEN-related external execution errors."""
 
     pass
 
 
 class OpenvspExternalException(PluginExternalException):
-    """Represent the openvspexternalexception component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Exception raised for OpenVSP-related external execution errors."""
 
     pass
 
 
 class M4ssExternalException(PluginExternalException):
-    """Represent the m4ssexternalexception component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Exception raised for M4SS-related external execution errors."""
 
     pass
 
 
 class OpenvspM4ssExternalException(PluginExternalException):
-    """Represent the openvspm4ssexternalexception component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Exception raised for combined OpenVSP and M4SS execution errors."""
 
     pass

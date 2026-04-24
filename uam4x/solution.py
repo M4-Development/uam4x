@@ -28,24 +28,22 @@ _plugin_registry = {}
 
 
 class Group:
-    """Represent the group component in the UAM4X workflow.
+    """Represent a solution group containing steps, links, and subgroups.
+
+    A ``Group`` organizes plugin steps and nested groups, stores variable links
+    between them, and provides helper methods for serialization, plugin
+    generation, link validation, and execution ordering.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    ``Solution`` extends ``Group`` to represent the top-level workflow.
 
     """
 
     log = get_log(log, object_name="group")
 
     def __init__(self):
-        """Initialize object state and default configuration.
-
-        Notes
-        -----
-        This method performs internal setup or validation logic.
-
-        """
+        """Initialize an empty solution group."""
         self.log = Group.log
         self.log.debug(f"initialize")
         self.links = []
@@ -58,27 +56,35 @@ class Group:
         self.cycle_declared_step_order = []
 
     def set_cycle_solver(self, solver_name):
-        """Set cycle solver.
+        """Set the solver used for cyclic group execution.
 
         Parameters
         ----------
-        solver_name : Any
-            Identifier used by this operation.
+        solver_name : str
+            Solver identifier.
+
+        Returns
+        -------
+        None
 
         """
         self.cycle_solver = solver_name
 
     def approx_totals(self, method="fd", step=10**-6, form="forward"):
-        """Configure approximate-total derivative preferences.
+        """Configure approximate total-derivative settings for the group.
 
         Parameters
         ----------
-        method : Any, optional
-            Input value for `method`.
-        step : Any, optional
-            Input value for `step`.
-        form : Any, optional
-            Input value for `form`.
+        method : str, optional
+            Approximation method, such as finite difference.
+        step : float, optional
+            Step size used by the approximation method.
+        form : str, optional
+            Approximation form, such as ``"forward"``.
+
+        Returns
+        -------
+        None
 
         """
         self._approx_totals = {
@@ -89,14 +95,28 @@ class Group:
         }
 
     def add_link(self, independent: str, dependent: str):
-        """Add link.
+        """Add a variable link between two names in the group.
 
         Parameters
         ----------
         independent : str
-            Input value for `independent`.
+            Source variable name.
         dependent : str
-            Input value for `dependent`.
+            Destination variable name.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``dependent`` includes bracketed indices. Only independent
+            variables may use indexed access.
+
+        Notes
+        -----
+        Duplicate links are ignored.
 
         """
         self.log.debug(
@@ -113,14 +133,22 @@ class Group:
             self.links.append(link)
 
     def remove_link(self, independent: str, dependent: str):
-        """Remove link.
+        """Remove a variable link from the group.
 
         Parameters
         ----------
         independent : str
-            Input value for `independent`.
+            Source variable name.
         dependent : str
-            Input value for `dependent`.
+            Destination variable name.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        If the link is not present, no action is taken.
 
         """
         self.log.debug(
@@ -131,33 +159,41 @@ class Group:
             self.links.remove(link)
 
     def get_step_names(self):
-        """Return step names.
+        """Return step names in the group.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of str
+            Step names in insertion order.
 
         """
         self.log.debug(f"get step names")
         return [step_name for step_name in self.steps]
 
     def _make_step_info(self, step, plugin_options, plugin_hash=None):
-        """Build normalized step metadata for plugins or subgroups.
+        """Normalize step metadata for a plugin or subgroup.
 
         Parameters
         ----------
-        step : Any
-            Input value for `step`.
-        plugin_options : Any
-            Input value for `plugin_options`.
-        plugin_hash : Any, optional
-            Input value for `plugin_hash`.
+        step : type[Plugin] or Group
+            Plugin class or subgroup object to normalize.
+        plugin_options : dict
+            Plugin options associated with the step.
+        plugin_hash : str, optional
+            Precomputed plugin source hash. If omitted and ``step`` is a plugin
+            class, the hash is computed from the plugin source code.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        dict or Group
+            Normalized plugin metadata dictionary for plugin steps, or the
+            original subgroup object for nested groups.
+
+        Raises
+        ------
+        TypeError
+            If ``step`` is neither a plugin class nor a :class:`Group`
+            instance.
 
         """
         if isinstance(step, type) and issubclass(step, Plugin):
@@ -181,16 +217,33 @@ class Group:
             raise TypeError(f"Only plugin classes and group objects are allowed")
 
     def add_step(self, step, step_name=None, plugin_options: dict = None):
-        """Add step.
+        """Add a plugin step or subgroup to the group.
 
         Parameters
         ----------
-        step : Any
-            Input value for `step`.
-        step_name : Any, optional
-            Identifier used by this operation.
+        step : type[Plugin] or Group
+            Plugin class or subgroup object to add.
+        step_name : str, optional
+            Name used to register the step. If omitted, a default name of the
+            form ``"stepN"`` is assigned.
         plugin_options : dict, optional
-            Input value for `plugin_options`.
+            Plugin options associated with the step.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If ``step`` is a class that is not a subclass of :class:`Plugin`.
+        ValueError
+            If ``step_name`` contains ``"["`` or ``"]"``.
+
+        Notes
+        -----
+        If ``step`` is a subgroup, its ``group_name`` attribute is set to
+        ``step_name``.
 
         """
         if plugin_options is None:
@@ -212,12 +265,20 @@ class Group:
         self.steps[step_name] = step_info
 
     def remove_step(self, step_name):
-        """Remove step.
+        """Remove a step from the group.
 
         Parameters
         ----------
-        step_name : Any
-            Identifier used by this operation.
+        step_name : str
+            Step name.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        If ``step_name`` is not present, no action is taken.
 
         """
         self.log.debug(f"remove step: {step_name}")
@@ -225,14 +286,25 @@ class Group:
             self.steps.pop(step_name)
 
     def edit_step(self, step_name, plugin_options: dict = None):
-        """Update plugin options for an existing step.
+        """Update plugin options for an existing plugin step.
 
         Parameters
         ----------
-        step_name : Any
-            Identifier used by this operation.
+        step_name : str
+            Step name.
         plugin_options : dict, optional
-            Input value for `plugin_options`.
+            Replacement or merged plugin options.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``step_name`` refers to a subgroup instead of a plugin step.
+        KeyError
+            If ``step_name`` is not present in the group.
 
         """
         self.log.debug(f"edit step: {step_name}")
@@ -253,16 +325,27 @@ class Group:
             raise KeyError(f"The step {step_name} is not a step")
 
     def add_plugin_option(self, step_name: str, option_name: str, option_value):
-        """Add plugin option.
+        """Add or overwrite one plugin option for a step.
 
         Parameters
         ----------
         step_name : str
-            Identifier used by this operation.
+            Step name.
         option_name : str
-            Identifier used by this operation.
-        option_value : Any
-            Input value for `option_value`.
+            Plugin option name.
+        option_value : object
+            Plugin option value.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``step_name`` refers to a subgroup instead of a plugin step.
+        KeyError
+            If ``step_name`` is not present in the group.
 
         """
         self.log.debug(f"add plugin option {option_name} to step {step_name}")
@@ -282,14 +365,25 @@ class Group:
             raise KeyError(f"The step {step_name} is not a step")
 
     def remove_plugin_option(self, step_name: str, option_name: str):
-        """Remove plugin option.
+        """Remove one plugin option from a step.
 
         Parameters
         ----------
         step_name : str
-            Identifier used by this operation.
+            Step name.
         option_name : str
-            Identifier used by this operation.
+            Plugin option name to remove.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``step_name`` refers to a subgroup instead of a plugin step.
+        KeyError
+            If ``step_name`` is not present in the group.
 
         """
         self.log.debug(f"remove plugin option {option_name} to step {step_name}")
@@ -305,13 +399,19 @@ class Group:
             raise KeyError(f"The step {step_name} is not a step")
 
     def _to_dict(self) -> dict:
-        # Serialize steps, converting plugin class to its name
-        """Serialize group configuration to a dictionary.
+        """Serialize the group to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing serialized steps, links,
+            cycle solver configuration, approximate-total settings, group
+            name, and declared cycle step order.
+
+        Notes
+        -----
+        Plugin steps are serialized by plugin class name and plugin metadata.
+        Nested groups are serialized recursively.
 
         """
         self.log.debug(f"write to dict")
@@ -342,17 +442,19 @@ class Group:
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Solution":
-        """Reconstruct a group from serialized dictionary data.
+        """Reconstruct a group from a dictionary.
 
         Parameters
         ----------
         data : dict
-            Input value for `data`.
+            Serialized group dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Group
+            Reconstructed group with restored steps, links, and cycle
+            metadata.
 
         """
         group = cls()
@@ -380,12 +482,14 @@ class Group:
         return group
 
     def generate_plugins(self):
-        """Generate plugins.
+        """Instantiate plugin objects for the group.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        dict
+            Nested dictionary mirroring the group structure. Plugin steps are
+            replaced with instantiated :class:`Plugin` objects, and subgroup
+            entries contain deeper dictionaries of instantiated plugins.
 
         """
         plugins = {}
@@ -401,21 +505,24 @@ class Group:
         return plugins
 
     def _recurse_generated_plugins(self, plugins, plugin_dict):
-        """Flatten nested generated plugin mappings into a single dictionary.
+        """Flatten a nested generated-plugin tree into a single dictionary.
 
         Parameters
         ----------
         plugins : dict
-            Nested dictionary produced by :meth:`generate_plugins`, where values are
-            either instantiated :class:`Plugin` objects or deeper group dictionaries.
+            Nested dictionary produced by :meth:`generate_plugins`.
         plugin_dict : dict
-            Output dictionary populated in place with ``{step_name: plugin_object}``
-            pairs discovered while traversing ``plugins``.
+            Output dictionary populated in place with ``{step_name: plugin}``
+            entries for leaf plugin objects.
+
+        Returns
+        -------
+        None
 
         Notes
         -----
-        This helper recurses through subgroup dictionaries and only records leaf
-        plugin objects.
+        Keys added to ``plugin_dict`` are leaf step names, not fully qualified
+        group paths.
 
         """
 
@@ -426,14 +533,23 @@ class Group:
                 self._recurse_generated_plugins(data, plugin_dict)
 
     def _get_all_plugin_names_to_data(self, head_dict, group_name):
-        """Return all plugin names to data.
+        """Collect fully qualified plugin metadata for this group tree.
 
         Parameters
         ----------
-        head_dict : Any
-            Dictionary payload used by this operation.
-        group_name : Any
-            Identifier used by this operation.
+        head_dict : dict
+            Output dictionary populated in place with fully qualified plugin
+            names mapped to plugin metadata.
+        group_name : str
+            Dotted prefix used for this group in the recursive traversal.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Fully qualified names are built as ``"<group_name>.<step_name>"``.
 
         """
         for name, data in self.steps.items():
@@ -447,11 +563,24 @@ class Group:
                 data._get_all_plugin_names_to_data(head_dict, f"{group_name}.{name}")
 
     def sort_steps(self):
-        """Sort steps into execution order based on declared links.
+        """Compute execution order for steps in the group.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If a cycle is detected and no cycle solver or declared cycle step
+            order is available, or if the declared cycle step order length does
+            not match the number of steps.
 
         Notes
         -----
-        This method performs internal setup or validation logic.
+        Step ordering is derived from declared links using a topological sort.
+        If a cycle is detected, the group switches to cycle mode and uses
+        ``cycle_declared_step_order``.
 
         """
         self._execution_steps = {}
@@ -529,12 +658,27 @@ class Group:
                     self._execution_steps[step] = self.steps[step]
 
     def _check_links_to_plugins(self, plugins):
-        """Validate links to plugins.
+        """Validate that linked variables are declared by plugin steps.
 
         Parameters
         ----------
-        plugins : Any
-            Input value for `plugins`.
+        plugins : dict
+            Nested plugin-instance mapping produced by
+            :meth:`generate_plugins`.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If a linked plugin input or output name was not declared by the
+            plugin.
+
+        Notes
+        -----
+        Validation is performed recursively for nested groups.
 
         """
         for step_name in self._execution_steps:
@@ -577,17 +721,24 @@ class Group:
                 )
 
     def get_plugin_input_and_output_names(self, step_name):
-        """Return plugin input and output names.
+        """Return linked input and output names for one step.
 
         Parameters
         ----------
-        step_name : Any
-            Identifier used by this operation.
+        step_name : str
+            Step name.
 
         Returns
         -------
-        Any
-            Requested value.
+        input_names : set of str
+            Linked variable names entering ``step_name``.
+        output_names : set of str
+            Linked variable names produced by ``step_name``.
+
+        Notes
+        -----
+        Bracketed indices on independent variable links are removed before the
+        names are reported.
 
         """
         input_names = []
@@ -603,19 +754,20 @@ class Group:
         return set(input_names), set(output_names)
 
     def get_all_groups(self, name_to_group, parent_name):
-        """Return all groups.
+        """Collect nested groups in the current group tree.
 
         Parameters
         ----------
-        name_to_group : Any
-            Input value for `name_to_group`.
-        parent_name : Any
-            Identifier used by this operation.
+        name_to_group : dict
+            Output dictionary populated in place with fully qualified group
+            names mapped to :class:`Group` objects.
+        parent_name : str
+            Dotted prefix used for this group in the recursive traversal.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Updated ``name_to_group`` dictionary.
 
         """
         for name, step in self.steps.items():
@@ -626,73 +778,79 @@ class Group:
         return name_to_group
 
     def get_var_type(self, name, plugins):
-        """Return var type.
+        """Return declared metadata type for a variable name.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        plugins : Any
-            Input value for `plugins`.
+        name : str
+            Fully qualified variable name.
+        plugins : dict
+            Plugin-instance mapping used to resolve the variable.
 
         Returns
         -------
-        Any
-            Requested value.
+        type
+            Declared Python type for the variable.
 
         """
         return self.get_var_data(name, plugins)["type"]
 
     def get_var_value(self, name, plugins):
-        """Return var value.
+        """Return declared default value for a variable name.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        plugins : Any
-            Input value for `plugins`.
+        name : str
+            Fully qualified variable name.
+        plugins : dict
+            Plugin-instance mapping used to resolve the variable.
 
         Returns
         -------
-        Any
-            Requested value.
+        object
+            Declared variable value.
 
         """
         return self.get_var_data(name, plugins)["value"]
 
     def get_var_shape(self, name, plugins):
-        """Return var shape.
+        """Return declared shape metadata for a variable name.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        plugins : Any
-            Input value for `plugins`.
+        name : str
+            Fully qualified variable name.
+        plugins : dict
+            Plugin-instance mapping used to resolve the variable.
 
         Returns
         -------
-        Any
-            Requested value.
+        tuple or None
+            Declared variable shape metadata.
 
         """
         return self.get_var_data(name, plugins)["shape"]
 
     def get_var_data(self, name, plugins):
-        """Return var data.
+        """Return declared metadata for a variable name.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        plugins : Any
-            Input value for `plugins`.
+        name : str
+            Fully qualified variable name.
+        plugins : dict
+            Plugin-instance mapping used to resolve the variable.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Variable metadata dictionary containing at least ``"type"``,
+            ``"value"``, and ``"shape"``.
+
+        Raises
+        ------
+        KeyError
+            If the variable name cannot be resolved from the plugin/group tree.
 
         """
         split_name = name.split(".")
@@ -722,16 +880,26 @@ class Group:
     def _get_global_execution_order_plugins(
         self, sol_name, plugins, global_name_to_plugin
     ):
-        """Return global execution order plugins.
+        """Collect plugins in global execution order.
 
         Parameters
         ----------
-        sol_name : Any
-            Identifier used by this operation.
-        plugins : Any
-            Input value for `plugins`.
-        global_name_to_plugin : Any
-            Input value for `global_name_to_plugin`.
+        sol_name : str
+            Dotted prefix for this group in the global solution tree.
+        plugins : dict
+            Nested plugin-instance mapping produced by
+            :meth:`generate_plugins`.
+        global_name_to_plugin : dict
+            Output dictionary populated in place with fully qualified step
+            names mapped to plugin instances.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Fully qualified names are built as ``"<sol_name>.<step_name>"``.
 
         """
         for name, step in self._execution_steps.items():
@@ -745,17 +913,23 @@ class Group:
                 global_name_to_plugin[sol_name + "." + name] = plugins[name]
 
     def _build_links(self, base_name):
-        """Build links.
+        """Build fully qualified links for the group tree.
 
         Parameters
         ----------
-        base_name : Any
-            Identifier used by this operation.
+        base_name : str
+            Dotted prefix for this group in the global solution tree.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        list of list[str]
+            Fully qualified ``[output_name, input_name]`` link pairs for this
+            group and all nested groups.
+
+        Notes
+        -----
+        Output links beginning with ``"vehicles"`` are treated as already
+        global and are not prefixed with ``base_name``.
 
         """
         global_links = []
@@ -775,32 +949,31 @@ class Group:
 
         Parameters
         ----------
-        names : Any
-            Input value for `names`.
+        names : sequence of str
+            Step names in the order they should be executed when the group
+            contains a cycle.
+
+        Returns
+        -------
+        None
 
         """
         self.cycle_declared_step_order = names
 
 
 class Solution(Group):
-    """Represent the solution component in the UAM4X workflow.
+    """Represent the top-level executable solution workflow.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    ``Solution`` extends :class:`Group` with tracked outputs and top-level
+    helpers for plugin discovery, group traversal, link validation, vehicle
+    parameter usage, and global execution-order construction.
 
     """
 
     log = get_log(log, object_name="solution")
 
     def __init__(self) -> None:
-        """Initialize object state and default configuration.
-
-        Notes
-        -----
-        This method performs internal setup or validation logic.
-
-        """
+        """Initialize an empty top-level solution workflow."""
         super().__init__()
         self.tracked_outputs = []
         self.log = Solution.log
@@ -808,12 +981,21 @@ class Solution(Group):
         self.step_name = "solution"
 
     def add_tracked_output(self, output: str):
-        """Add tracked output.
+        """Add a tracked output to the solution.
 
         Parameters
         ----------
         output : str
-            Input value for `output`.
+            Fully qualified output variable name to track.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RuntimeError
+            If ``output`` is already being tracked.
 
         """
         self.log.debug(f"add tracked output: {output}")
@@ -823,12 +1005,20 @@ class Solution(Group):
         self.tracked_outputs.append(output)
 
     def remove_tracked_output(self, output: str):
-        """Remove tracked output.
+        """Remove a tracked output from the solution.
 
         Parameters
         ----------
         output : str
-            Input value for `output`.
+            Fully qualified output variable name to stop tracking.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        If ``output`` is not currently tracked, no action is taken.
 
         """
         self.log.debug(f"remove tracked output: {output}")
@@ -837,12 +1027,13 @@ class Solution(Group):
 
     def _to_dict(self) -> dict:
         # Serialize steps, converting plugin class to its name
-        """Serialize solution configuration to a dictionary.
+        """Serialize the solution to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the serialized group data and
+            tracked outputs.
 
         """
         self.log.debug(f"write to dict")
@@ -870,17 +1061,19 @@ class Solution(Group):
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Solution":
-        """Reconstruct a solution from serialized dictionary data.
+        """Reconstruct a solution from a dictionary.
 
         Parameters
         ----------
         data : dict
-            Input value for `data`.
+            Serialized solution dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Solution
+            Reconstructed solution with restored steps, links, and tracked
+            outputs.
 
         """
         sol = cls()
@@ -906,12 +1099,13 @@ class Solution(Group):
         return sol
 
     def get_all_plugin_names_to_hashes(self):
-        """Return all plugin names to hashes.
+        """Return plugin hashes for all steps in the solution.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Mapping from fully qualified plugin step names to plugin source
+            hashes.
 
         """
         plugins_names_to_hashes = {}
@@ -921,12 +1115,12 @@ class Solution(Group):
         return plugins_names_to_hashes
 
     def get_all_plugin_names_to_classes(self):
-        """Return all plugin names to classes.
+        """Return plugin classes for all steps in the solution.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Mapping from fully qualified plugin step names to plugin classes.
 
         """
         plugins_names_to_classes = {}
@@ -936,12 +1130,13 @@ class Solution(Group):
         return plugins_names_to_classes
 
     def get_all_plugin_names_to_options(self):
-        """Return all plugin names to options.
+        """Return plugin options for all steps in the solution.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Mapping from fully qualified plugin step names to plugin option
+            dictionaries.
 
         """
         plugins_names_to_options = {}
@@ -951,12 +1146,13 @@ class Solution(Group):
         return plugins_names_to_options
 
     def get_all_plugin_names_to_data(self):
-        """Return all plugin names to data.
+        """Return plugin metadata for all steps in the solution.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Mapping from fully qualified plugin step names to dictionaries
+            containing plugin class, plugin hash, and plugin options.
 
         """
         plugins_name_to_data = {}
@@ -973,17 +1169,25 @@ class Solution(Group):
         return plugins_name_to_data
 
     def get_plugin_input_and_output_names(self, step_name):
-        """Return plugin input and output names.
+        """Return linked input and output names for one top-level step.
 
         Parameters
         ----------
-        step_name : Any
-            Identifier used by this operation.
+        step_name : str
+            Top-level step name.
 
         Returns
         -------
-        Any
-            Requested value.
+        input_names : set of str
+            Linked variable names entering ``step_name``.
+        output_names : set of str
+            Linked variable names produced by ``step_name``, including tracked
+            outputs originating from the step.
+
+        Notes
+        -----
+        Bracketed indices on independent variable links are removed before the
+        names are reported.
 
         """
         input_names = []
@@ -1002,12 +1206,14 @@ class Solution(Group):
         return set(input_names), set(output_names)
 
     def get_all_groups(self):
-        """Return all groups.
+        """Return all groups in the solution tree.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Mapping from fully qualified group names to :class:`Group`
+            objects. The returned dictionary always includes ``"solution"``
+            mapped to the top-level solution itself.
 
         """
         name_to_group = {"solution": self}
@@ -1019,17 +1225,18 @@ class Solution(Group):
         return name_to_group
 
     def get_group(self, dotted_path):
-        """Return group.
+        """Return a group by dotted path.
 
         Parameters
         ----------
-        dotted_path : Any
-            Path used by this operation.
+        dotted_path : str
+            Group path. Paths may be given either relative to the solution root
+            or with an explicit ``"solution."`` prefix.
 
         Returns
         -------
-        Any
-            Requested value.
+        Group
+            Group resolved from ``dotted_path``.
 
         """
         split_path = dotted_path.split(".")
@@ -1072,15 +1279,16 @@ class Solution(Group):
 
         Parameters
         ----------
-        split_name : Any
-            Identifier used by this operation.
-        plugins : Any
-            Input value for `plugins`.
+        split_name : sequence of str
+            Sequence of nested group or step names.
+        plugins : dict
+            Nested plugin-instance mapping.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        object
+            Nested plugin dictionary or plugin instance resolved from
+            ``split_name``.
 
         """
         # last term in the initial string (is a group)
@@ -1093,14 +1301,31 @@ class Solution(Group):
             return self.recurse_plugin_dict(split_name[1:], local_plug)
 
     def _check_link_types(self, plugins, study):
-        """Validate link types.
+        """Validate type compatibility of all declared links.
 
         Parameters
         ----------
-        plugins : Any
-            Input value for `plugins`.
-        study : Any
-            Input value for `study`.
+        plugins : dict
+            Nested plugin-instance mapping produced by
+            :meth:`generate_plugins`.
+        study : Study
+            Study used to resolve vehicle parameter types for links beginning
+            with ``"vehicles"``.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If indexed access is used on a non-array output link.
+        TypeError
+            If one or more link source and destination types are incompatible.
+
+        Notes
+        -----
+        Validation is performed across all groups in the solution tree.
 
         """
         groups = self.get_all_groups()
@@ -1150,12 +1375,13 @@ class Solution(Group):
             raise TypeError(msg)
 
     def get_all_used_vehicle_params(self):
-        """Return all used vehicle params.
+        """Return all vehicle parameter links used by the solution.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of str
+            Vehicle parameter paths referenced as independent link sources
+            across all groups in the solution tree.
 
         """
         groups = self.get_all_groups()
@@ -1168,12 +1394,27 @@ class Solution(Group):
         return all_used_vehicle_params
 
     def _check_optimization_discrete(self, plugins):
-        """Validate optimization discrete.
+        """Validate that optimization plugin links are continuous-valued.
 
         Parameters
         ----------
-        plugins : Any
-            Input value for `plugins`.
+        plugins : dict
+            Nested plugin-instance mapping produced by
+            :meth:`generate_plugins`.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If a non-vehicle output link between plugins has a
+            non-continuous type.
+
+        Notes
+        -----
+        Vehicle links are excluded from this check.
 
         """
         groups = self.get_all_groups()
@@ -1211,17 +1452,19 @@ class Solution(Group):
             raise TypeError(msg)
 
     def get_global_execution_order_plugins(self, plugins):
-        """Return global execution order plugins.
+        """Return plugins in global execution order.
 
         Parameters
         ----------
-        plugins : Any
-            Input value for `plugins`.
+        plugins : dict
+            Nested plugin-instance mapping produced by
+            :meth:`generate_plugins`.
 
         Returns
         -------
-        Any
-            Requested value.
+        dict
+            Mapping from fully qualified step names to plugin instances in
+            global execution order.
 
         """
         sol_name = "solution"
@@ -1239,12 +1482,13 @@ class Solution(Group):
         return global_plugin_name_to_plugin
 
     def _build_global_links(self):
-        """Build global links.
+        """Build fully qualified links for the entire solution tree.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        list of list[str]
+            Fully qualified ``[output_name, input_name]`` link pairs for the
+            top-level solution and all nested groups.
 
         """
         global_links = []
@@ -1261,14 +1505,30 @@ class Solution(Group):
         return global_links
 
     def _check_link_indices(self, plugins, study):
-        """Validate link indices.
+        """Validate indexed source links against source and destination shapes.
 
         Parameters
         ----------
-        plugins : Any
-            Input value for `plugins`.
-        study : Any
-            Input value for `study`.
+        plugins : dict
+            Nested plugin-instance mapping produced by
+            :meth:`generate_plugins`.
+        study : Study
+            Study used to resolve indexed vehicle parameter values and shapes.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If source indices are invalid or if the indexed source shape is
+            incompatible with the destination shape.
+
+        Notes
+        -----
+        This check applies only to links whose source specifies bracketed
+        indices.
 
         """
         groups = self.get_all_groups()
@@ -1342,22 +1602,28 @@ class Solution(Group):
 
 
 class Plugin:
-    """Represent the plugin component in the UAM4X workflow.
+    """Represent the base class for executable solution plugins.
+
+    A ``Plugin`` declares its inputs, outputs, templates, executable metadata,
+    and optional partial-derivative information. Concrete plugin subclasses
+    implement setup and run behavior for one solution step.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    Plugin subclasses typically override :meth:`setup_plugin` to process
+    plugin options and :meth:`run_plugin` to perform execution.
 
     """
 
     log = get_log(log, object_name="Plugin base class")
 
     def __init__(self) -> None:
-        """Initialize object state and default configuration.
+        """Initialize an empty plugin definition.
 
         Notes
         -----
-        This method performs internal setup or validation logic.
+        Construction initializes declared inputs, outputs, templates, executable
+        metadata, and partial-derivative bookkeeping.
 
         """
         self._declare_partials = False
@@ -1374,36 +1640,53 @@ class Plugin:
         self._executable_to_data = {}
 
     def __str__(self):
-        """Return a human-readable string representation.
+        """Return a human-readable string representation of the plugin.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        str
+            Plugin class name.
 
         """
         return f"{self.__class__.__name__}"
 
     def setup_plugin(self, plugin_options: dict):
-        """Initialize plugin-level configuration before run-time execution.
+        """Configure the plugin from step options.
 
         Parameters
         ----------
         plugin_options : dict
-            Input value for `plugin_options`.
+            Plugin options declared for the solution step.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Concrete plugin subclasses typically override this method.
 
         """
         self.log.debug("setup plugin")
 
     def run_plugin(self, links: dict, work_dir: str):
-        """Run plugin.
+        """Execute the plugin for one solution step.
 
         Parameters
         ----------
         links : dict
-            Input value for `links`.
-        work_dir : str
-            Input value for `work_dir`.
+            Mapping from declared plugin input names to values supplied by linked
+            variables.
+        work_dir : str or path-like
+            Working directory for plugin execution.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Concrete plugin subclasses typically override this method.
 
         """
         self.log.debug("run plugin")
@@ -1418,24 +1701,43 @@ class Plugin:
         rows: list | np.ndarray | None = None,
         cols: list | np.ndarray | None = None,
     ):
-        """Register partial-derivative declarations for plugin outputs/inputs.
+        """Declare plugin partial derivatives.
 
         Parameters
         ----------
-        of : str | Sequence[str]
-            Input value for `of`.
-        wrt : str | Sequence[str]
-            Input value for `wrt`.
-        method : Any, optional
-            Input value for `method`.
-        step : Any, optional
-            Input value for `step`.
-        form : Any, optional
-            Input value for `form`.
+        of : str or sequence of str
+            Output variable name or names differentiated.
+        wrt : str or sequence of str
+            Input variable name or names with respect to which derivatives are
+            taken.
+        method : {"fd", "exact"}, optional
+            Derivative method. ``"fd"`` declares finite-difference derivatives and
+            ``"exact"`` declares analytic derivatives.
+        step : real, optional
+            Finite-difference step size. This is only valid when ``method="fd"``.
+        form : {"forward", "backward", "central"}, optional
+            Finite-difference form. This is only valid when ``method="fd"``.
         rows : list | np.ndarray | None, optional
-            Input value for `rows`.
+            Row indices for sparse partial declarations.
         cols : list | np.ndarray | None, optional
-            Input value for `cols`.
+            Column indices for sparse partial declarations.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is unsupported, if ``step`` or ``form`` are invalid for
+            finite differences, or if ``step``/``form`` are provided when
+            ``method="exact"``.
+
+        Notes
+        -----
+        Strings are normalized to one-element lists. Wildcard declarations using
+        ``"*"``, if supported by the caller, are expanded later by
+        :meth:`build_partials`.
 
         """
         self.log.debug("declare partials plugin")
@@ -1515,21 +1817,38 @@ class Plugin:
         )
 
     def build_partials(self, input_names, output_names, step_name):
-        """Build partials.
+        """Expand and validate declared partial derivatives.
 
         Parameters
         ----------
-        input_names : Any
-            Input value for `input_names`.
-        output_names : Any
-            Input value for `output_names`.
-        step_name : Any
-            Identifier used by this operation.
+        input_names : collection of str
+            Fully qualified input variable names linked to the plugin step.
+        output_names : collection of str
+            Fully qualified output variable names linked to the plugin step.
+        step_name : str
+            Fully qualified plugin step name.
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        dict
+            Mapping from ``(input_name, output_name)`` pairs to derivative metadata
+            dictionaries containing method, form, step, rows, and cols.
+
+        Raises
+        ------
+        KeyError
+            If a declared partial references an input or output not declared by the
+            plugin.
+        ValueError
+            If declared partial names are not a subset of the actual linked plugin
+            inputs or outputs.
+        TypeError
+            If a variable declared in a partial is not continuous-valued.
+
+        Notes
+        -----
+        Wildcard declarations are expanded against the actual linked plugin inputs
+        and outputs after the step-name prefix is removed.
 
         """
         self.log.debug("build partials")
@@ -1653,8 +1972,13 @@ class Plugin:
 
         Returns
         -------
-        Any
-            Return value produced by this operation.
+        dict
+            Mapping from derivative method name to lists of ``(output_name,
+            input_name)`` pairs.
+
+        Notes
+        -----
+        If any exact partials are present, ``_declare_partials`` is set to True.
 
         """
         self.log.debug("catagorize partials")
@@ -1673,25 +1997,39 @@ class Plugin:
         return self.method_to_partial
 
     def compute_partials_plugin(self, links: dict):
-        """Compute partials plugin.
+        """Compute analytic partial derivatives for the plugin.
 
         Parameters
         ----------
         links : dict
-            Input value for `links`.
+            Mapping from declared plugin input names to values supplied by linked
+            variables.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Concrete plugin subclasses override this method when exact partials are
+        declared.
 
         """
         self.log.debug("compute partials plugin")
 
     def set_check_partials_options(self, form="forward", step=None):
-        """Set check partials options.
+        """Configure finite-difference settings for partial checks.
 
         Parameters
         ----------
-        form : Any, optional
-            Input value for `form`.
-        step : Any, optional
-            Input value for `step`.
+        form : {"forward", "backward", "central"}, optional
+            Finite-difference form used during partial checking.
+        step : real, optional
+            Finite-difference step size used during partial checking.
+
+        Returns
+        -------
+        None
 
         """
         self.log.debug("set check partials options")
@@ -1701,23 +2039,33 @@ class Plugin:
 
     @staticmethod
     def check_declared_IO(name, var_type, value, shape):
-        """Validate declared IO.
+        """Validate declared plugin input or output metadata.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        var_type : Any
-            Input value for `var_type`.
-        value : Any
-            Input value for `value`.
-        shape : Any
-            Input value for `shape`.
+        name : str
+            Variable name.
+        var_type : type
+            Declared Python type of the variable.
+        value : object
+            Declared default value.
+        shape : int or tuple of int, optional
+            Declared array shape metadata.
 
         Returns
         -------
-        Any
-            Boolean status for the requested check.
+        tuple or None
+            Normalized shape metadata. If ``shape`` is omitted for an array-valued
+            declaration and the value is an array, the shape is inferred from the
+            value.
+
+        Raises
+        ------
+        TypeError
+            If ``var_type`` is not a Python type.
+        ValueError
+            If the variable name contains unsupported characters, if array type and
+            shape/value metadata are inconsistent, or if ``shape`` is invalid.
 
         """
         if not isinstance(var_type, type):
@@ -1782,18 +2130,34 @@ class Plugin:
     def declare_input(
         self, name, var_type, value=None, shape: int | tuple | None = None
     ):
-        """Declare plugin input metadata for linking and validation.
+        """Declare plugin input metadata.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        var_type : Any
-            Input value for `var_type`.
-        value : Any, optional
-            Input value for `value`.
+        name : str
+            Input variable name.
+        var_type : type
+            Declared Python type of the input.
+        value : object, optional
+            Declared default value.
         shape : int | tuple | None, optional
-            Input value for `shape`.
+            Declared array shape metadata.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If ``var_type`` is not a Python type.
+        ValueError
+            If the declared name, value, or shape metadata are invalid.
+
+        Notes
+        -----
+        Metadata is stored for link validation, type checking, and default-value
+        propagation.
 
         """
         shape = self.check_declared_IO(name, var_type, value, shape)
@@ -1806,18 +2170,34 @@ class Plugin:
     def declare_output(
         self, name, var_type, value=None, shape: int | tuple | None = None
     ):
-        """Declare plugin output metadata for linking and validation.
+        """Declare plugin output metadata.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        var_type : Any
-            Input value for `var_type`.
-        value : Any, optional
-            Input value for `value`.
+        name : str
+            Output variable name.
+        var_type : type
+            Declared Python type of the output.
+        value : object, optional
+            Declared default value.
         shape : int | tuple | None, optional
-            Input value for `shape`.
+            Declared array shape metadata.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If ``var_type`` is not a Python type.
+        ValueError
+            If the declared name, value, or shape metadata are invalid.
+
+        Notes
+        -----
+        Metadata is stored for link validation, type checking, and default-value
+        propagation.
 
         """
         shape = self.check_declared_IO(name, var_type, value, shape)
@@ -1828,12 +2208,26 @@ class Plugin:
         }
 
     def declare_template(self, path):
-        """Register a template file path for provenance/checksum tracking.
+        """Register a template file for provenance tracking.
 
         Parameters
         ----------
-        path : Any
-            Input value for `path`.
+        path : str or path-like
+            Path to a template file used by the plugin.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        KeyError
+            If ``path`` has already been registered.
+
+        Notes
+        -----
+        If the file exists at setup time, its SHA-256 checksum is recorded. If it
+        does not exist yet, a placeholder checksum value is stored.
 
         """
         if path in self._template_to_checksum:
@@ -1848,26 +2242,41 @@ class Plugin:
         self._template_to_checksum[str(path)] = h
 
     def add_executable_data(self, path, description):
-        """Add executable data.
+        """Register external executable metadata for the plugin.
 
         Parameters
         ----------
-        path : Any
-            Path used by this operation.
-        description : Any
-            Input value for `description`.
+        path : str or path-like
+            Path to an external executable used by the plugin.
+        description : str
+            Human-readable description of how the executable is used.
+
+        Returns
+        -------
+        None
 
         """
         self._executable_to_data[path] = description
 
 
 def register_plugin(cls):
-    """Register plugin.
+    """Register a plugin class for lookup and deserialization.
+
+    Parameters
+    ----------
+    cls : type
+        Plugin class to register.
 
     Returns
     -------
-    Any
-        Return value produced by this operation.
+    type
+        Registered plugin class. This allows the function to be used as a
+        class decorator.
+
+    Notes
+    -----
+    The plugin registry is updated in memory. When registry writes are enabled,
+    the plugin source path is also written to ``conf.json``.
 
     """
     plugin_name = cls.__name__
@@ -1908,17 +2317,22 @@ def register_plugin(cls):
 
 
 def get_plugin_class(plugin_name):
-    """Return plugin class.
+    """Return a registered plugin class by name.
 
     Parameters
     ----------
-    plugin_name : Any
-        Identifier used by this operation.
+    plugin_name : str
+        Registered plugin class name.
 
     Returns
     -------
-    Any
-        Requested value.
+    type
+        Registered plugin class.
+
+    Raises
+    ------
+    ImportError
+        If ``plugin_name`` is not registered.
 
     """
     if not plugin_name in _plugin_registry:
@@ -1933,12 +2347,12 @@ def get_plugin_class(plugin_name):
 
 
 def get_plugin_names():
-    """Return plugin names.
+    """Return registered plugin names.
 
     Returns
     -------
-    Any
-        Requested value.
+    list of str
+        Registered plugin class names.
 
     """
     log.debug("get plugin names")

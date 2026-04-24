@@ -17,20 +17,28 @@ DEFAULT_TRADE_NAME = "Default State"
 
 
 class Optimization:
-    """Represent the optimization component in the UAM4X workflow.
+    """Define the user-facing optimization setup for a UAM4X trade study.
+
+    An ``Optimization`` object is the main optimization API exposed to UAM4X
+    users. It stores design variables, constraints, objective metadata, and
+    driver settings that are later translated into the underlying OpenMDAO
+    optimization execution.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    This class defines the optimization problem at the UAM4X interface level.
+    Lower-level OpenMDAO optimization machinery is used internally during
+    execution.
 
     """
 
     def __init__(self) -> None:
-        """Initialize object state and default configuration.
+        """Initialize an optimization definition.
 
         Notes
         -----
-        This method performs internal setup or validation logic.
+        Construction initializes empty design-variable and constraint collections,
+        no objective, default driver settings, and default optimizer options.
 
         """
         self.des_vars = {}
@@ -41,12 +49,13 @@ class Optimization:
         self.driver = "ScipyOptimizeDriver"
 
     def _to_dict(self):
-        """Execute to dict.
+        """Serialize the optimization definition to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing design variables, constraints,
+            objective name, driver settings, and optimizer options.
 
         """
         save_dict = {
@@ -61,66 +70,89 @@ class Optimization:
         return save_dict
 
     def set_driver(self, name):
-        """Set driver.
+        """Set the OpenMDAO driver class name.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
+        name : str
+            Driver class name.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The currently supported driver names are ``"pyOptSparseDriver"`` and
+        ``"ScipyOptimizeDriver"``.
 
         """
         self.driver = name
 
     def add_driver_option(self, name, value):
-        """Add driver option.
+        """Add or overwrite an OpenMDAO driver option.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        value : Any
-            Input value for `value`.
+        name : str
+            Driver option name.
+        value : object
+            Driver option value.
+
+        Returns
+        -------
+        None
 
         """
         self._mdao_driver_options[name] = value
 
     def add_optimizer_option(self, name, value):
-        """Add optimizer option.
+        """Add or overwrite an optimizer-specific option.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        value : Any
-            Input value for `value`.
+        name : str
+            Optimizer option name.
+        value : object
+            Optimizer option value.
+
+        Returns
+        -------
+        None
 
         """
         self._optimizer_options[name] = value
 
     def get_desvar_names(self):
-        """Return desvar names.
+        """Return design-variable names.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of str
+            Names of all registered design variables.
 
         """
         return list(self.des_vars.keys())
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Optimization":
-        """Execute from dict.
+        """Reconstruct an optimization definition from a dictionary.
 
         Parameters
         ----------
         data : dict
-            Input value for `data`.
+            Serialized optimization dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Optimization
+            Reconstructed optimization definition.
+
+        Notes
+        -----
+        List-valued lower and upper bounds are converted back to NumPy arrays during
+        reconstruction.
 
         """
         obj = cls()
@@ -158,18 +190,31 @@ class Optimization:
         upper: np.ndarray | float | np.floating | None = None,
         indices: list | None = None,
     ):
-        """Add design var.
+        """Add a design variable to the optimization definition.
 
         Parameters
         ----------
         name : str
-            Identifier used by this operation.
+            Design-variable name.
         lower : np.ndarray | float | np.floating | None, optional
-            Input value for `lower`.
+            Lower bound for the design variable.
         upper : np.ndarray | float | np.floating | None, optional
-            Input value for `upper`.
+            Upper bound for the design variable.
         indices : list | None, optional
-            Input value for `indices`.
+            Indices of an array-valued design variable to expose as active design
+            variables. If omitted, the full variable is used.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If bound types are inconsistent or if a bound is not continuous-valued.
+        ValueError
+            If array-shaped bounds have mismatched shapes or if any upper bound is
+            less than the corresponding lower bound.
 
         """
         self.check_upper_lower(
@@ -184,18 +229,32 @@ class Optimization:
         upper: np.ndarray | float | np.floating | None = None,
         indices=None,
     ):
-        """Add constraint.
+        """Add a constraint to the optimization definition.
 
         Parameters
         ----------
         name : str
-            Identifier used by this operation.
+            Constraint variable name.
         lower : np.ndarray | float | np.floating | None, optional
-            Input value for `lower`.
+            Lower bound for the constraint.
         upper : np.ndarray | float | np.floating | None, optional
-            Input value for `upper`.
-        indices : Any, optional
-            Input value for `indices`.
+            Upper bound for the constraint.
+        indices : list or ndarray, optional
+            Indices of an array-valued constrained variable to apply as active
+            constraints. If omitted, the full variable is constrained.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If bound types are inconsistent or if a bound is not continuous-valued.
+        ValueError
+            If both bounds are omitted, if array-shaped bounds have mismatched
+            shapes, or if any upper bound is less than the corresponding lower
+            bound.
 
         """
         self.check_upper_lower(
@@ -218,20 +277,37 @@ class Optimization:
 
         # At least one bound must be declared on a constraint
 
-        """Validate upper lower.
+        """Validate lower and upper bound declarations.
 
         Parameters
         ----------
         name : str
-            Identifier used by this operation.
-        const_or_dv : Any
-            Input value for `const_or_dv`.
+            Design-variable or constraint name.
+        const_or_dv : str
+            Kind of quantity being validated, typically ``"constraint"`` or
+            ``"design variable"``.
         lower : np.ndarray | float | np.floating | None, optional
-            Input value for `lower`.
+            Lower bound to validate.
         upper : np.ndarray | float | np.floating | None, optional
-            Input value for `upper`.
+            Upper bound to validate.
         indices : list | np.ndarray | None, optional
-            Input value for `indices`.
+            Indices selecting active entries of an array-valued design variable or
+            constraint. This argument is accepted for API consistency but is not
+            validated by this method.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If bound values are not continuous-valued or if lower and upper bounds
+            have different types.
+        ValueError
+            If a constraint omits both bounds, if array-shaped bounds have
+            mismatched shapes, or if any upper bound is less than the corresponding
+            lower bound.
 
         """
         if lower is None and upper is None and const_or_dv == "constraint":
@@ -280,23 +356,33 @@ class Optimization:
                     )
 
     def add_objective(self, name: str):
-        """Add objective.
+        """Set the optimization objective variable.
 
         Parameters
         ----------
         name : str
-            Identifier used by this operation.
+            Objective variable name.
+
+        Returns
+        -------
+        None
 
         """
         self.objective_name = name
 
 
 class ParameterSweep:
-    """Represent the parametersweep component in the UAM4X workflow.
+    """Define a user-facing parameter sweep for a UAM4X trade study.
+
+    A ``ParameterSweep`` maps parameter names to equal-length lists of values
+    and generates one study state per list position. A sweep may chain to
+    another :class:`ParameterSweep` or to an :class:`Optimization`, allowing
+    nested sweeps and sweep-plus-optimization workflows.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    When a child sweep is present, generated states form the Cartesian product
+    of the parent and child sweep states.
 
     """
 
@@ -307,14 +393,26 @@ class ParameterSweep:
         param_name_to_value_list: Dict[str, Any],
         child: Union["ParameterSweep", Optimization] = None,
     ) -> None:
-        """Initialize object state and default configuration.
+        """Initialize a parameter sweep definition.
 
         Parameters
         ----------
         param_name_to_value_list : Dict[str, Any]
-            Input value for `param_name_to_value_list`.
+            Mapping from parameter names to lists of sweep values.
         child : Union['ParameterSweep', Optimization], optional
-            Input value for `child`.
+            Child sweep or optimization definition chained below this sweep.
+
+        Raises
+        ------
+        TypeError
+            If any mapped sweep values are not provided as lists.
+        ValueError
+            If parameter value lists do not all have the same length.
+
+        Notes
+        -----
+        The sweep length is inferred from the first parameter value list and all
+        other lists must match it.
 
         """
         self.child = child
@@ -341,12 +439,21 @@ class ParameterSweep:
                 )
 
     def set_child(self, child: Union["ParameterSweep", Optimization]) -> None:
-        """Set child.
+        """Set the child sweep or optimization definition.
 
         Parameters
         ----------
         child : Union['ParameterSweep', Optimization]
-            Input value for `child`.
+            Child object chained below this sweep.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If ``child`` is not a :class:`ParameterSweep` or :class:`Optimization`.
 
         """
         self.log.debug("set child")
@@ -356,12 +463,12 @@ class ParameterSweep:
         self.child = child
 
     def get_optim_child(self):
-        """Return optim child.
+        """Return the optimization child at the end of the sweep chain.
 
         Returns
         -------
-        Any
-            Requested value.
+        Optimization or None
+            Terminal optimization object if one exists, otherwise None.
 
         """
         child = self.child
@@ -374,12 +481,13 @@ class ParameterSweep:
 
     def get_desvar_names(self):
         # assumes optimization cannot have child
-        """Return desvar names.
+        """Return design-variable names from the terminal optimization child.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of str
+            Design-variable names from the child optimization, or an empty list if
+            no optimization child is present.
 
         """
         child = self.child
@@ -390,12 +498,12 @@ class ParameterSweep:
 
     def get_all_param_names(self):
         # assumes optimization cannot have child
-        """Return all param names.
+        """Return all parameter names across the sweep chain.
 
         Returns
         -------
-        Any
-            Requested value.
+        set of str
+            Union of parameter names defined by this sweep and any child sweeps.
 
         """
         child = self.child
@@ -406,12 +514,20 @@ class ParameterSweep:
             return params
 
     def get_states(self) -> List[Dict[str, Any]]:
-        """Return states.
+        """Generate trade-study states for the sweep chain.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of dict
+            Generated state dictionaries. Each state contains one selected value
+            for every sweep parameter in the chain. If a child optimization is
+            present, its serialized optimization definition is embedded in each
+            state and ``"optimization"`` is set to True.
+
+        Notes
+        -----
+        Nested sweeps generate the Cartesian product of parent and child sweep
+        states.
 
         """
         states = []
@@ -441,12 +557,13 @@ class ParameterSweep:
         return states
 
     def _to_dict(self):
-        """Execute to dict.
+        """Serialize the parameter sweep to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the sweep values and optional
+            child definition.
 
         """
         self.log.debug("write to dict")
@@ -458,17 +575,19 @@ class ParameterSweep:
 
     @classmethod
     def _from_dict(cls, data):
-        """Execute from dict.
+        """Reconstruct a parameter sweep from a dictionary.
 
         Parameters
         ----------
-        data : Any
-            Input value for `data`.
+        data : dict
+            Serialized parameter sweep dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        ParameterSweep
+            Reconstructed parameter sweep with any child sweep or optimization
+            restored.
 
         """
         cls.log.debug("parameter sweep from dict")
@@ -483,11 +602,17 @@ class ParameterSweep:
 
 
 class Control:
-    """Represent the control component in the UAM4X workflow.
+    """Define study metadata and trade-study configurations for UAM4X.
+
+    A ``Control`` object is the top-level user-facing container for study
+    metadata and named trade studies. It stores descriptive metadata, repository
+    context, variant information, and the collection of configured trade-study
+    workflows.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    Supported trade-study objects currently include parameter sweeps,
+    optimizations, uncertainty analyses, and local sensitivity studies.
 
     """
 
@@ -500,18 +625,26 @@ class Control:
         description: str = "Default Description",
         repo_root: str = None,
     ) -> None:
-        """Initialize object state and default configuration.
+        """Initialize a control definition.
 
         Parameters
         ----------
         title : str, optional
-            Input value for `title`.
+            Study title.
         author : str, optional
-            Input value for `author`.
+            Study author.
         description : str, optional
-            Input value for `description`.
+            Study description.
         repo_root : str, optional
-            Input value for `repo_root`.
+            Root directory of the study repository. This value is stored in control
+            metadata written to study JSON files. It may be set directly or populated
+            automatically when a study is generated through :class:`Variants` with an
+            assigned repository root.
+
+        Notes
+        -----
+        Construction initializes an empty trade-study registry and clears the
+        variant name.
 
         """
         self.title = title
@@ -523,24 +656,33 @@ class Control:
         self.variant_name = ""
 
     def _set_repo_root(self, repo_root: str) -> None:
-        """Set the Git repository root directory for the study object.
+        """Set the study repository root directory.
 
         Parameters
         ----------
         repo_root : str
-            Absolute path to the root of the Git repository used
-            for study data, variant generation, and version-controlled outputs.
+            Root directory of the study repository. This value is stored in control
+            metadata written to study JSON files. It may be assigned directly or
+            populated automatically during variant generation.
+
+        Returns
+        -------
+        None
 
         """
         self.repo_root = repo_root
 
     def _set_variant_name(self, variant_name: str) -> None:
-        """Set variant name.
+        """Set the current variant name.
 
         Parameters
         ----------
         variant_name : str
-            Identifier used by this operation.
+            Variant name associated with this control definition.
+
+        Returns
+        -------
+        None
 
         """
         self.variant_name = variant_name
@@ -551,16 +693,20 @@ class Control:
         author: str = "Default Author",
         description: str = "Default Description",
     ) -> None:
-        """Add metadata.
+        """Update study metadata.
 
         Parameters
         ----------
         title : str, optional
-            Input value for `title`.
+            Study title.
         author : str, optional
-            Input value for `author`.
+            Study author.
         description : str, optional
-            Input value for `description`.
+            Study description.
+
+        Returns
+        -------
+        None
 
         """
         self.title = title
@@ -570,14 +716,23 @@ class Control:
     def add_tradestudy(
         self, trade_name: str, trade: Union[ParameterSweep, Optimization, AleatoryAnalysis,MixedAnalysis],
     ) -> None:
-        """Add tradestudy.
+        """Register a named trade study.
 
         Parameters
         ----------
         trade_name : str
-            Identifier used by this operation.
-        trade : Union[ParameterSweep, Optimization, AleatoryAnalysis]
-            Input value for `trade`.
+            Trade-study name.
+        trade : ParameterSweep or Optimization or AleatoryAnalysis or MixedAnalysis or EpistemicAnalysis or LocalSensitivity
+            Trade-study definition to register.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``trade_name`` is ``"Default State"``, which is reserved.
 
         """
         if trade_name == DEFAULT_TRADE_NAME:
@@ -591,12 +746,13 @@ class Control:
         self.trade_studies[trade_name] = trade
 
     def _to_dict(self) -> dict:
-        """Execute to dict.
+        """Serialize the control definition to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing metadata, repository context,
+            variant name, and serialized trade studies.
 
         """
         self.log.debug("write to dict")
@@ -611,17 +767,23 @@ class Control:
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Control":
-        """Execute from dict.
+        """Reconstruct a control definition from a dictionary.
 
         Parameters
         ----------
         data : dict
-            Input value for `data`.
+            Serialized control dictionary, typically produced by :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Control
+            Reconstructed control definition with restored metadata, variant name,
+            and trade studies.
+
+        Raises
+        ------
+        ValueError
+            If a serialized trade-study type is not recognized.
 
         """
         cls.log.debug("control from dict")

@@ -1,12 +1,6 @@
 # UnitType as class with string attributes
 class UnitType:
-    """Represent the unittype component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported unit categories for subsystem parameters."""
 
     NONE = "none"
     LENGTH = "length"
@@ -25,13 +19,7 @@ class UnitType:
 
 
 class LengthUnit:
-    """Represent the lengthunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported length unit strings."""
 
     METER = "m"
     CENTIMETER = "cm"
@@ -46,13 +34,7 @@ class LengthUnit:
 
 
 class AngleUnit:
-    """Represent the angleunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported angle unit strings."""
 
     DEGREE = "deg"
     RADIAN = "rad"
@@ -62,13 +44,7 @@ class AngleUnit:
 
 
 class MassUnit:
-    """Represent the massunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported mass unit strings."""
 
     KILOGRAM = "kg"
     GRAM = "g"
@@ -80,13 +56,7 @@ class MassUnit:
 
 
 class TimeUnit:
-    """Represent the timeunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported time unit strings."""
 
     SECOND = "s"
     MILLISECOND = "ms"
@@ -97,13 +67,7 @@ class TimeUnit:
 
 
 class ForceUnit:
-    """Represent the forceunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported force unit strings."""
 
     NEWTON = "N"
     KILONEWTON = "kN"
@@ -112,13 +76,7 @@ class ForceUnit:
 
 
 class TemperatureUnit:
-    """Represent the temperatureunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported temperature unit strings."""
 
     KELVIN = "K"
     CELSIUS = "C"
@@ -127,13 +85,7 @@ class TemperatureUnit:
 
 
 class PressureUnit:
-    """Represent the pressureunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported pressure unit strings."""
 
     PASCAL = "Pa"
     KILOPASCAL = "kPa"
@@ -144,13 +96,7 @@ class PressureUnit:
 
 
 class EnergyUnit:
-    """Represent the energyunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported energy unit strings."""
 
     JOULE = "J"
     KILOJOULE = "kJ"
@@ -162,13 +108,7 @@ class EnergyUnit:
 
 
 class PowerUnit:
-    """Represent the powerunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported power unit strings."""
 
     WATT = "W"
     KILOWATT = "kW"
@@ -177,13 +117,7 @@ class PowerUnit:
 
 
 class VolumeUnit:
-    """Represent the volumeunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported volume unit strings."""
 
     LITER = "L"
     MILLILITER = "mL"
@@ -198,13 +132,7 @@ class VolumeUnit:
 
 
 class AreaUnit:
-    """Represent the areaunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported area unit strings."""
 
     SQUARE_METER = "m2"
     SQUARE_CENTIMETER = "cm2"
@@ -217,13 +145,7 @@ class AreaUnit:
 
 
 class SpeedUnit:
-    """Represent the speedunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported speed unit strings."""
 
     METER_PER_SECOND = "m/s"
     KILOMETER_PER_HOUR = "km/h"
@@ -233,13 +155,7 @@ class SpeedUnit:
 
 
 class AccelerationUnit:
-    """Represent the accelerationunit component in the UAM4X workflow.
-
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
-
-    """
+    """Define supported acceleration unit strings."""
 
     METER_PER_SECOND_SQUARED = "m/s2"
     FOOT_PER_SECOND_SQUARED = "ft/s2"

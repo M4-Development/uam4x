@@ -5,37 +5,54 @@ from uam4x.results import Tradestudy
 
 
 class LocalSensitivity:
-    """Represent the localsensitivity component in the UAM4X workflow.
+    """Define the user-facing API for local one-at-a-time sensitivity analysis.
+
+    A ``LocalSensitivity`` object specifies evaluation points and perturbation
+    step sizes for selected variables. It generates baseline and perturbed
+    states that can be used to estimate local sensitivities of study outputs.
+
+    Parameters
+    ----------
+    step_size : float, optional
+        Default perturbation step size used for variables that do not define
+        their own step size.
 
     Notes
     -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    Generated states include one baseline state plus one backward and one
+    forward perturbed state for each registered variable.
 
     """
 
     def __init__(self, step_size=1e-6):
-        """Initialize object state and default configuration.
+        """Initialize a local sensitivity study definition.
 
         Parameters
         ----------
-        step_size : Any, optional
-            Input value for `step_size`.
+        step_size : float, optional
+            Default perturbation step size used for variables that do not define
+            their own step size.
 
         """
         self.step_size = step_size
         self.variable_to_sensitivity_data = {}
 
     def add_perturbation_var(self, name, evaluation_point, step_size=None):
-        """Add perturbation var.
+        """Register a variable for local sensitivity analysis.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
-        evaluation_point : Any
-            Input value for `evaluation_point`.
-        step_size : Any, optional
-            Input value for `step_size`.
+        name : str
+            Variable name.
+        evaluation_point : float
+            Baseline value at which local sensitivity is evaluated.
+        step_size : float, optional
+            Variable-specific perturbation step size. If omitted, the global
+            ``step_size`` defined on the analysis is used.
+
+        Returns
+        -------
+        None
 
         """
         data = {
@@ -45,12 +62,20 @@ class LocalSensitivity:
         self.variable_to_sensitivity_data[name] = data
 
     def get_states(self):
-        """Return states.
+        """Generate baseline and perturbed states.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of dict
+            State dictionaries for the local sensitivity study. The first state is
+            the baseline evaluation point with ``"optimization"`` set to False.
+            For each registered variable, one backward-perturbed and one forward-
+            perturbed state are added.
+
+        Notes
+        -----
+        States are returned in this order: baseline, all backward perturbations,
+        then all forward perturbations.
 
         """
         baseline_state = {
@@ -80,12 +105,13 @@ class LocalSensitivity:
         return states
 
     def _to_dict(self):
-        """Execute to dict.
+        """Serialize the local sensitivity definition to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the global step size and
+            registered sensitivity variables.
 
         """
         return {
@@ -98,17 +124,18 @@ class LocalSensitivity:
 
     @classmethod
     def _from_dict(cls, sensitivity_dict):
-        """Execute from dict.
+        """Reconstruct a local sensitivity definition from a dictionary.
 
         Parameters
         ----------
-        sensitivity_dict : Any
-            Input value for `sensitivity_dict`.
+        sensitivity_dict : dict
+            Serialized local sensitivity dictionary, typically produced by
+            :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        LocalSensitivity
+            Reconstructed local sensitivity definition.
 
         """
         step_size = sensitivity_dict["global_step_size"]
@@ -119,6 +146,4 @@ class LocalSensitivity:
             sensitivity_obj.variable_to_sensitivity_data[name] = data
 
         return sensitivity_obj
-
-
 

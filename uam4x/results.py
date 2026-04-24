@@ -6,38 +6,42 @@ from uam4x.utils import split_dotted_path_and_indices
 
 
 class Results:
-    """Represent the results component in the UAM4X workflow.
+    """Store analysis result sets for a study.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    A ``Results`` object maps analysis names to :class:`Tradestudy` result
+    containers and provides access to all stored study results.
+
+    Parameters
+    ----------
+    study : Study, optional
+        Parent study associated with these results.
 
     """
 
     def __init__(self, study=None):
-        """Initialize a container for trade-study result sets.
+        """Initialize a container for study results.
 
         Parameters
         ----------
-        study : Any, optional
-            Input value for `study`.
+        study : Study, optional
+            Parent study associated with these results.
 
         """
         self.tradestudies = {}
         self.study = study
 
     def get_tradestudy(self, name):
-        """Return tradestudy.
+        """Return one stored analysis result container by name.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this operation.
+        name : str
+            Analysis name.
 
         Returns
         -------
-        Any
-            Requested value.
+        Tradestudy or None
+            Stored result container for ``name``, or None if it is not present.
 
         """
         if name in self.tradestudies:
@@ -46,26 +50,36 @@ class Results:
             return None
 
     def add_tradestudy(self, name, Trade):
-        """Attach a trade-study results container to this results object.
+        """Attach an analysis result container to this results object.
 
         Parameters
         ----------
-        name : Any
-            Identifier used by this method.
-        Trade : Any
-            Input value for `Trade`.
+        name : str
+            Analysis name.
+        Trade : Tradestudy
+            Result container to attach.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The attached :class:`Tradestudy` receives a back-reference to this
+        :class:`Results` object.
 
         """
         Trade._results_owner = self
         self.tradestudies[name] = Trade
 
     def has_results(self):
-        """Return `True` when any trade-study results are stored.
+        """Return whether any analysis results are stored.
 
         Returns
         -------
-        Any
-            Status flag for the requested check.
+        bool
+            True if at least one analysis result container is stored, otherwise
+            False.
 
         """
         if self.tradestudies:
@@ -74,24 +88,25 @@ class Results:
             return False
 
     def get_all_tradestudies(self):
-        """Return all tradestudies.
+        """Return names of all stored analysis result containers.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of str
+            Analysis names with stored results.
 
         """
         tradestudies = list(self.tradestudies.keys())
         return tradestudies
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the results object to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary mapping analysis names to serialized
+            :class:`Tradestudy` data.
 
         """
         tradename_to_tradestudy = {}
@@ -101,19 +116,19 @@ class Results:
 
     @classmethod
     def _from_dict(cls, tradename_to_results, study):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a results object from a dictionary.
 
         Parameters
         ----------
-        tradename_to_results : Any
-            Mapping from trade-study names to serialized result data.
-        study : Any
-            Input value for `study`.
+        tradename_to_results : dict
+            Mapping from analysis names to serialized :class:`Tradestudy` data.
+        study : Study
+            Parent study associated with the reconstructed results.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Results
+            Reconstructed results object with attached study reference.
 
         """
         res = cls(study)
@@ -124,21 +139,22 @@ class Results:
 
 
 class Tradestudy:
-    """Represent the tradestudy component in the UAM4X workflow.
+    """Store all result points for one named analysis.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    A ``Tradestudy`` groups the individual :class:`Result` objects produced by
+    one analysis and provides access to variables that change across those
+    result points.
+
 
     """
 
     def __init__(self, trade_name):
-        """Initialize storage for all result points of one trade study.
+        """Initialize storage for one analysis result set.
 
         Parameters
         ----------
-        trade_name : Any
-            Trade-study name under `Study.control.trade_studies`.
+        trade_name : str
+            Name of the analysis associated with these results.
 
         """
         self._results = []
@@ -150,12 +166,13 @@ class Tradestudy:
 
     @property
     def study(self):
-        """Return the parent `Study` object through the owning `Results` container.
+        """Return the parent study associated with these results.
 
         Returns
         -------
-        Any
-            Requested value.
+        Study or None
+            Parent study resolved through the owning :class:`Results` object, or
+            None if this result set is not attached.
 
         """
         if self._results_owner is None:
@@ -165,12 +182,19 @@ class Tradestudy:
 
 
     def get_changing_variables(self):
-        """Return variables that change across trade-study evaluations.
+        """Return variables that can vary across result points.
 
         Returns
         -------
-        Any
-            Requested value.
+        list of str
+            Variable names that may change across the analysis, including design
+            variables, tracked outputs, and sweep parameters when applicable.
+
+        Raises
+        ------
+        ValueError
+            If the associated analysis name is not found in the parent study
+            control.
 
         """
         if self.trade_name in self.study.control.trade_studies:
@@ -203,24 +227,44 @@ class Tradestudy:
 
         Parameters
         ----------
-        study : Any
-            Input value for `study`.
+        study : Study
+            Parent study used to resolve vehicle and analysis metadata.
+
+        Returns
+        -------
+        None
 
         """
         self.study = study
 
     def get_variable(self, variable_name):
-        """Return one variable across all stored result points in the trade study.
+        """Return one variable across all stored result points.
 
         Parameters
         ----------
-        variable_name : Any
-            Identifier used by this method.
+        variable_name : str
+            Variable name to retrieve. This may refer to a tracked output, design
+            variable, sweep variable, uncertainty variable, sensitivity variable,
+            or a fixed vehicle parameter. Indexed access using bracket notation is
+            supported for array-valued variables.
 
         Returns
         -------
-        Any
-            Requested value.
+        list
+            Values of ``variable_name`` across stored result points. For fixed
+            vehicle parameters, the returned list contains one value.
+
+        Raises
+        ------
+        ValueError
+            If this result set is not attached to a :class:`Results` object, if no
+            stored results are available, if the parent study reference is missing,
+            or if ``variable_name`` cannot be resolved.
+
+        Notes
+        -----
+        Missing tracked outputs or design-variable outputs are returned as
+        ``numpy.nan`` for the corresponding result points.
 
         """
         if not self._results_owner:
@@ -323,12 +367,12 @@ class Tradestudy:
                 )
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the analysis result set to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing serialized result points.
 
         """
         return {
@@ -337,19 +381,19 @@ class Tradestudy:
 
     @classmethod
     def _from_dict(cls, trade_name, results_dict):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct an analysis result set from a dictionary.
 
         Parameters
         ----------
-        trade_name : Any
-            Trade-study name under `Study.control.trade_studies`.
-        results_dict : Any
-            Serialized dictionary payload for one result or tradestudy.
+        trade_name : str
+            Name of the analysis associated with the serialized results.
+        results_dict : dict
+            Serialized result-set dictionary, typically produced by :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Tradestudy
+            Reconstructed result set with restored :class:`Result` points.
 
         """
         results = cls(trade_name=trade_name)
@@ -361,21 +405,25 @@ class Tradestudy:
 
 
 class Result:
-    """Represent the result component in the UAM4X workflow.
+    """Store one evaluation result for a single analysis state.
 
-    Notes
-    -----
-    This class encapsulates related state and behavior used by UAM4X workflows.
+    A ``Result`` contains the input state, tracked outputs, optional template
+    checksums, and optional convergence status for one executed analysis point.
 
     """
 
     def __init__(self, state):
-        """Initialize one stored evaluation result for a single input state.
+        """Initialize one stored evaluation result.
 
         Parameters
         ----------
-        state : Any
+        state : dict
             Input state dictionary for a single model evaluation.
+
+        Notes
+        -----
+        The input state is deep-copied and normalized for serialization before the
+        result hash is computed.
 
         """
         self.state = convert_numpy_to_python(copy.deepcopy(state))
@@ -385,65 +433,78 @@ class Result:
         self.convergence_status = None
 
     def _add_convergence_status(self, convergence_status):
-        """Add convergence status.
+        """Store optimization convergence status.
 
         Parameters
         ----------
-        convergence_status : Any
-            Collection consumed by this method.
+        convergence_status : bool
+            Convergence flag for the executed analysis point.
+
+        Returns
+        -------
+        None
 
         """
         self.convergence_status = convergence_status
 
     def _add_result(self, result_name, result_value):
-        """Add result.
+        """Store one tracked output value.
 
         Parameters
         ----------
-        result_name : Any
-            Identifier used by this operation.
-        result_value : Any
-            Input value for `result_value`.
+        result_name : str
+            Output variable name.
+        result_value : object
+            Output value for ``result_name``.
+
+        Returns
+        -------
+        None
 
         """
         self.outputs[result_name] = result_value
 
     def _add_template_checksum(self, file_path, checksum):
-        """Store one template checksum associated with this result point.
+        """Store one template checksum for provenance tracking.
 
         Parameters
         ----------
-        file_path : Any
-            Template or artifact path tracked for provenance.
-        checksum : Any
-            Checksum value associated with a file/template artifact.
+        file_path : str or path-like
+            Template or artifact path tracked for this result.
+        checksum : str
+            Checksum associated with ``file_path``.
+
+        Returns
+        -------
+        None
 
         """
         self.template_hashes[file_path] = checksum
 
     def equal_states(self, result_object):
-        """Return whether this result and another result share the same state hash.
+        """Return whether two results share the same input state.
 
         Parameters
         ----------
-        result_object : Any
-            Input value for `result_object`.
+        result_object : Result
+            Result object to compare against.
 
         Returns
         -------
-        Any
-            Status flag for the requested check.
+        bool
+            True if both results have the same state hash, otherwise False.
 
         """
         return self.state_hash == result_object.state_hash
 
     def _to_dict(self):
-        """Serialize this object to a JSON-compatible dictionary.
+        """Serialize the result to a dictionary.
 
         Returns
         -------
-        Any
-            JSON-serializable representation.
+        dict
+            JSON-compatible dictionary containing the input state, outputs, and
+            optional template checksums and convergence status.
 
         """
         d = {
@@ -460,17 +521,22 @@ class Result:
 
     @classmethod
     def _from_dict(cls, results_dict):
-        """Reconstruct this object from serialized dictionary data.
+        """Reconstruct a result from a dictionary.
 
         Parameters
         ----------
-        results_dict : Any
-            Serialized dictionary payload for one result or tradestudy.
+        results_dict : dict
+            Serialized result dictionary, typically produced by :meth:`_to_dict`.
 
         Returns
         -------
-        Any
-            Reconstructed object instance.
+        Result
+            Reconstructed result object.
+
+        Notes
+        -----
+        List-valued state and output entries are converted back to NumPy arrays
+        during reconstruction.
 
         """
 
