@@ -960,6 +960,29 @@ class Group:
         """
         self.cycle_declared_step_order = names
 
+    def get_all_steps(self):
+        """Get all steps in dotted paths"""
+        paths = []
+        for step, value in self.steps.items():
+            if isinstance(value, Group):
+                paths.extend([f"{step}.{path}" for path in value.get_all_steps()])
+            else:
+                paths.append(step)
+        return paths
+
+    def get_all_steps_dict(self, prefix=""):
+        result = {}
+        current_key = prefix or "solution"
+
+        # Use the simpler function
+        result[current_key] = self.get_all_steps()
+
+        for step, value in self.steps.items():
+            if isinstance(value, Group):
+                full_path = f"{prefix}.{step}" if prefix else step
+                result.update(value.get_all_steps_dict(full_path))
+
+        return result
 
 class Solution(Group):
     """Represent the top-level executable solution workflow.
@@ -1128,6 +1151,16 @@ class Solution(Group):
         for name, data in plugins_name_to_data.items():
             plugins_names_to_classes[name] = data["plugin"]
         return plugins_names_to_classes
+
+    def get_all_steps_of_type(self, plugin_type):
+        """Get all plugins of a certain type"""
+        steps_to_type = self.get_all_plugin_names_to_classes()
+        plugins = []
+        for name, plugin in steps_to_type.items():
+            if plugin == plugin_type:
+                plugins.append(name)
+
+        return plugins
 
     def get_all_plugin_names_to_options(self):
         """Return plugin options for all steps in the solution.

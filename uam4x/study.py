@@ -960,6 +960,34 @@ class Study:
 
         return vehicle_names
 
+    def get_comp_type(self, vehicle, component):
+        component_type_dict = self.get_component_classes_dict()
+        return component_type_dict[(vehicle, component)]
+
+    def get_component_classes_dict(self):
+        """Create a dictionary mapping components to their type"""
+        result = {}
+
+        for vehicle in self.vehicles:
+            for component in vehicle.components:
+                result[(vehicle.name, component.name)] = component.__class__.__name__
+
+        return result
+
+    def get_component_paths(self):
+        """Create a list with all component paths for all vehicles"""
+        paths = []
+
+        for vehicle in self.vehicles:
+            for component in vehicle.components:
+                base = f"vehicles.{vehicle.name}.{component.name}"
+                paths.append(base)
+
+                # add modes if they exist
+                for mode_name in component._modes.keys():
+                    paths.append(f"{base}.{mode_name}")
+
+        return paths
 
 class Variants:
     """Manage generation of multiple study variants.
