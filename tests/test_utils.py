@@ -949,7 +949,7 @@ def test_get_param_type_raises():
     with pytest.raises(AttributeError):
         study.get_param_type("vehicles.mtr.NotAComponent.height")
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError):
         study.get_param_type("vehicles.NotAVehicle.wing.span")
 
     with pytest.raises(ValueError):

@@ -81,7 +81,7 @@ def test_nonexistent_vehicle_access(demo_vehicle_manager, demo_vehicle, demo_win
     with pytest.raises(ValueError):
         demo_vehicle_manager.get_vehicle('non_existent_vehicle')
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError):
         demo_vehicle_manager.non_existent_vehicle
 
 def test_adding_same_vehicle(demo_vehicle_manager):
