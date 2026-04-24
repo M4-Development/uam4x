@@ -905,10 +905,10 @@ def _get_class_from_file(class_name, file_path):
 
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
 
     try:
+        spec.loader.exec_module(module)
         cls = getattr(module, class_name)
-    except AttributeError:
+    except Exception as e:
         return None
     return cls
