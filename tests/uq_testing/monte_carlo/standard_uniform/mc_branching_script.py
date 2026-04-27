@@ -1,4 +1,4 @@
-from uam4x.UQ import AleatoryAnalysis, MonteCarloSampler, UniformDistribution,BasicAleatory
+from uam4x.UQ import MonteCarloSampler, UniformDistribution,BasicAleatory
 from uam4x.vehicle import Vehicle
 from uam4x.study import Study,Variants
 from custom import Point,PointAnalysis
@@ -24,8 +24,7 @@ def setup_solution(study:Study):
 
 def setup_tradestudy(study:Study):
 
-    workflow=BasicAleatory(100000,SamplingClass=MonteCarloSampler)
-    uq=AleatoryAnalysis(seed=42,UQ_workflow=workflow)
+    uq=BasicAleatory(100000,SamplingClass=MonteCarloSampler,seed=42)
     uq.add_aleatory_variable('vehicles.point_vehicle.point_base.x',UniformDistribution(low=0.0,high=1.0))
     study.control.add_tradestudy('standard_uniform',uq)
 

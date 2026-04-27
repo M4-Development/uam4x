@@ -1,6 +1,5 @@
 import copy
 from uam4x.utils import hash_state, convert_numpy_to_python
-import matplotlib.pyplot as plt
 import numpy as np
 from uam4x.utils import split_dotted_path_and_indices
 
@@ -161,7 +160,6 @@ class Tradestudy:
         self._hash_to_result = {}
         self.trade_name = trade_name
         self._results_owner = None
-        self._results_owner = None
 
 
     @property
@@ -222,20 +220,6 @@ class Tradestudy:
 
         return des_vars + tracked + list(param_names)
 
-    def set_study_reference(self, study):
-        """Set the parent study reference used for variable resolution.
-
-        Parameters
-        ----------
-        study : Study
-            Parent study used to resolve vehicle and analysis metadata.
-
-        Returns
-        -------
-        None
-
-        """
-        self.study = study
 
     def get_variable(self, variable_name):
         """Return one variable across all stored result points.
@@ -297,16 +281,12 @@ class Tradestudy:
 
         # get UQ variable names if applicable
         aleatory_vars_to_pdf = getattr(trade, "aleatory_var_to_dist", None) or {}
-        epistemic_vars_to_intervals=getattr(trade,"epistemic_var_to_vals",None) or {}
+        epistemic_vars_to_intervals=getattr(trade,"epistemic_var_to_interval",None) or {}
         # get sensitivity variable names if applicable
         sensitivity_vars_to_values = (
             getattr(trade, "variable_to_sensitivity_data", None) or {}
         )
-        if not self._results:
-            print(f"No results for tradestudy {self.trade_name}")
-            return None
         # first check if variable name is in tracked outputs
-
         if variable_name in self.study.solution.tracked_outputs:
             for result in self._results:
                 if variable_name in result.outputs:

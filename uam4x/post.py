@@ -661,7 +661,7 @@ class RegressionPCEPost(BasicAleatoryPost):
         """
         trade_name = self.tradestudy.trade_name
         ts = self.tradestudy.study.control.trade_studies[trade_name]
-        num_samples = ts.UQ_workflow.num_samples
+        num_samples = ts.num_samples
         aleatory_var_to_dist = ts.aleatory_var_to_dist
         poly_factories = []
         abscissas = np.zeros((num_samples, len(aleatory_var_to_dist)))
@@ -712,7 +712,7 @@ class RegressionPCEPost(BasicAleatoryPost):
         product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
-        poly_order = ts.UQ_workflow.poly_order
+        poly_order = ts.poly_order
         basis_size = enum.getBasisSizeFromTotalDegree(poly_order)
         if basis_size != comb(poly_order + len(aleatory_var_to_dist), poly_order):
             raise ValueError(
@@ -785,7 +785,7 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
         ts = self.tradestudy.study.control.trade_studies[trade_name]
         aleatory_var_to_dist = ts.aleatory_var_to_dist
         num_aleatory = len(aleatory_var_to_dist)
-        num_samples = (ts.UQ_workflow.poly_order + 1) ** num_aleatory
+        num_samples = (ts.poly_order + 1) ** num_aleatory
         # get the weights:
         weights = []
         for result in self.tradestudy._results:
@@ -841,7 +841,7 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
         product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
-        poly_order = ts.UQ_workflow.poly_order
+        poly_order = ts.poly_order
         basis_size = enum.getBasisSizeFromTotalDegree(poly_order)
         if basis_size != comb(poly_order + len(aleatory_var_to_dist), poly_order):
             raise ValueError(
@@ -1445,17 +1445,17 @@ class SobolSensitivityPost(BasicAleatoryPost):
         """
         outs = np.array(self.tradestudy.get_variable(output_name))[:, None]
 
-        # Overarching UQ distributor class
-        UQ_Distrubutor = self.tradestudy.study.control.trade_studies[
+        # Sobol workflow configuration for this trade study.
+        uq_distributor = self.tradestudy.study.control.trade_studies[
             self.tradestudy.trade_name
         ]
-        aleatory_dict = UQ_Distrubutor.aleatory_var_to_dist
+        aleatory_dict = uq_distributor.aleatory_var_to_dist
 
-        # Samples run
-        num_samples = UQ_Distrubutor.UQ_workflow.num_samples
+        # Number of model evaluations used by the Sobol design.
+        num_samples = uq_distributor.num_samples
         # Number of aleatory vars
         # Calculates the number of samples needed to preallocate array shape
-        second_order = UQ_Distrubutor.UQ_workflow.computeSecondOrder
+        second_order = uq_distributor.computeSecondOrder
         num_aleatory = len(aleatory_dict)
         if not second_order or num_aleatory == 2:
             num_sobol_samples = num_samples * (2 + num_aleatory)
@@ -1543,10 +1543,10 @@ class SobolSensitivityPost(BasicAleatoryPost):
             second-order indices.
 
         """
-        UQ_Distrubutor = self.tradestudy.study.control.trade_studies[
+        uq_distributor = self.tradestudy.study.control.trade_studies[
             self.tradestudy.trade_name
         ]
-        if not UQ_Distrubutor.UQ_workflow.computeSecondOrder:
+        if not uq_distributor.computeSecondOrder:
             raise ValueError(f"This run did not support second order Sobol")
 
         results, _ = self.generate_Sobol_indices(output_name, algo)
@@ -1728,7 +1728,7 @@ class BasicMixedPost:
         trade_base=self.tradestudy.study.control.trade_studies[trade_name]
         out_vals= np.array(self.tradestudy.get_variable(var_name))
         #special case for IVP problems with ad hoc state generation
-        epistemic_vars=list(trade_base.epistemic_var_to_vals.keys())
+        epistemic_vars=list(trade_base.epistemic_var_to_interval.keys())
         epistemic_state_to_inds={}
         for i,result in enumerate(self.tradestudy._results):
             epistemic_state=tuple(result.state[epistemic_var] for epistemic_var in epistemic_vars)
@@ -1959,7 +1959,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
         trade_name = self.tradestudy.trade_name
         ts = self.tradestudy.study.control.trade_studies[trade_name]
         mixed_var_to_dist = {}
-        for name, interval in ts.epistemic_var_to_vals.items():
+        for name, interval in ts.epistemic_var_to_interval.items():
             mixed_var_to_dist[name] = UniformDistribution(interval[0], interval[1])
         for name, distribution in ts.aleatory_var_to_dist.items():
             mixed_var_to_dist[name] = distribution
@@ -1986,7 +1986,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
         """
         trade_name = self.tradestudy.trade_name
         ts = self.tradestudy.study.control.trade_studies[trade_name]
-        num_samples = ts.UQ_workflow.num_samples
+        num_samples = ts.num_samples
         all_var_to_dist = self._get_mixed_var_to_dist()
         poly_factories = []
         abscissas = np.zeros((num_samples, len(all_var_to_dist)))
@@ -2037,7 +2037,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
         product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
-        poly_order = ts.UQ_workflow.poly_order
+        poly_order = ts.poly_order
         basis_size = enum.getBasisSizeFromTotalDegree(poly_order)
         if basis_size != comb(poly_order + len(all_var_to_dist), poly_order):
             raise ValueError(
@@ -2056,7 +2056,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
         algo.run()
         res = algo.getResult()
 
-        epistemic_var_to_interval=ts.epistemic_var_to_vals
+        epistemic_var_to_interval=ts.epistemic_var_to_interval
         aleatory_var_to_dist=ts.aleatory_var_to_dist
 
         return MixedSurrogate(all_var_to_dist, res,epistemic_var_to_interval,

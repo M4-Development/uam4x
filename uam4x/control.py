@@ -10,7 +10,10 @@ from uam4x.utils import (
     value_to_type_name,
     replace_empty_quotes_with_none,
 )
-from uam4x.UQ import AleatoryAnalysis,MixedAnalysis,EpistemicAnalysis
+from uam4x.UQ import BasicAleatory, RegressionPCE, GaussQuadraturePCE, SobolSensitivity, \
+BasicEpistemic, BasicMixedIVP, BasicSOP, MixedRegressionPCE, \
+AleatoryCSVPoints, EpistemicCSVPoints, MixedCSVPoints
+
 from uam4x.local_sensitivity import LocalSensitivity
 
 DEFAULT_TRADE_NAME = "Default State"
@@ -755,7 +758,13 @@ class Control:
         self.description = description
 
     def add_tradestudy(
-        self, trade_name: str, trade: Union[ParameterSweep, Optimization, AleatoryAnalysis,MixedAnalysis],
+        self, trade_name: str, trade: Union[ParameterSweep, Optimization,
+                                            BasicAleatory,RegressionPCE,
+                                            GaussQuadraturePCE,SobolSensitivity,
+                                            BasicEpistemic, BasicMixedIVP,
+                                            BasicSOP,MixedRegressionPCE,
+                                            AleatoryCSVPoints,EpistemicCSVPoints,
+                                            MixedCSVPoints],
     ) -> None:
         """Register a named trade study.
 
@@ -763,8 +772,9 @@ class Control:
         ----------
         trade_name : str
             Trade-study name.
-        trade : ParameterSweep or Optimization or AleatoryAnalysis or MixedAnalysis or EpistemicAnalysis or LocalSensitivity
-            Trade-study definition to register.
+        trade : ParameterSweep or Optimization or LocalSensitivity or UQ workflow
+            Trade-study definition to register. Supported UQ workflows include
+            aleatory, epistemic, mixed, and CSV-backed workflow classes.
 
         Returns
         -------
@@ -838,25 +848,30 @@ class Control:
         control._set_variant_name(data.get("variant_name", ""))
 
         for k, v in data["trade_studies"].items():
-            if v["type"] == "ParameterSweep":
-                trade = ParameterSweep._from_dict(v)
-            elif v["type"] == "Optimization":
-                trade = Optimization._from_dict(v)
-            elif v["type"] == "AleatoryAnalysis":
-                trade = AleatoryAnalysis._from_dict(v)
-            elif v["type"] == "LocalSensitivity":
-                trade = LocalSensitivity._from_dict(v)
-            elif v["type"]=="MixedAnalysis":
-                trade=MixedAnalysis._from_dict(v)
-            elif v["type"]=="EpistemicAnalysis":
-                trade=EpistemicAnalysis._from_dict(v)
-            else:
-                raise ValueError(f"Unknown trade study type: {v['type']}")
+            analysis_type=v["type"]
+            if analysis_type not in trade_type_to_class:
+                raise ValueError(f"Unknown trade study type: {analysis_type}")
+            trade=trade_type_to_class[analysis_type]._from_dict(v)
             control.add_tradestudy(k, trade)
 
         return control
 
-
+trade_type_to_class = {
+    ParameterSweep.__name__: ParameterSweep,
+    Optimization.__name__: Optimization,
+    LocalSensitivity.__name__:LocalSensitivity,
+    BasicAleatory.__name__:BasicAleatory,
+    RegressionPCE.__name__:RegressionPCE,
+    GaussQuadraturePCE.__name__:GaussQuadraturePCE,
+    SobolSensitivity.__name__:SobolSensitivity,
+    BasicEpistemic.__name__:BasicEpistemic,
+    BasicMixedIVP.__name__: BasicMixedIVP,
+    BasicSOP.__name__:BasicSOP,
+    MixedRegressionPCE.__name__:MixedRegressionPCE,
+    AleatoryCSVPoints.__name__:AleatoryCSVPoints,
+    EpistemicCSVPoints.__name__:EpistemicCSVPoints,
+    MixedCSVPoints.__name__:MixedCSVPoints
+}
 if __name__ == "__main__":
     opt = Optimization()
     opt.add_design_var(name="wing_span", lower=10.0, upper=15.0)
