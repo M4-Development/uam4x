@@ -661,7 +661,7 @@ class RegressionPCEPost(BasicAleatoryPost):
         """
         trade_name = self.tradestudy.trade_name
         ts = self.tradestudy.study.control.trade_studies[trade_name]
-        num_samples = ts.num_samples
+        num_samples = len(self.tradestudy._results)
         aleatory_var_to_dist = ts.aleatory_var_to_dist
         poly_factories = []
         abscissas = np.zeros((num_samples, len(aleatory_var_to_dist)))
@@ -1452,7 +1452,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
         aleatory_dict = uq_distributor.aleatory_var_to_dist
 
         # Number of model evaluations used by the Sobol design.
-        num_samples = uq_distributor.num_samples
+        num_samples = len(self.tradestudy._results)
         # Number of aleatory vars
         # Calculates the number of samples needed to preallocate array shape
         second_order = uq_distributor.computeSecondOrder
@@ -1986,7 +1986,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
         """
         trade_name = self.tradestudy.trade_name
         ts = self.tradestudy.study.control.trade_studies[trade_name]
-        num_samples = ts.num_samples
+        num_samples = len(self.tradestudy._results)
         all_var_to_dist = self._get_mixed_var_to_dist()
         poly_factories = []
         abscissas = np.zeros((num_samples, len(all_var_to_dist)))

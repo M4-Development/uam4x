@@ -3,7 +3,7 @@ import numpy as np
 import openturns as ot
 from math import comb
 import copy
-from uam4x.utils import log
+from uam4x.utils import log, is_bool, is_integer
 import pandas as pd
 
 
@@ -1348,6 +1348,26 @@ class CSVPoints:
     """
     def __init__(self,csv_file):
         self.csv_file=csv_file
+        self.poly_order=None
+        self.computeSecondOrder=None
+
+    def add_polynomial_order(self,order):
+        if not is_integer(order):
+            raise ValueError(
+                "Polynomial order must be an integer value."
+            )
+        if order < 0:
+            raise ValueError(
+                "Polynomial order must be nonnegative."
+            )
+        self.poly_order=order
+
+    def set_compute_second_order(self, computeSecondOrder: bool):
+        if not is_bool(computeSecondOrder):
+            raise ValueError(
+                "computeSecondOrder must be a boolean value."
+            )
+        self.computeSecondOrder = computeSecondOrder
 
     def _to_dict(self):
         """Serialize the CSV-backed workflow metadata.
@@ -1359,10 +1379,15 @@ class CSVPoints:
             file path.
 
         """
-        return {
+        data= {
             "type":self.__class__.__name__,
             "csv_path":self.csv_file,
         }
+        if self.poly_order is not None:
+            data["polynomial_order"]=self.poly_order
+        if self.computeSecondOrder is not None:
+            data["computeSecondOrder"]=self.computeSecondOrder
+        return data
 
 
 class EpistemicCSVPoints(CSVPoints,EpistemicBaseClass):
@@ -1396,6 +1421,10 @@ class EpistemicCSVPoints(CSVPoints,EpistemicBaseClass):
         csv_analysis=cls(csv_file)
         for name,interval in data['epistemic_variables'].items():
             csv_analysis.add_epistemic_variable(name,np.array(interval))
+        if "polynomial_order" in data:
+            csv_analysis.add_polynomial_order(data["polynomial_order"])
+        if "computeSecondOrder" in data:
+            csv_analysis.set_compute_second_order(data["computeSecondOrder"])
         return csv_analysis
 
 
@@ -1435,6 +1464,10 @@ class AleatoryCSVPoints(CSVPoints,AleatoryBaseClass):
                 distribution_data['name']
             ]._from_dict(distribution_data)
             csv_analysis.add_aleatory_variable(name,distribution)
+        if "polynomial_order" in data:
+            csv_analysis.add_polynomial_order(data["polynomial_order"])
+        if "computeSecondOrder" in data:
+            csv_analysis.set_compute_second_order(data["computeSecondOrder"])
         return csv_analysis
 
 class MixedCSVPoints(CSVPoints,MixedBaseClass):
@@ -1480,6 +1513,10 @@ class MixedCSVPoints(CSVPoints,MixedBaseClass):
 
         for name,interval_data in data["epistemic_variables"].items():
             csv_analysis.add_epistemic_variable(name,np.array(interval_data))
+        if "polynomial_order" in data:
+            csv_analysis.add_polynomial_order(data["polynomial_order"])
+        if "computeSecondOrder" in data:
+            csv_analysis.set_compute_second_order(data["computeSecondOrder"])
         return csv_analysis
 
 
