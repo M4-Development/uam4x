@@ -7,6 +7,9 @@ from uam4x.UQ import LatinHypercubeSampler, SobolSampler,MonteCarloSampler,\
 import scipy.stats as stats
 from math import comb
 import sympy as sp
+from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.model_selection import train_test_split
+
 
 
 #--------------------------Basic Post Process Class
@@ -650,13 +653,20 @@ class RegressionPCEPost(BasicAleatoryPost):
 
         Returns
         -------
-        AleatorySurrogate
+        RegressionSurrogate
             Surrogate model fitted to ``output_name``.
 
         Notes
         -----
         Log-normal input variables are transformed to their underlying normal
-        variables before fitting the OpenTURNS functional chaos model.
+        variables before fitting the OpenTURNS functional chaos model. When
+        the workflow was configured with a nonzero holdout fraction, the
+        fitted surrogate stores the held-out inputs and outputs for later
+        validation metrics. For Monte Carlo training samples this acts like a
+        standard random train/test split. For structured space-filling designs
+        such as Latin hypercube or Sobol sampling, the resulting holdout
+        metrics can be optimistic because both subsets come from the same
+        original design rather than independent validation samples.
 
         """
         trade_name = self.tradestudy.trade_name
@@ -696,11 +706,20 @@ class RegressionPCEPost(BasicAleatoryPost):
 
             joint_list.append(ot_dist)
 
-        # Data as OT samples
-        abscissas = ot.Sample(abscissas)
-        outputs = ot.Sample(
-            np.array(self.tradestudy.get_variable(output_name))[:, None]
-        )
+        outputs=np.array(self.tradestudy.get_variable(output_name))[:, None]
+        X_test=None
+        y_test=None
+        # Handle hold out case
+        if ts.hold_out_fraction > 0.0:
+            X_train,X_test,y_train,y_test = train_test_split(abscissas,
+                                                        outputs,
+                                                        test_size=ts.hold_out_fraction,
+                                                        random_state=ts.hold_out_seed)
+            abscissas = ot.Sample(X_train)
+            outputs = ot.Sample(y_train)
+        else:
+            abscissas = ot.Sample(abscissas)
+            outputs = ot.Sample(outputs)
 
         # Joint distribution based on independent input aleatory dists
         joint = ot.JointDistribution(joint_list)
@@ -733,7 +752,7 @@ class RegressionPCEPost(BasicAleatoryPost):
 
         aleatory_var_to_dist = ts.aleatory_var_to_dist
 
-        return AleatorySurrogate(aleatory_var_to_dist, res,self.post_storage)
+        return RegressionSurrogate(aleatory_var_to_dist, res,self.post_storage,X_test,y_test)
 
 
 class GaussQuadtraturePCEPost(BasicAleatoryPost):
@@ -884,8 +903,6 @@ class AleatorySurrogate:
     """
 
     def __init__(self, aleatory_var_to_dist, result,post_storage):
-        # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
-        # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
         """Initialize an aleatory surrogate.
 
         Parameters
@@ -1388,7 +1405,217 @@ class AleatorySurrogate:
 
         return ax
 
+class RegressionSurrogate(AleatorySurrogate):
+    """Represent a regression-fitted aleatory polynomial-chaos surrogate.
 
+    When the parent workflow used a nonzero holdout fraction, the surrogate
+    stores the held-out inputs and outputs and exposes validation metrics on
+    that test split. Those metrics are most directly interpretable when the
+    parent regression workflow used Monte Carlo sampling; they may be
+    optimistic for space-filling samplers such as Latin hypercube or Sobol.
+    The metric methods also accept external physical-space validation inputs
+    and outputs.
+
+    """
+
+    def __init__(self, aleatory_var_to_dist, result,post_storage,X_test=None,y_test=None):
+        super().__init__(aleatory_var_to_dist, result,post_storage)
+        if X_test is not None:
+            self.X_test=X_test
+        if y_test is not None:
+            self.y_test=y_test
+
+    def get_surrogate_mse(self,X=None,y=None):
+        """Return the mean-squared error for the surrogate.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical variable space. When omitted,
+            the stored internal holdout split is used. When provided, ``X``
+            must be a 2D array-like object with rows as validation samples
+            and columns ordered to match ``self.aleatory_var_to_dist``.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            Mean-squared error evaluated on either the stored holdout split or
+            the provided external validation data.
+
+        Raises
+        ------
+        ValueError
+            If no holdout split was configured and no external validation data
+            were provided, if only one of ``X`` and ``y`` was provided, or if
+            ``X`` is not a 2D array-like object, or if ``X`` does not contain
+            one column per aleatory variable in surrogate order.
+
+        """
+        if (X is None and y is not None) or (X is not None and y is None):
+            raise ValueError("Both X and y must be provided together.")
+        if X is None or y is None:
+            if not hasattr(self, "X_test") or not hasattr(self, "y_test"):
+                raise ValueError("No hold out was specified for this surrogate, cannot compute MSE.")
+            inputs=ot.PointCollection(self.X_test)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            mse=mean_squared_error(self.y_test, evaluated_vals)
+        else:
+            #assumes provided order of X matches the provided order of aleatory variables in the surrogate
+            X_new=np.copy(X)
+            if X_new.ndim != 2:
+                raise ValueError("X must be a 2D array-like object with rows as samples and columns as variables.")
+            if X_new.shape[1] != len(self.aleatory_var_to_dist):
+                raise ValueError("X must have one column per aleatory variable in surrogate order.")
+            y_new=np.asarray(y)
+            if y_new.shape[0] != X_new.shape[0]:
+                raise ValueError("y must contain one validation output per row of X.")
+            for i, (name,dist) in enumerate(self.aleatory_var_to_dist.items()):
+                if isinstance(dist, LogNormalDistribution):
+                    # transform X~Lognormal(mu,sigma)-->Z~Norm(mu,sigma)
+                    if np.any(X_new[:, i] - dist.gamma <= 0.0):
+                        raise ValueError(
+                            f"LogNormal variable '{name}' contains values at or below its "
+                            f"shift gamma={dist.gamma}; cannot apply log transform."
+                        )
+                    z = np.log(X_new[:, i] - dist.gamma)
+                    X_new[:, i] = z
+            inputs=ot.PointCollection(X_new)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            mse=mean_squared_error(y_new, evaluated_vals)
+        return mse
+
+    def get_surrogate_r2(self,X=None,y=None):
+        """Return the coefficient of determination for the surrogate.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical variable space. When omitted,
+            the stored internal holdout split is used. When provided, ``X``
+            must be a 2D array-like object with rows as validation samples
+            and columns ordered to match ``self.aleatory_var_to_dist``.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            R-squared evaluated on either the stored holdout split or the
+            provided external validation data.
+
+        Raises
+        ------
+        ValueError
+            If no holdout split was configured and no external validation data
+            were provided, if only one of ``X`` and ``y`` was provided, or if
+            ``X`` is not a 2D array-like object, or if ``X`` does not contain
+            one column per aleatory variable in surrogate order.
+
+        """
+        if (X is None and y is not None) or (X is not None and y is None):
+            raise ValueError("Both X and y must be provided together.")
+        if X is None or y is None:
+            if not hasattr(self, "X_test") or not hasattr(self, "y_test"):
+                raise ValueError("No hold out was specified for this surrogate, cannot compute R2.")
+            inputs=ot.PointCollection(self.X_test)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            r2=r2_score(self.y_test, evaluated_vals)
+        else:
+            #assumes provided order of X matches the provided order of aleatory variables in the surrogate
+            X_new=np.copy(X)
+            if X_new.ndim != 2:
+                raise ValueError("X must be a 2D array-like object with rows as samples and columns as variables.")
+            if X_new.shape[1] != len(self.aleatory_var_to_dist):
+                raise ValueError("X must have one column per aleatory variable in surrogate order.")
+            y_new=np.asarray(y)
+            if y_new.shape[0] != X_new.shape[0]:
+                raise ValueError("y must contain one validation output per row of X.")
+            for i, (name,dist) in enumerate(self.aleatory_var_to_dist.items()):
+                if isinstance(dist, LogNormalDistribution):
+                    # transform X~Lognormal(mu,sigma)-->Z~Norm(mu,sigma)
+                    if np.any(X_new[:, i] - dist.gamma <= 0.0):
+                        raise ValueError(
+                            f"LogNormal variable '{name}' contains values at or below its "
+                            f"shift gamma={dist.gamma}; cannot apply log transform."
+                        )
+                    z = np.log(X_new[:, i] - dist.gamma)
+                    X_new[:, i] = z
+            inputs=ot.PointCollection(X_new)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            r2=r2_score(y_new, evaluated_vals)
+        return r2
+
+    def get_surrogate_rel_mse(self,X=None,y=None):
+        """Return MSE normalized by the validation-output standard deviation.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical variable space. When omitted,
+            the stored internal holdout split is used. When provided, ``X``
+            must be a 2D array-like object with rows as validation samples
+            and columns ordered to match ``self.aleatory_var_to_dist``.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            Mean-squared error divided by the standard deviation of the stored
+            holdout outputs or the provided external validation outputs.
+
+        Raises
+        ------
+        ValueError
+            If no holdout split was configured and no external validation data
+            were provided, if only one of ``X`` and ``y`` was provided, or if
+            ``X`` is not a 2D array-like object, if ``X`` does not contain one
+            column per aleatory variable in surrogate order, or if the
+            validation outputs have zero standard deviation.
+
+        """
+        if (X is None and y is not None) or (X is not None and y is None):
+            raise ValueError("Both X and y must be provided together.")
+        if X is None or y is None:
+            if not hasattr(self, "X_test") or not hasattr(self, "y_test"):
+                raise ValueError("No hold out was specified for this surrogate, cannot compute relative MSE.")
+            inputs=ot.PointCollection(self.X_test)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            mse=mean_squared_error(self.y_test, evaluated_vals)
+            std=np.std(self.y_test)
+        else:
+            #assumes provided order of X matches the provided order of aleatory variables in the surrogate
+            X_new=np.copy(X)
+            if X_new.ndim != 2:
+                raise ValueError("X must be a 2D array-like object with rows as samples and columns as variables.")
+            if X_new.shape[1] != len(self.aleatory_var_to_dist):
+                raise ValueError("X must have one column per aleatory variable in surrogate order.")
+            y_new=np.asarray(y)
+            if y_new.shape[0] != X_new.shape[0]:
+                raise ValueError("y must contain one validation output per row of X.")
+            for i, (name,dist) in enumerate(self.aleatory_var_to_dist.items()):
+                if isinstance(dist, LogNormalDistribution):
+                    # transform X~Lognormal(mu,sigma)-->Z~Norm(mu,sigma)
+                    if np.any(X_new[:, i] - dist.gamma <= 0.0):
+                        raise ValueError(
+                            f"LogNormal variable '{name}' contains values at or below its "
+                            f"shift gamma={dist.gamma}; cannot apply log transform."
+                        )
+                    z = np.log(X_new[:, i] - dist.gamma)
+                    X_new[:, i] = z
+            inputs=ot.PointCollection(X_new)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            mse=mean_squared_error(y_new, evaluated_vals)
+            std=np.std(y_new)
+        if std == 0:
+            raise ValueError("Standard deviation of validation outputs is zero, cannot compute relative MSE.")
+        rel_mse=mse/std
+        return rel_mse
 
 class SobolSensitivityPost(BasicAleatoryPost):
     """Post-process Sobol sensitivity trade-study results.
@@ -1981,7 +2208,14 @@ class MixedRegressionPCEPost(BasicMixedPost):
         Notes
         -----
         Log-normal input variables are transformed to their underlying normal
-        variables before fitting the OpenTURNS functional chaos model.
+        variables before fitting the OpenTURNS functional chaos model. When
+        the workflow was configured with a nonzero holdout fraction, the
+        fitted surrogate stores the held-out inputs and outputs for later
+        validation metrics. For Monte Carlo training samples this acts like a
+        standard random train/test split. For structured space-filling designs
+        such as Latin hypercube or Sobol sampling, the resulting holdout
+        metrics can be optimistic because both subsets come from the same
+        original design rather than independent validation samples.
 
         """
         trade_name = self.tradestudy.trade_name
@@ -2021,11 +2255,21 @@ class MixedRegressionPCEPost(BasicMixedPost):
 
             joint_list.append(ot_dist)
 
-        # Data as OT samples
-        abscissas = ot.Sample(abscissas)
-        outputs = ot.Sample(
-            np.array(self.tradestudy.get_variable(output_name))[:, None]
-        )
+        outputs=np.array(self.tradestudy.get_variable(output_name))[:, None]
+        X_test=None
+        y_test=None
+        # Handle hold out case
+        if ts.hold_out_fraction > 0.0:
+            X_train,X_test,y_train,y_test = train_test_split(abscissas,
+                                                        outputs,
+                                                        test_size=ts.hold_out_fraction,
+                                                        random_state=ts.hold_out_seed)
+
+            abscissas = ot.Sample(X_train)
+            outputs = ot.Sample(y_train)
+        else:
+            abscissas = ot.Sample(abscissas)
+            outputs = ot.Sample(outputs)
 
         # Joint distribution based on independent input aleatory dists
         joint = ot.JointDistribution(joint_list)
@@ -2060,14 +2304,19 @@ class MixedRegressionPCEPost(BasicMixedPost):
         aleatory_var_to_dist=ts.aleatory_var_to_dist
 
         return MixedSurrogate(all_var_to_dist, res,epistemic_var_to_interval,
-                              aleatory_var_to_dist,self.post_storage)
+                              aleatory_var_to_dist,self.post_storage,X_test=X_test,y_test=y_test)
 
 class MixedSurrogate:
     """Represent a mixed aleatory-epistemic polynomial-chaos surrogate.
 
     The surrogate wraps an OpenTURNS functional-chaos result with both
     epistemic and aleatory input variables. It provides prediction, sampling,
-    p-box and horsetail plots, symbolic metamodels, and Sobol indices.
+    p-box and horsetail plots, symbolic metamodels, Sobol indices, and
+    holdout-based validation metrics when available. Those metrics are most
+    directly interpretable when the parent regression workflow used Monte
+    Carlo sampling; they may be optimistic for space-filling samplers such as
+    Latin hypercube or Sobol. The metric methods also accept external
+    physical-space validation inputs and outputs.
 
     Parameters
     ----------
@@ -2086,7 +2335,7 @@ class MixedSurrogate:
 
     _META_STATE_NAME="__IVP__STATE__META"
     def __init__(self, all_var_to_dist, result,epistemic_var_to_interval,
-                 aleatory_var_to_dist,post_storage):
+                 aleatory_var_to_dist,post_storage,X_test=None,y_test=None):
         # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
         # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
         """Initialize a mixed surrogate.
@@ -2113,7 +2362,202 @@ class MixedSurrogate:
         self.new_sample_values = None
         self._Chaos_SI=ot.FunctionalChaosSobolIndices(self._ot_res)
         self.post_storage=post_storage
+        if X_test is not None:
+            self.X_test=X_test
+        if y_test is not None:
+            self.y_test=y_test
 
+    def get_surrogate_mse(self,X=None,y=None):
+        """Return the mean-squared error for the surrogate.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical mixed-variable space. When
+            omitted, the stored internal holdout split is used. When provided,
+            ``X`` must be a 2D array-like object with rows as validation
+            samples and columns ordered to match ``self.all_var_to_dist``.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            Mean-squared error evaluated on either the stored holdout split or
+            the provided external validation data.
+
+        Raises
+        ------
+        ValueError
+            If no holdout split was configured and no external validation data
+            were provided, if only one of ``X`` and ``y`` was provided, or if
+            ``X`` is not a 2D array-like object, or if ``X`` does not contain
+            one column per mixed variable in surrogate order.
+
+        """
+        if (X is None and y is not None) or (X is not None and y is None):
+            raise ValueError("Both X and y must be provided together.")
+        if X is None or y is None:
+            if not hasattr(self, "X_test") or not hasattr(self, "y_test"):
+                raise ValueError("No hold out was specified for this surrogate, cannot compute MSE.")
+            inputs=ot.PointCollection(self.X_test)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            mse=mean_squared_error(self.y_test, evaluated_vals)
+        else:
+            #assumes provided order of X matches the provided order of mixed variables in the surrogate
+            X_new=np.copy(X)
+            if X_new.ndim != 2:
+                raise ValueError("X must be a 2D array-like object with rows as samples and columns as variables.")
+            if X_new.shape[1] != len(self.all_var_to_dist):
+                raise ValueError("X must have one column per mixed variable in surrogate order.")
+            y_new=np.asarray(y)
+            if y_new.shape[0] != X_new.shape[0]:
+                raise ValueError("y must contain one validation output per row of X.")
+            for i, (name,dist) in enumerate(self.all_var_to_dist.items()):
+                if isinstance(dist, LogNormalDistribution):
+                    # transform X~Lognormal(mu,sigma)-->Z~Norm(mu,sigma)
+                    if np.any(X_new[:, i] - dist.gamma <= 0.0):
+                        raise ValueError(
+                            f"LogNormal variable '{name}' contains values at or below its "
+                            f"shift gamma={dist.gamma}; cannot apply log transform."
+                        )
+                    z = np.log(X_new[:, i] - dist.gamma)
+                    X_new[:, i] = z
+            inputs=ot.PointCollection(X_new)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            mse=mean_squared_error(y_new, evaluated_vals)
+        return mse
+
+    def get_surrogate_r2(self,X=None,y=None):
+        """Return the coefficient of determination for the surrogate.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical mixed-variable space. When
+            omitted, the stored internal holdout split is used. When provided,
+            ``X`` must be a 2D array-like object with rows as validation
+            samples and columns ordered to match ``self.all_var_to_dist``.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            R-squared evaluated on either the stored holdout split or the
+            provided external validation data.
+
+        Raises
+        ------
+        ValueError
+            If no holdout split was configured and no external validation data
+            were provided, if only one of ``X`` and ``y`` was provided, or if
+            ``X`` is not a 2D array-like object, or if ``X`` does not contain
+            one column per mixed variable in surrogate order.
+
+        """
+        if (X is None and y is not None) or (X is not None and y is None):
+            raise ValueError("Both X and y must be provided together.")
+        if X is None or y is None:
+            if not hasattr(self, "X_test") or not hasattr(self, "y_test"):
+                raise ValueError("No hold out was specified for this surrogate, cannot compute R2.")
+            inputs=ot.PointCollection(self.X_test)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            r2=r2_score(self.y_test, evaluated_vals)
+        else:
+            #assumes provided order of X matches the provided order of mixed variables in the surrogate
+            X_new=np.copy(X)
+            if X_new.ndim != 2:
+                raise ValueError("X must be a 2D array-like object with rows as samples and columns as variables.")
+            if X_new.shape[1] != len(self.all_var_to_dist):
+                raise ValueError("X must have one column per mixed variable in surrogate order.")
+            y_new=np.asarray(y)
+            if y_new.shape[0] != X_new.shape[0]:
+                raise ValueError("y must contain one validation output per row of X.")
+            for i, (name,dist) in enumerate(self.all_var_to_dist.items()):
+                if isinstance(dist, LogNormalDistribution):
+                    # transform X~Lognormal(mu,sigma)-->Z~Norm(mu,sigma)
+                    if np.any(X_new[:, i] - dist.gamma <= 0.0):
+                        raise ValueError(
+                            f"LogNormal variable '{name}' contains values at or below its "
+                            f"shift gamma={dist.gamma}; cannot apply log transform."
+                        )
+                    z = np.log(X_new[:, i] - dist.gamma)
+                    X_new[:, i] = z
+            inputs=ot.PointCollection(X_new)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            r2=r2_score(y_new, evaluated_vals)
+        return r2
+
+    def get_surrogate_rel_mse(self,X=None,y=None):
+        """Return MSE normalized by the validation-output standard deviation.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical mixed-variable space. When
+            omitted, the stored internal holdout split is used. When provided,
+            ``X`` must be a 2D array-like object with rows as validation
+            samples and columns ordered to match ``self.all_var_to_dist``.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            Mean-squared error divided by the standard deviation of the stored
+            holdout outputs or the provided external validation outputs.
+
+        Raises
+        ------
+        ValueError
+            If no holdout split was configured and no external validation data
+            were provided, if only one of ``X`` and ``y`` was provided, or if
+            ``X`` is not a 2D array-like object, if ``X`` does not contain one
+            column per mixed variable in surrogate order, or if the validation
+            outputs have zero standard deviation.
+
+        """
+        if (X is None and y is not None) or (X is not None and y is None):
+            raise ValueError("Both X and y must be provided together.")
+        if X is None or y is None:
+            if not hasattr(self, "X_test") or not hasattr(self, "y_test"):
+                raise ValueError("No hold out was specified for this surrogate, cannot compute relative MSE.")
+            inputs=ot.PointCollection(self.X_test)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            mse=mean_squared_error(self.y_test, evaluated_vals)
+            std=np.std(self.y_test)
+        else:
+            #assumes provided order of X matches the provided order of mixed variables in the surrogate
+            X_new=np.copy(X)
+            if X_new.ndim != 2:
+                raise ValueError("X must be a 2D array-like object with rows as samples and columns as variables.")
+            if X_new.shape[1] != len(self.all_var_to_dist):
+                raise ValueError("X must have one column per mixed variable in surrogate order.")
+            y_new=np.asarray(y)
+            if y_new.shape[0] != X_new.shape[0]:
+                raise ValueError("y must contain one validation output per row of X.")
+            for i, (name,dist) in enumerate(self.all_var_to_dist.items()):
+                if isinstance(dist, LogNormalDistribution):
+                    # transform X~Lognormal(mu,sigma)-->Z~Norm(mu,sigma)
+                    if np.any(X_new[:, i] - dist.gamma <= 0.0):
+                        raise ValueError(
+                            f"LogNormal variable '{name}' contains values at or below its "
+                            f"shift gamma={dist.gamma}; cannot apply log transform."
+                        )
+                    z = np.log(X_new[:, i] - dist.gamma)
+                    X_new[:, i] = z
+            inputs=ot.PointCollection(X_new)
+            evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
+            mse=mean_squared_error(y_new, evaluated_vals)
+            std=np.std(y_new)
+        if std == 0:
+            raise ValueError("Standard deviation of validation outputs is zero, cannot compute relative MSE.")
+        rel_mse=mse/std
+        return rel_mse
 
     def get_symbolic_metamodel(self,model_type='physical'):
         """Return a symbolic expression for the surrogate metamodel.

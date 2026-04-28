@@ -5,7 +5,7 @@ from math import comb
 import copy
 from uam4x.utils import log, is_bool, is_integer
 import pandas as pd
-
+from math import ceil
 
 def gen_csv_states(csv_path,col_order):
     """Load uncertainty states from a CSV file.
@@ -181,11 +181,16 @@ class RegressionPCE(BasicAleatory):
     -----
     The workflow checks that the number of samples is at least the number of
     basis terms required for the requested polynomial order and number of
-    aleatory variables.
+    aleatory variables. When a nonzero holdout fraction is used, the basis
+    feasibility check is performed against the effective post-split training
+    sample count. Split-based holdout validation is most defensible for
+    Monte Carlo sampling; for space-filling samplers such as Latin hypercube
+    and Sobol, an independent validation design is usually more rigorous.
 
     """
 
-    def __init__(self, num_samples, SamplingClass,poly_order,seed=42):
+    def __init__(self, num_samples, SamplingClass,poly_order,
+                 seed=42,hold_out_fraction=0.0,hold_out_seed=None):
         """Initialize a regression PCE workflow.
 
         Parameters
@@ -196,10 +201,29 @@ class RegressionPCE(BasicAleatory):
             Sampler class used to generate samples.
         poly_order : int
             Total polynomial order of the polynomial chaos basis.
+        seed : int, optional
+            Random seed used to generate the regression sample set.
+        hold_out_fraction : float, optional
+            Fraction of completed samples reserved for surrogate validation.
+            The remaining samples are used to fit the polynomial-chaos model.
+            This split-based validation is most statistically natural for
+            Monte Carlo sampling. For structured space-filling designs such as
+            Latin hypercube or Sobol sampling, splitting one generated design
+            can give optimistic validation metrics because the training and
+            holdout sets are not independent designs.
+        hold_out_seed : int or None, optional
+            Random seed used to split training and holdout samples when
+            ``hold_out_fraction`` is nonzero. Defaults to ``68`` in that case.
 
         """
         super().__init__(num_samples, SamplingClass,seed)
         self.poly_order = poly_order
+        if hold_out_fraction<0.0 or hold_out_fraction>1.0:
+            raise ValueError(f'Hold out fraction must be between zero and one')
+        self.hold_out_fraction=hold_out_fraction
+        if not hold_out_fraction==0.0:
+            self.hold_out_seed=hold_out_seed if hold_out_seed is not None else 68
+
 
     def _check_analysis(self):
         # check order and number of aleatory vs. num samples
@@ -216,22 +240,24 @@ class RegressionPCE(BasicAleatory):
         Notes
         -----
         The number of basis terms is computed as
-        ``comb(poly_order + num_aleatory, poly_order)``. A warning is logged
-        when ``num_samples`` is less than three times the number of required
-        basis terms.
+        ``comb(poly_order + num_aleatory, poly_order)`` using the effective
+        training-sample count after any holdout split. A warning is logged
+        when the effective training-sample count is less than three times the
+        number of required basis terms.
 
         """
         num_aleatory = len(self.aleatory_var_to_dist)
         min_terms = comb(self.poly_order + num_aleatory, self.poly_order)
-        if min_terms > self.num_samples:
+        num_samples = ceil(self.num_samples * (1 - self.hold_out_fraction))
+        if min_terms > num_samples:
             raise ValueError(
                 f"Insufficient terms for polynomial chaos expansion of degree {self.poly_order} for {num_aleatory} random variables"
             )
-        elif min_terms * 3 > self.num_samples:
+        elif min_terms * 3 > num_samples:
             log.warning(
                 "Regression PCE is lightly sampled: "
                 f"polynomial order={self.poly_order}, num_variables={num_aleatory}, "
-                f"basis_size={min_terms}, num_samples={self.num_samples}. "
+                f"basis_size={min_terms}, num_samples={num_samples}. "
                 "Consider 2-3x oversampling relative to the basis size."
             )
 
@@ -248,6 +274,9 @@ class RegressionPCE(BasicAleatory):
         """
         data=super()._to_dict()
         data['polynomial_order']=self.poly_order
+        data['hold_out_fraction']=self.hold_out_fraction
+        if not self.hold_out_fraction==0.0:
+            data['hold_out_seed']=self.hold_out_seed
         return data
 
     @classmethod
@@ -270,7 +299,14 @@ class RegressionPCE(BasicAleatory):
         num_samples = workflow_dict["num_samples"]
         poly_order = workflow_dict["polynomial_order"]
         seed=workflow_dict['seed']
-        analysis=cls(num_samples=num_samples, SamplingClass=sampler,seed=seed,poly_order=poly_order)
+        hold_out_fraction=workflow_dict['hold_out_fraction']
+        hold_out_seed=workflow_dict.get('hold_out_seed', None)
+        analysis=cls(num_samples=num_samples,
+                     SamplingClass=sampler,
+                     seed=seed,
+                     poly_order=poly_order,
+                     hold_out_fraction=hold_out_fraction,
+                     hold_out_seed=hold_out_seed)
         for name, distribution_data in workflow_dict["aleatory_variables"].items():
             dist = distribution_name_to_class_registry[
                 distribution_data["name"]
@@ -1171,12 +1207,18 @@ class MixedRegressionPCE(MixedBaseClass):
     Epistemic intervals are sampled as uniform distributions over their lower
     and upper bounds. The workflow checks that the number of samples is at
     least the number of basis terms required for the requested polynomial order
-    and total number of mixed variables.
+    and total number of mixed variables. When a nonzero holdout fraction is
+    used, the basis feasibility check is performed against the effective
+    post-split training sample count. Split-based holdout validation is most
+    defensible for Monte Carlo sampling; for space-filling samplers such as
+    Latin hypercube and Sobol, an independent validation design is usually
+    more rigorous.
 
     """
 
     def __init__(self,SamplingClass,num_samples,
-                 poly_order,seed=42):
+                 poly_order,seed=42,
+                 hold_out_fraction=0.0,hold_out_seed=None):
         """Initialize a mixed regression PCE workflow.
 
         Parameters
@@ -1187,6 +1229,19 @@ class MixedRegressionPCE(MixedBaseClass):
             Number of mixed samples to generate.
         poly_order : int
             Total polynomial order of the polynomial chaos basis.
+        seed : int, optional
+            Random seed used to generate the mixed sample set.
+        hold_out_fraction : float, optional
+            Fraction of completed samples reserved for surrogate validation.
+            The remaining samples are used to fit the polynomial-chaos model.
+            This split-based validation is most statistically natural for
+            Monte Carlo sampling. For structured space-filling designs such as
+            Latin hypercube or Sobol sampling, splitting one generated design
+            can give optimistic validation metrics because the training and
+            holdout sets are not independent designs.
+        hold_out_seed : int or None, optional
+            Random seed used to split training and holdout samples when
+            ``hold_out_fraction`` is nonzero. Defaults to ``68`` in that case.
 
         """
         super().__init__()
@@ -1194,6 +1249,11 @@ class MixedRegressionPCE(MixedBaseClass):
         self.num_samples=num_samples
         self.poly_order = poly_order
         self.seed=seed
+        if hold_out_fraction<0.0 or hold_out_fraction>1.0:
+            raise ValueError(f'Hold out fraction must be between zero and one')
+        self.hold_out_fraction=hold_out_fraction
+        if not hold_out_fraction==0.0:
+            self.hold_out_seed=hold_out_seed if hold_out_seed is not None else 68
 
     def get_states(self):
         """Generate sampled mixed state dictionaries.
@@ -1252,16 +1312,17 @@ class MixedRegressionPCE(MixedBaseClass):
         -----
         The number of basis terms is computed as
         ``comb(poly_order + num_vars, poly_order)``, where ``num_vars`` is the
-        total number of aleatory and epistemic variables. A warning is logged
-        when ``num_samples`` is less than three times the number of required
-        basis terms.
+        total number of aleatory and epistemic variables, using the effective
+        training-sample count after any holdout split. A warning is logged
+        when the effective training-sample count is less than three times the
+        number of required basis terms.
 
         """
         num_vars = len(self.aleatory_var_to_dist) + len(
             self.epistemic_var_to_interval
         )
         min_terms = comb(self.poly_order + num_vars, self.poly_order)
-        num_samples=self.num_samples
+        num_samples=ceil(self.num_samples*(1-self.hold_out_fraction))
         if min_terms > num_samples:
             raise ValueError(
                 f"Insufficient terms for polynomial chaos expansion of degree {self.poly_order} "
@@ -1286,7 +1347,7 @@ class MixedRegressionPCE(MixedBaseClass):
             polynomial order.
 
         """
-        return{
+        data={
             "type":self.__class__.__name__,
             "sampler":self.SamplingClass.__name__,
             "num_samples":self.num_samples,
@@ -1296,8 +1357,13 @@ class MixedRegressionPCE(MixedBaseClass):
 
             "epistemic_variables":{name:interval
                                    for name,interval in self.epistemic_var_to_interval.items()},
-            "polynomial_order":self.poly_order
+            "polynomial_order":self.poly_order,
+            "hold_out_fraction":self.hold_out_fraction,
+
         }
+        if not self.hold_out_fraction==0.0:
+            data["hold_out_seed"]=self.hold_out_seed
+        return data
 
     @classmethod
     def _from_dict(cls, data):
@@ -1319,10 +1385,14 @@ class MixedRegressionPCE(MixedBaseClass):
         num_samples = data["num_samples"]
         poly_order = data["polynomial_order"]
         seed=data['seed']
+        hold_out_fraction=data['hold_out_fraction']
+        hold_out_seed=data.get('hold_out_seed', None)
         mixed_analysis=cls(SamplingClass=sampler,
                            num_samples=num_samples,
                              poly_order=poly_order,
-                             seed=seed)
+                             seed=seed,
+                             hold_out_fraction=hold_out_fraction,
+                             hold_out_seed=hold_out_seed)
         for name,distribution_data in data["aleatory_variables"].items():
             dist=distribution_name_to_class_registry[
                 distribution_data["name"]
