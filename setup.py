@@ -22,7 +22,8 @@ setup(
         'scipy>=1.16.1',
         'tzdata==2025.2',
         'sympy==1.14.0',
-        'pandas==2.3.1'
+        'pandas==2.3.1',
+        'scikit-learn==1.4.2'
 
     ],
     description='M4 Engineering developed UAM design space exploration framework with embedded version control',

@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from numbers import Real
 from itertools import product
 from uam4x.log import get_log
-from uam4x.utils import log
+from uam4x.utils import log, canonicalize_path
 import numpy as np
 import inspect
 import hashlib
@@ -2320,20 +2320,21 @@ def register_plugin(cls):
 
     # Handle case where module is run as __main__ (no __spec__)
     try:
-        module_origin = importlib.util.find_spec(cls.__module__).origin
+        module_origin = canonicalize_path(inspect.getfile(cls))
     except (ValueError, AttributeError):
         # If module is run as __main__, get the actual file path from sys.argv[0]
         import sys
 
         if sys.argv and len(sys.argv) > 0:
-            module_origin = os.path.abspath(sys.argv[0])
+            module_origin = canonicalize_path(os.path.abspath(sys.argv[0]))
         else:
             # Fallback to current working directory + module name
-            module_origin = os.path.join(os.getcwd(), cls.__module__ + ".py")
+            module_origin = canonicalize_path(os.path.join(os.getcwd(), cls.__module__ + ".py"))
 
     if (
         plugin_name in _config["PLUGINS"]
-        and _config["PLUGINS"][plugin_name] != module_origin
+        and canonicalize_path(_config["PLUGINS"][plugin_name])
+        != canonicalize_path(module_origin)
     ):
         log.warning(
             f"Plugin '{plugin_name}' already registered\nOverwritting existing data"

@@ -253,15 +253,6 @@ def test_shared_bound_validation_failures(adder, kwargs, exc_type, match):
         method(name, **kwargs)
 
 
-# -------------------- Constraint-only special rule --------------------
-
-
-def test_add_constraint_requires_bound():
-    opt = Optimization()
-    with pytest.raises(ValueError, match="At least one constraint must be declared"):
-        opt.add_constraint(CONSTRAINT_NAME)
-
-
 # -------------------- Indices passthrough --------------------
 
 

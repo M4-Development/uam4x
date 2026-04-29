@@ -1,6 +1,6 @@
 import os
 from uam4x.log import get_log
-from uam4x.utils import log
+from uam4x.utils import log, canonicalize_path
 
 from uam4x.units import (
     UnitType,
@@ -951,21 +951,19 @@ def register_subsystem(cls):
         return cls
 
     # For external subsystems, update conf.json
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conf.json")
+    config_path = canonicalize_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conf.json"))
     _config = check_and_get_config(config_path)
-
+    import inspect
     if (
         subsystem in _config["SUBSYSTEMS"]
-        and _config["SUBSYSTEMS"][subsystem]
-        != importlib.util.find_spec(cls.__module__).origin
+        and canonicalize_path(_config["SUBSYSTEMS"][subsystem])
+        != canonicalize_path(os.path.abspath(inspect.getfile(cls)))
     ):
         log.warning(
             f"WARNING: Subsystem '{subsystem }' already registered\nOverwritting existing data"
         )
     if not "uam4x.subsystems" in cls.__module__.replace(".", "/"):
-        _config["SUBSYSTEMS"][subsystem] = importlib.util.find_spec(
-            cls.__module__
-        ).origin
+        _config["SUBSYSTEMS"][subsystem] = canonicalize_path(os.path.abspath(inspect.getfile(cls)))
         if is_main_process() and registry_writes_enabled():
             with open(config_path, "w") as configfile:
                 json.dump(_config, configfile, indent=4)

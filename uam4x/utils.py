@@ -892,23 +892,44 @@ def replace_empty_quotes_with_none(value):
     return value
 
 def _get_class_from_file(class_name, file_path):
-    file_path = Path(file_path).resolve()
+    file_path = os.path.abspath(file_path)
 
-    if not file_path.exists():
+    if not os.path.exists(file_path):
         raise FileNotFoundError(f"Python file not found: {file_path}")
 
-    module_name = file_path.stem
+    canon = canonicalize_path(file_path)
+    module_name = f"_uam4x_dynamic_{hashlib.sha256(canon.encode('utf-8')).hexdigest()}"
 
+    # spec defines the name of the module and the corresponding location of the file to import
     spec = importlib.util.spec_from_file_location(module_name, str(file_path))
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not create import spec for: {file_path}")
 
+    #this is just that defined module
     module = importlib.util.module_from_spec(spec)
+    # add the module to the system modules
     sys.modules[module_name] = module
 
     try:
+        #run the module code file to populate the module's namespace
         spec.loader.exec_module(module)
         cls = getattr(module, class_name)
     except Exception as e:
         return None
     return cls
+
+def canonicalize_path(path):
+    """Return a canonicalized absolute path.
+
+    Parameters
+    ----------
+    path : str or path-like
+        Path to canonicalize.
+
+    Returns
+    -------
+    str
+        Canonicalized absolute path.
+
+    """
+    return os.path.normcase(os.path.normpath(os.path.realpath(os.path.abspath(path))))
