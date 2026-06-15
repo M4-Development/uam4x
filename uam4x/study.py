@@ -23,6 +23,7 @@ from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import hashlib
+from pathlib import Path
 
 
 class Study:
@@ -653,30 +654,25 @@ class Study:
         HEAD, no commit is created.
 
         """
-        if not os.path.isdir(self.control.repo_root):
+        path=Path(self.control.repo_root)
+        if not path.is_dir():
             raise NotADirectoryError(
                 f"The provided repository root path {self.control.repo_root} is not a directory.\n"
                 f"The repo root must be a directory."
             )
 
-        assert os.path.isdir(os.path.join(self.control.repo_root, ".git"))
-
         try:
-            repo_path = pygit2.discover_repository(self.control.repo_root)
+            repo_path = pygit2.discover_repository(path)
         except KeyError:
             repo_path = None
 
         if repo_path is None:
             raise ValueError("No repository found with provided path")
 
-        expected_git_dir = os.path.join(self.control.repo_root, ".git")
-        repo_path_norm = os.path.normcase(os.path.normpath(os.path.realpath(repo_path)))
+        repo_path=Path(repo_path)
+        expected_git_dir = path / '.git'
 
-        expected_norm = os.path.normcase(
-            os.path.normpath(os.path.realpath(expected_git_dir))
-        )
-
-        if repo_path_norm != expected_norm:
+        if expected_git_dir != repo_path:
             raise ValueError(
                 f"Provided path: {self.control.repo_root} does not have a repo"
             )
@@ -1028,7 +1024,22 @@ class Variants:
             os.mkdir(variants_dir)
 
         self.log = Variants.log
-        self.repo_dir=git_dir if git_dir is not None else dir
+
+
+
+
+        self.repo_dir=git_dir if git_dir is not None else None
+        if self.repo_dir is None:
+            try:
+                found_git_dir = pygit2.discover_repository(dir)
+            except KeyError:
+                found_git_dir=None
+            if found_git_dir is not None:
+                found_git_dir=Path(found_git_dir)
+                if found_git_dir.name=='.git':
+                    found_git_dir=found_git_dir.parent
+                found_git_dir=str(found_git_dir)
+            self.repo_dir=found_git_dir
 
 
     def set_repo_root(self, repo_dir: str) -> None:
