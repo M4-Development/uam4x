@@ -2,6 +2,7 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import openturns as ot
 import numpy as np
+import warnings
 from uam4x.UQ import LatinHypercubeSampler, SobolSampler,MonteCarloSampler,\
     HaltonSampler,NormalDistribution,UniformDistribution,LogNormalDistribution
 import scipy.stats as stats
@@ -707,6 +708,23 @@ class RegressionPCEPost(BasicAleatoryPost):
             joint_list.append(ot_dist)
 
         outputs=np.array(self.tradestudy.get_variable(output_name))[:, None]
+        finite_mask = np.isfinite(abscissas).all(axis=1) & np.isfinite(outputs).all(axis=1)
+        num_invalid = int((~finite_mask).sum())
+        if num_invalid:
+            warnings.warn(
+                f"Dropping {num_invalid} non-finite sample(s) before fitting the "
+                f"surrogate for '{output_name}'. Failed model evaluations appear "
+                "as NaN tracked outputs and cannot be passed to OpenTURNS.",
+                RuntimeWarning,
+            )
+            abscissas = abscissas[finite_mask]
+            outputs = outputs[finite_mask]
+
+        if abscissas.shape[0] == 0:
+            raise ValueError(
+                f"No finite samples are available to fit the surrogate for '{output_name}'."
+            )
+
         X_test=None
         y_test=None
         # Handle hold out case
@@ -736,6 +754,12 @@ class RegressionPCEPost(BasicAleatoryPost):
         if basis_size != comb(poly_order + len(aleatory_var_to_dist), poly_order):
             raise ValueError(
                 f"Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(aleatory_var_to_dist)}"
+            )
+        if abscissas.getSize() < basis_size:
+            raise ValueError(
+                f"Not enough finite samples to fit the surrogate for '{output_name}'. "
+                f"Need at least {basis_size} samples for polynomial order {poly_order}, "
+                f"but only {abscissas.getSize()} remain after filtering."
             )
 
         # Selects first P elemens of the polynomial chaos basis according to enumeration function

@@ -127,7 +127,7 @@ class Engine:
         problem.check_partials(step=step, form=form, compact_print=True)
         os.chdir(cwd)
 
-    def _run_state(self, state, iteration=None, resort_steps=False):
+    def _run_state(self, state, trade_work_dir,iteration=None, resort_steps=False,):
         """Execute one analysis state.
 
         Parameters
@@ -155,9 +155,9 @@ class Engine:
         # preserve the derived execution order stored in `_execution_steps`.
         # Recompute it here so serial and parallel runs build the same model.
         if not iteration is None and self.create_step_work_dirs:
-            out_dir = os.path.join(self.work_dir, f"out_{iteration}")
+            out_dir = os.path.join(trade_work_dir, f"out_{iteration}")
         else:
-            out_dir = os.path.join(self.work_dir)
+            out_dir = os.path.join(trade_work_dir)
 
         os.makedirs(out_dir, exist_ok=True)
 
@@ -176,7 +176,7 @@ class Engine:
 
     @staticmethod
     def _run_state_parallel(
-        study_dict, state, iteration=None, work_dir=None, create_step_work_dirs=True
+        study_dict, state, iteration=None, trade_work_dir=None, create_step_work_dirs=True
     ):
         """Execute one analysis state in a worker process.
 
@@ -205,10 +205,10 @@ class Engine:
 
         """
 
-        study = Study._from_dict(study_dict, work_dir)
-        engine = Engine(study, work_dir)
+        study = Study._from_dict(study_dict, trade_work_dir)
+        engine = Engine(study, trade_work_dir)
         engine.create_step_work_dirs = create_step_work_dirs
-        result = engine._run_state(state, iteration=iteration, resort_steps=True)
+        result = engine._run_state(state, trade_work_dir=trade_work_dir,iteration=iteration, resort_steps=True)
         return result
 
     def _run_optimization(self, state, plugins, out_dir):
@@ -341,7 +341,7 @@ class Engine:
         self.study.solution.sort_steps()
         plugins = self.study.solution.generate_plugins()
         state = {}
-        out_dir = self.work_dir
+        out_dir = os.path.join(self.work_dir,'Default_State')
         result = self._run_single_point(state, plugins, out_dir=out_dir)
         study_result = self.study.results
         if trade_name in study_result.tradestudies:
@@ -498,6 +498,9 @@ class Engine:
         self.log.debug(f"run tradestudy: {trade_name}")
         self.study.solution.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
+        trade_work_dir=os.path.join(self.work_dir,trade_name)
+        os.makedirs(trade_work_dir,exist_ok=True)
+
         # addition for UQ workflows where orchestration is more complex
         if hasattr(tradestudy, "_check_analysis"):
             tradestudy._check_analysis()
@@ -516,7 +519,7 @@ class Engine:
             plugins = self.study.solution.generate_plugins()
             if check:
                 self.check_model(plugins, state)
-            result = self._run_optimization(state, plugins, self.work_dir)
+            result = self._run_optimization(state, plugins, trade_work_dir)
             study_result = self.study.results
             if trade_name in study_result.tradestudies:
                 self.log.warning(
@@ -575,6 +578,7 @@ class Engine:
         successful_states = []
         states = trade_states
         num_states = len(states)
+        trade_work_dir=os.path.join(self.work_dir,trade_name)
         if num_processors and num_processors > 1:
             if num_processors > num_states:
                 log.warning(
@@ -598,7 +602,7 @@ class Engine:
                         study_dict,
                         state,
                         iteration=i,
-                        work_dir=self.work_dir,
+                        trade_work_dir=trade_work_dir,
                         create_step_work_dirs=self.create_step_work_dirs,
                     )
                     for i, state in enumerate(states)
@@ -640,7 +644,7 @@ class Engine:
             for i, state in enumerate(states):
 
                 try:
-                    outputs.append(self._run_state(state, iteration=i))
+                    outputs.append(self._run_state(state, trade_work_dir=trade_work_dir,iteration=i))
                     self.log.info(f"state successful: {state}")
                     successful_states.append(state)
                 except PluginException as e:

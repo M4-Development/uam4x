@@ -313,7 +313,7 @@ def test_run_state_parallel_rebuilds_study_and_runs(tmp_path):
         study._to_dict(),
         state={},
         iteration=None,
-        work_dir=str(tmp_path / "parallel"),
+        trade_work_dir=str(tmp_path / "parallel"),
     )
 
     assert result.outputs["stage2.objective"] == pytest.approx(40.0)

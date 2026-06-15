@@ -1300,6 +1300,12 @@ class Aircraft(Subsystem):
             unit_type=UnitType.MASS,
             description="Mass per passenger",
         )
+        self.add_parameter(
+                "disk_loading",
+                0.0,
+                float,
+                unit_type=None,
+                description="Diskloading (thrust/rotor area)")
 
 
 # --- Test script ---

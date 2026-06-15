@@ -1006,7 +1006,7 @@ class Variants:
 
     log = get_log(log, object_name="variants")
 
-    def __init__(self, dir: str) -> None:
+    def __init__(self, dir: str,git_dir=None) -> None:
         """Initialize a variant manager.
 
         Parameters
@@ -1028,6 +1028,8 @@ class Variants:
             os.mkdir(variants_dir)
 
         self.log = Variants.log
+        self.repo_dir=git_dir if git_dir is not None else dir
+
 
     def set_repo_root(self, repo_dir: str) -> None:
         """Set the repository root used to generate variant artifacts.
@@ -1043,7 +1045,7 @@ class Variants:
         None
 
         """
-        self.dir = os.path.abspath(os.path.expanduser(repo_dir))
+        self.repo_dir = os.path.abspath(os.path.expanduser(repo_dir))
 
     def add_variant(self, name, func_list: list,options:dict=None):
         """Register a named study variant.
@@ -1106,7 +1108,7 @@ class Variants:
                 else:
                     func(study)
 
-            study.control._set_repo_root(self.dir)
+            study.control._set_repo_root(self.repo_dir)
             study.control._set_variant_name(name)
             study.save_model_to_json(this_variant_dir, commit=commit)
             studies.append(study)

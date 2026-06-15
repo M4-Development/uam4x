@@ -482,7 +482,7 @@ class ParameterSweep:
                     f"All parameter value lists must have the same length, but '{name}' has length {len(value_list)} while others have length {self.length}"
                 )
 
-    def set_child(self, child: Union["ParameterSweep", Optimization]) -> None:
+    def add_child(self, child: Union["ParameterSweep", Optimization]) -> None:
         """Set the child sweep or optimization definition.
 
         Parameters
