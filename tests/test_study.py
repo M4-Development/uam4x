@@ -186,9 +186,10 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
     out.mkdir()
     calls = {}
 
-    def fake_commit(json_paths, commit_message):
+    def fake_commit(json_paths, commit_message, branch_name=None):
         calls["paths"] = json_paths
         calls["msg"] = commit_message
+        calls["branch_name"] = branch_name
 
     # save+reload to initialize model hash for results-only save path
     demo_study.save_model_to_json(str(out), commit=False)
@@ -204,6 +205,7 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
     assert (out / "results.json").exists()
     assert calls["paths"] == [str(out / "results.json")]
     assert "Writing results for variant" in calls["msg"]
+    assert calls["branch_name"] is None
 
 
 def test_study_commit_json_to_branch_errors_no_dir(demo_study):

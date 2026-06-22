@@ -19,6 +19,7 @@ import concurrent.futures
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import shutil
 
 
 class Engine:
@@ -342,6 +343,9 @@ class Engine:
         plugins = self.study.solution.generate_plugins()
         state = {}
         out_dir = os.path.join(self.work_dir,'Default_State')
+        if os.path.exists(out_dir):
+            shutil.rmtree(out_dir)
+        os.makedirs(out_dir)
         result = self._run_single_point(state, plugins, out_dir=out_dir)
         study_result = self.study.results
         if trade_name in study_result.tradestudies:
@@ -499,7 +503,9 @@ class Engine:
         self.study.solution.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
         trade_work_dir=os.path.join(self.work_dir,trade_name)
-        os.makedirs(trade_work_dir,exist_ok=True)
+        if os.path.exists(trade_work_dir):
+            shutil.rmtree(trade_work_dir)
+        os.makedirs(trade_work_dir)
 
         # addition for UQ workflows where orchestration is more complex
         if hasattr(tradestudy, "_check_analysis"):
