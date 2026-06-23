@@ -15,7 +15,6 @@ from operator import attrgetter
 import sys
 import platform
 from importlib.metadata import distributions
-from pathlib import Path
 import subprocess
 import pygit2
 from uam4x.results import Results
@@ -24,7 +23,6 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import hashlib
 from pathlib import Path
-import re
 
 
 class Study:
@@ -440,14 +438,16 @@ class Study:
         commit : bool, optional
             If True, commit the generated JSON file to git.
         branch_name : str, optional
-            Local branch to commit to. If omitted, a unique branch named
-            ``DefaultBranch<N>`` is created from the active branch.
+            Local branch to commit to. Required when ``commit=True``.
 
         Returns
         -------
         None
 
         """
+        if commit and not branch_name:
+            raise ValueError("branch_name is required when commit=True.")
+
         msg = f"AutoCommit: Created data for variant {self.control.variant_name}"
         study_dict=replace_none_with_empty_quotes(self._to_dict())
         model_dict={
@@ -507,8 +507,7 @@ class Study:
         commit : bool, optional
             If True, commit the generated JSON file to git.
         branch_name : str, optional
-            Local branch to commit to. If omitted, a unique branch named
-            ``DefaultBranch<N>`` is created from the active branch.
+            Local branch to commit to. Required when ``commit=True``.
 
         Returns
         -------
@@ -524,6 +523,9 @@ class Study:
             results.
 
         """
+        if commit and not branch_name:
+            raise ValueError("branch_name is required when commit=True.")
+
         msg = f"AutoCommit: Writing results for variant {self.control.variant_name}"
         results_path=os.path.join(variant_path,'results.json')
         study_dict=replace_none_with_empty_quotes(self._to_dict())
@@ -576,8 +578,7 @@ class Study:
         commit : bool, optional
             If True, commit the generated JSON file to git.
         branch_name : str, optional
-            Local branch to commit to. If omitted, a unique branch named
-            ``DefaultBranch<N>`` is created from the active branch.
+            Local branch to commit to. Required when ``commit=True``.
 
         Returns
         -------
@@ -591,6 +592,9 @@ class Study:
             does not match the loaded results hash.
 
         """
+        if commit and not branch_name:
+            raise ValueError("branch_name is required when commit=True.")
+
         msg=f"AutoCommit: Writing post processing data for variant {self.control.variant_name}"
         post_processing_path=os.path.join(variant_path,'post.json')
         study_dict=replace_none_with_empty_quotes(self._to_dict())
@@ -645,10 +649,9 @@ class Study:
         commit_message : str
             Git commit message used for the commit.
         branch_name : str, optional
-            Local branch to commit to. If omitted, a unique branch named
-            ``DefaultBranch<N>`` is created from the active branch. If a name
-            is provided and the local branch does not exist, it is created from
-            the active branch before committing.
+            Local branch to commit to. This is required. If the local branch
+            does not exist, it is created from the active branch before
+            committing.
 
         Returns
         -------
@@ -659,7 +662,8 @@ class Study:
         NotADirectoryError
             If :attr:`control.repo_root` is not a directory.
         ValueError
-            If no git repository can be found at :attr:`control.repo_root`.
+            If no git repository can be found at :attr:`control.repo_root`, or
+            if ``branch_name`` is not provided.
         RuntimeError
             If the repository is in a detached HEAD state or has an unborn
             HEAD.
@@ -670,6 +674,11 @@ class Study:
         the target branch HEAD, no commit is created.
 
         """
+        if not branch_name:
+            raise ValueError("branch_name is required when committing JSON artifacts.")
+
+        # FIRST: Find the git repository to work with in the first place
+        # make sure it is in an acceptable state
         path=Path(self.control.repo_root)
         if not path.is_dir():
             raise NotADirectoryError(
@@ -697,62 +706,65 @@ class Study:
         if repo.head_is_unborn:
             raise RuntimeError("Cannot commit: repository has no commits yet (unborn HEAD).")
 
-
-
-
         if repo.head_is_detached:
             raise RuntimeError("Cannot commit: repo is in detached HEAD state.")
 
+        #now, using the branch name, add the jsons to the ref is that branch already exists
+        #if the branch doesn't yet exist, attempt to create it and then commit without checking
+        #out the branch itself
 
-        current_branch=repo.head.shorthand
+        #local branch name
 
-        if branch_name is None:
-            increment=1
-            for branch in repo.branches.local:
-                if re.fullmatch("DefaultBranch\d+",branch):
-                    val=int(re.findall('\d+',branch)[0])
-                    if val>=increment:
-                        increment=val+1
-            branch_name='DefaultBranch'+str(increment)
-            target_commit = repo.head.peel(pygit2.Commit)
-            branch=repo.branches.local.create(branch_name,target_commit)
-        else:
-            exists=False
-            for branch in repo.branches.local:
-                if branch_name==branch:
-                    exists=True
-                    break
-            if not exists:
-                repo.branches.local.create(branch_name,repo.head.peel(pygit2.Commit))
-
+        # desired branch name
         full_branch_ref='refs/heads/'+branch_name
-        repo.checkout(full_branch_ref)
+        if branch_name in repo.branches.local:
+            # this points to all references associated with the branch
+            # branch points to target commit, but commits point to the commits
+            # that precede it in the tree
+            branch_ref=repo.references[full_branch_ref]
+            #this points to the commit the branch is pointed to
+            parent_commit=repo[branch_ref.target]
+        else:
+            # if the branch does not exist, create it at the current head
 
+            # get the current commit/ref at the head
+            base_commit = repo.head.peel(pygit2.Commit)
 
-        parents = [repo.head.target]
-        index = repo.index
+            # create a new branch
+            repo.create_branch(branch_name, base_commit)
+
+            # get the ref to append the commit to
+            branch_ref = repo.references[full_branch_ref]
+            parent_commit = base_commit
+
+        # index object (can stage/unstage by interacting with api)
+        index=repo.index
+
         for json_path in json_paths:
             # stage the JSON file
             # rel path
             rel_path = os.path.relpath(json_path, repo.workdir)
             rel_path = rel_path.replace(os.sep, "/")
-            # same as git add path
+            # same as git add path but does it to the pygit2 object (in memory)
             index.add(rel_path)
+
+        #equivalent to running git add . or staging to commit directly
         index.write()
+
         # this is the snapshot of your repo as a hash
         tree = index.write_tree()
-        head_commit=repo[repo.head.target]
-        if tree==head_commit.tree_id:
+
+        #TODO: handle case where non .json files are already in the index.
+
+        if tree==parent_commit.tree_id:
             self.log.debug("No JSON changes detected; skipping commit.")
-            print("No JSON changes detected; skipping commit. Current branch has changed")
+            print("No JSON changes detected; skipping commit.")
             return
         author = pygit2.Signature(self.control.author, "fake@email")
         committer = pygit2.Signature(self.control.author, "fake@email")
-        repo.create_commit("HEAD", author, committer, commit_message, tree, parents)
+        # tree is the data that has been staged, parent commit is the ref to commit onto
+        repo.create_commit(full_branch_ref, author, committer, commit_message, tree, [parent_commit.id])
 
-
-        full_current='refs/heads/'+current_branch
-        repo.checkout(full_current)
 
 
 
@@ -1129,8 +1141,8 @@ class Variants:
         commit : bool, optional
             If True, also commit generated JSON artifacts to git.
         branch_name : str, optional
-            Local branch to commit generated artifacts to. If omitted, each
-            autocommit uses a unique branch named ``DefaultBranch<N>``.
+            Local branch to commit generated artifacts to. Required when
+            ``commit=True``.
 
         Returns
         -------
@@ -1144,6 +1156,9 @@ class Variants:
 
         """
         self.log.debug("generate variants")
+        if commit and not branch_name:
+            raise ValueError("branch_name is required when commit=True.")
+
         studies = []
 
         for name, (func_list, options) in self.variants.items():
