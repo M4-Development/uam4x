@@ -695,6 +695,7 @@ class Study:
             raise ValueError("No repository found with provided path")
 
         repo_path=Path(repo_path)
+
         expected_git_dir = path / '.git'
 
         if expected_git_dir != repo_path:
@@ -713,7 +714,17 @@ class Study:
         #if the branch doesn't yet exist, attempt to create it and then commit without checking
         #out the branch itself
 
-        #local branch name
+        #check if any files are already in the index:
+        # git diff compares the staged files to the files in the head commit
+        # if there are no differences (e.g nothing staged) then the return code
+        # is a zero, if there are differences, the return code is a 1.
+
+        # --cached is equivalent to --staged makes it compare against the HEAD
+        # should be run from the directory of the git repository
+        result=subprocess.run(["git","diff","--staged","--exit-code","--quiet"],cwd=repo.workdir)
+        if result.returncode!=0:
+            raise RuntimeError(f'The repository has staged changes when attempting to autocommit,'
+                             ' the index should be clean before committing')
 
         # desired branch name
         full_branch_ref='refs/heads/'+branch_name
@@ -737,33 +748,38 @@ class Study:
             branch_ref = repo.references[full_branch_ref]
             parent_commit = base_commit
 
-        # index object (can stage/unstage by interacting with api)
-        index=repo.index
+        try:
+            # index object (can stage/unstage by interacting with api)
+            index=repo.index
 
-        for json_path in json_paths:
-            # stage the JSON file
-            # rel path
-            rel_path = os.path.relpath(json_path, repo.workdir)
-            rel_path = rel_path.replace(os.sep, "/")
-            # same as git add path but does it to the pygit2 object (in memory)
-            index.add(rel_path)
+            for json_path in json_paths:
+                # stage the JSON file
+                # rel path
+                rel_path = os.path.relpath(json_path, repo.workdir)
+                rel_path = rel_path.replace(os.sep, "/")
+                # same as git add path but does it to the pygit2 object (in memory)
+                index.add(rel_path)
 
-        #equivalent to running git add . or staging to commit directly
-        index.write()
+            #equivalent to running git add . or staging to commit directly
+            index.write()
 
-        # this is the snapshot of your repo as a hash
-        tree = index.write_tree()
+            # this is the snapshot of your repo as a hash
+            tree = index.write_tree()
 
-        #TODO: handle case where non .json files are already in the index.
+            #TODO: handle case where non .json files are already in the index.
 
-        if tree==parent_commit.tree_id:
-            self.log.debug("No JSON changes detected; skipping commit.")
-            print("No JSON changes detected; skipping commit.")
-            return
-        author = pygit2.Signature(self.control.author, "fake@email")
-        committer = pygit2.Signature(self.control.author, "fake@email")
-        # tree is the data that has been staged, parent commit is the ref to commit onto
-        repo.create_commit(full_branch_ref, author, committer, commit_message, tree, [parent_commit.id])
+
+            if tree==parent_commit.tree_id:
+                self.log.debug("No JSON changes detected; skipping commit.")
+                print("No JSON changes detected; skipping commit.")
+                return
+            author = pygit2.Signature(self.control.author, "fake@email")
+            committer = pygit2.Signature(self.control.author, "fake@email")
+            # tree is the data that has been staged, parent commit is the ref to commit onto
+            repo.create_commit(full_branch_ref, author, committer, commit_message, tree, [parent_commit.id])
+        finally:
+            #reset the index (which should already be clean)
+            subprocess.run(['git','reset','HEAD','--quiet'],cwd=repo.workdir,check=True)
 
 
 
@@ -1180,7 +1196,8 @@ class Variants:
 
             study.control._set_repo_root(self.repo_dir)
             study.control._set_variant_name(name)
-            study.save_model_to_json(this_variant_dir, commit=commit,branch_name=branch_name)
+            temp_branch_name=branch_name+'_'+name
+            study.save_model_to_json(this_variant_dir, commit=commit,branch_name=temp_branch_name)
             studies.append(study)
         return studies
 
