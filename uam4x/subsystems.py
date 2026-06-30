@@ -1164,7 +1164,12 @@ class Rotor(Subsystem):
             unit_type=UnitType.ANGLE,
             description="Collective pitch angle (deg)",
         )
-
+        self.add_parameter(
+                "disk_loading",
+                0.0,
+                float,
+                unit_type=None,
+                description="Diskloading (thrust/rotor area)")
 
 @register_subsystem
 class RotorBladeRegion(Subsystem):
@@ -1283,29 +1288,18 @@ class RotorBladeRegion(Subsystem):
 @register_subsystem
 class Aircraft(Subsystem):
     """Represent an aircraft-level component."""
-
     def setup(self):
-        """Register baseline aircraft parameters.
+        self.add_parameter('Upass',0.0,float,description='Weight per passenger')
 
-        Returns
-        -------
-        None
+        self.add_parameter('Wenviron',75.,float,description='Environmental Control Lumped Weight')
 
-        """
-        self.add_parameter("npass", 4, int, description="Number of passengers")
-        self.add_parameter(
-            "wpass",
-            200.0,
-            float,
-            unit_type=UnitType.MASS,
-            description="Mass per passenger",
-        )
-        self.add_parameter(
-                "disk_loading",
-                0.0,
-                float,
-                unit_type=None,
-                description="Diskloading (thrust/rotor area)")
+        self.add_parameter('Wfurnish',0.0,float,'Weight of all furnishings (seats, carpet, etc.)')
+
+        self.add_parameter('Welectrical',0.0,float,'Weight of misc electrical systems (lights, entertainment)')
+
+        self.add_parameter('Npass',1,int,'Number of passengers')
+
+
 
 
 # --- Test script ---

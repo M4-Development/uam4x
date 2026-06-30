@@ -186,10 +186,10 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
     out.mkdir()
     calls = {}
 
-    def fake_commit(json_paths, commit_message, branch_name=None):
+    def fake_commit(json_paths, commit_message, new_branch):
         calls["paths"] = json_paths
         calls["msg"] = commit_message
-        calls["branch_name"] = branch_name
+        calls["new_branch"] = new_branch
 
     # save+reload to initialize model hash for results-only save path
     demo_study.save_model_to_json(str(out), commit=False)
@@ -200,38 +200,43 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
     monkeypatch.setattr(loaded, "_to_dict", lambda: data_with_results)
     monkeypatch.setattr(loaded, "_commit_json_to_branch", fake_commit)
 
-    loaded.save_results_to_json(str(out), commit=True, branch_name="results-branch")
+    loaded.save_results_to_json(str(out), commit=True)
 
     assert (out / "results.json").exists()
     assert calls["paths"] == [str(out / "results.json")]
     assert "Writing results for variant" in calls["msg"]
-    assert calls["branch_name"] == "results-branch"
+    assert calls["new_branch"] is False
 
 
-def test_study_save_results_to_json_requires_branch_name_for_commit(tmp_path, demo_study):
+def test_study_save_results_to_json_commit_uses_current_branch(tmp_path, demo_study, monkeypatch):
     out = tmp_path / "variant"
     out.mkdir()
+    calls = {}
 
     demo_study.save_model_to_json(str(out), commit=False)
     loaded = Study.from_json(str(out))
 
     data_with_results = loaded._to_dict()
     data_with_results["results"] = {"trade_a": {"points": [{"x": 1.0, "y": 6.0}]}}
-    loaded._to_dict = lambda: data_with_results
+    monkeypatch.setattr(loaded, "_to_dict", lambda: data_with_results)
+    monkeypatch.setattr(
+        loaded,
+        "_commit_json_to_branch",
+        lambda json_paths, commit_message, new_branch: calls.update(
+            {"paths": json_paths, "msg": commit_message, "new_branch": new_branch}
+        ),
+    )
 
-    with pytest.raises(ValueError, match="branch_name is required"):
-        loaded.save_results_to_json(str(out), commit=True)
+    loaded.save_results_to_json(str(out), commit=True)
+
+    assert calls["paths"] == [str(out / "results.json")]
+    assert "Writing results for variant" in calls["msg"]
+    assert calls["new_branch"] is False
 
 
 def test_study_commit_json_to_branch_errors_no_dir(demo_study):
     demo_study.control.repo_root = "/definitely/not/a/repo"
     with pytest.raises(NotADirectoryError):
-        demo_study._commit_json_to_branch(["dummy.json"], "msg")
-
-
-def test_study_commit_json_to_branch_requires_branch_name(demo_study):
-    demo_study.control.repo_root = "."
-    with pytest.raises(ValueError, match="branch_name is required"):
         demo_study._commit_json_to_branch(["dummy.json"], "msg")
 
 
