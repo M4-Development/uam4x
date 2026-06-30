@@ -9,17 +9,19 @@ _config = check_and_get_config(_conf_path)
 for _subsystem_name, _python_file_path in _config["SUBSYSTEMS"].items():
     if _subsystem_name in _subsystem_registry:
         continue
-    cls = _get_class_from_file(_subsystem_name, _python_file_path)
+    cls, msg = _get_class_from_file(_subsystem_name, _python_file_path)
     if cls is not None:
         _subsystem_registry[_subsystem_name] = cls
     else:
         log.warning(f"Subsystem '{_subsystem_name}' not found in {_python_file_path}")
+        log.warning(msg)
 
 for _plugin_name, _python_file_path in _config["PLUGINS"].items():
     if _plugin_name in _plugin_registry:
         continue
-    cls = _get_class_from_file(_plugin_name, _python_file_path)
+    cls, msg = _get_class_from_file(_plugin_name, _python_file_path)
     if cls is not None:
         _plugin_registry[_plugin_name] = cls
     else:
         log.warning(f"Plugin '{_plugin_name}' not found in {_python_file_path}")
+        log.warning(msg)

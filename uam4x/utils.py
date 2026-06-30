@@ -915,8 +915,9 @@ def _get_class_from_file(class_name, file_path):
         spec.loader.exec_module(module)
         cls = getattr(module, class_name)
     except Exception as e:
-        return None
-    return cls
+        msg = f"Error loading module {module_name}: {e}"
+        return None, msg
+    return cls, ""
 
 def canonicalize_path(path):
     """Return a canonicalized absolute path.
