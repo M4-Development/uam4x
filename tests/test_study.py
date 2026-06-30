@@ -237,7 +237,7 @@ def test_study_save_results_to_json_commit_uses_current_branch(tmp_path, demo_st
 def test_study_commit_json_to_branch_errors_no_dir(demo_study):
     demo_study.control.repo_root = "/definitely/not/a/repo"
     with pytest.raises(NotADirectoryError):
-        demo_study._commit_json_to_branch(["dummy.json"], "msg")
+        demo_study._commit_json_to_branch(["dummy.json"], "msg", new_branch=False)
 
 
 def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, monkeypatch):
@@ -248,7 +248,7 @@ def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, m
 
     monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: None)
     with pytest.raises(ValueError, match="No repository found"):
-        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg", new_branch=False)
 
 
 def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_study, monkeypatch):
@@ -259,7 +259,7 @@ def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_st
 
     monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: str(tmp_path / "other" / ".git"))
     with pytest.raises(ValueError, match="does not have a repo"):
-        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg", new_branch=False)
 
 
 def test_study_commit_json_to_branch_detached_head(tmp_path, demo_study, monkeypatch):
@@ -273,7 +273,7 @@ def test_study_commit_json_to_branch_detached_head(tmp_path, demo_study, monkeyp
     monkeypatch.setattr(study_module.pygit2, "Repository", lambda *_: fake_repo)
 
     with pytest.raises(RuntimeError, match="detached HEAD"):
-        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg", new_branch=False)
 
 
 def test_study_get_plugin_link_inputs_current_behavior_raises(demo_study):

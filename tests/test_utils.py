@@ -702,8 +702,8 @@ def test_get_param_type():
     wing.set_parameter("sweep", 0.5)
 
     aircraft = Aircraft("aircraft")
-    aircraft.set_parameter("npass", 6)
-    aircraft.set_parameter("wpass", 200.0)
+    aircraft.set_parameter("Npass", 6)
+    aircraft.set_parameter("Upass", 200.0)
 
     rotor = Rotor("rotor")
     rotor.set_parameter("nblade", 8)
@@ -730,7 +730,7 @@ def test_get_param_type():
 
     # Add links for test plugin
     study.solution.add_link("vehicles.mtr.wing.span", "test_plug.testin_cont")
-    study.solution.add_link("vehicles.mtr.aircraft.npass", "test_plug.testin_discrete")
+    study.solution.add_link("vehicles.mtr.aircraft.Npass", "test_plug.testin_discrete")
 
     plugins = study.solution.generate_plugins()
 
@@ -744,10 +744,10 @@ def test_get_param_type():
     actual = study.get_param_type("vehicles.mtr.wing.sweep")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = study.get_param_type("vehicles.mtr.aircraft.wpass")
+    actual = study.get_param_type("vehicles.mtr.aircraft.Upass")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = study.get_param_type("vehicles.mtr.aircraft.npass")
+    actual = study.get_param_type("vehicles.mtr.aircraft.Npass")
     assert actual == int, f"expected int, got {actual}"
 
     actual = study.get_param_type("vehicles.mtr.rotor.nblade")
@@ -933,7 +933,7 @@ def test_get_param_type_raises():
     mtr.add_component(rotor)
 
     aircraft = Aircraft("aircraft")
-    aircraft.set_parameter("npass", 6)
+    aircraft.set_parameter("Npass", 6)
     mtr.add_component(aircraft)
 
     study.add_vehicle(mtr)

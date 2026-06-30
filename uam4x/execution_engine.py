@@ -147,15 +147,15 @@ class Engine:
 
         Notes
         -----
-        If ``iteration`` is provided and per-step work directories are enabled,
-        outputs are written under ``out_<iteration>``.
+        If ``iteration`` is provided, outputs are written under
+        ``out_<iteration>`` so each state has an isolated working directory.
 
         """
         self.log.debug("run solution")
         # Parallel workers rebuild Study from a serialized form, which does not
         # preserve the derived execution order stored in `_execution_steps`.
         # Recompute it here so serial and parallel runs build the same model.
-        if not iteration is None and self.create_step_work_dirs:
+        if iteration is not None:
             out_dir = os.path.join(trade_work_dir, f"out_{iteration}")
         else:
             out_dir = os.path.join(trade_work_dir)
@@ -205,11 +205,20 @@ class Engine:
         before execution.
 
         """
+        if iteration is not None:
+            worker_log_dir = os.path.join(trade_work_dir, f"out_{iteration}")
+        else:
+            worker_log_dir = trade_work_dir
 
-        study = Study._from_dict(study_dict, trade_work_dir)
+        study = Study._from_dict(study_dict, worker_log_dir)
         engine = Engine(study, trade_work_dir)
         engine.create_step_work_dirs = create_step_work_dirs
-        result = engine._run_state(state, trade_work_dir=trade_work_dir,iteration=iteration, resort_steps=True)
+        result = engine._run_state(
+            state,
+            trade_work_dir=trade_work_dir,
+            iteration=iteration,
+            resort_steps=True,
+        )
         return result
 
     def _run_optimization(self, state, plugins, out_dir):

@@ -781,9 +781,9 @@ def test_rotor_parameters():
 def test_aircraft_parameters():
     aircraft = Aircraft("ac1")
     assert aircraft.name == "ac1"
-    assert aircraft.npass == 4
-    aircraft.set_parameter("wpass", 180.0)
-    assert aircraft.wpass == 180.0
+    assert aircraft.Npass == 1
+    aircraft.set_parameter("Upass", 180.0)
+    assert aircraft.Upass == 180.0
 
 #----------------------------------Subsystem registry
 def test_register_subsystem_good():

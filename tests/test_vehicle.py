@@ -134,8 +134,8 @@ def test_vehicle_component_attribute_values(
     demo_rotor_blade_region.chord_stop = 69.0
     # everything else left at defaults
 
-    demo_aircraft.npass = 15
-    # wpass left at default
+    demo_aircraft.Npass = 15
+    # Upass left at default
 
     # -------------------------
     # Attach components to vehicle
@@ -266,10 +266,10 @@ def test_vehicle_component_attribute_values(
     # Aircraft parameters (explicit + defaults)
     # -------------------------
     # explicit
-    assert demo_vehicle.aircraft_demo.npass == demo_aircraft.npass == 15
+    assert demo_vehicle.aircraft_demo.Npass == demo_aircraft.Npass == 15
 
     # default
-    assert demo_vehicle.aircraft_demo.wpass == demo_aircraft.wpass == 200.0
+    assert demo_vehicle.aircraft_demo.Upass == demo_aircraft.Upass == 0.0
 
 
 def test_vehicle_component_attribute_identity(
@@ -295,8 +295,8 @@ def test_vehicle_component_attribute_identity(
     demo_rotor_blade_region.chord_stop = 69.0
     # everything else left at defaults
 
-    demo_aircraft.npass = 15
-    # wpass left at default
+    demo_aircraft.Npass = 15
+    # Upass left at default
 
     # -------------------------
     # Attach components to vehicle
@@ -415,10 +415,10 @@ def test_vehicle_component_attribute_identity(
     # Aircraft parameters (explicit + defaults) – identity
     # -------------------------
     # explicit
-    assert demo_vehicle.aircraft_demo.npass is demo_aircraft.npass
+    assert demo_vehicle.aircraft_demo.Npass is demo_aircraft.Npass
 
     # default
-    assert demo_vehicle.aircraft_demo.wpass is demo_aircraft.wpass
+    assert demo_vehicle.aircraft_demo.Upass is demo_aircraft.Upass
 
 
 #Check adding component then querying
@@ -554,7 +554,7 @@ def test_vehicle_from_dict_roundtrip(demo_wing, demo_aircraft):
     # -------------------------
     demo_wing.area = 123.0
     demo_wing.span = 42.0
-    demo_aircraft.npass = 7
+    demo_aircraft.Npass = 7
 
     original = Vehicle("demo_vehicle_from_dict", [demo_wing, demo_aircraft])
 
@@ -592,7 +592,7 @@ def test_vehicle_from_dict_roundtrip(demo_wing, demo_aircraft):
     # Parameter values preserved (not identity, just equality)
     assert rebuilt_wing.area == demo_wing.area == 123.0
     assert rebuilt_wing.span == demo_wing.span == 42.0
-    assert rebuilt_aircraft.npass == demo_aircraft.npass == 7
+    assert rebuilt_aircraft.Npass == demo_aircraft.Npass == 7
 
     # Make sure new components are distinct objects from originals
     assert rebuilt_wing is not demo_wing
