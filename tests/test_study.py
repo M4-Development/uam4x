@@ -101,7 +101,7 @@ def test_study_to_dict_from_dict_roundtrip(monkeypatch, demo_study):
     assert rebuilt.get_vehicle("demo_vehicle").wing.span == 12.0
     assert rebuilt.solution.links == s.solution.links
     assert rebuilt.solution.tracked_outputs == s.solution.tracked_outputs
-    assert "roundtrip_trade" in rebuilt._runtime_meta_data
+    assert rebuilt._runtime_meta_data == {}
 
 
 def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
@@ -109,7 +109,7 @@ def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
     path.mkdir()
 
     demo_study.save_model_to_json(str(path), commit=False)
-    loaded = Study.from_json(str(path))
+    loaded = Study.load_model_from_json(str(path / "model.json"))
 
     assert loaded.get_vehicle("demo_vehicle").wing.span == 12.0
     assert loaded.solution.links == demo_study.solution.links
@@ -121,7 +121,7 @@ def test_study_from_json_loads_study(tmp_path, demo_study):
     path.mkdir()
     demo_study.save_model_to_json(str(path), commit=False)
 
-    fresh = Study.from_json(str(path))
+    fresh = Study.load_model_from_json(str(path / "model.json"))
 
     assert fresh.get_vehicle("demo_vehicle").wing.span == 12.0
     assert fresh.solution.links == demo_study.solution.links
@@ -193,7 +193,7 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
 
     # save+reload to initialize model hash for results-only save path
     demo_study.save_model_to_json(str(out), commit=False)
-    loaded = Study.from_json(str(out))
+    loaded = Study.load_model_from_json(str(out / "model.json"))
 
     data_with_results = loaded._to_dict()
     data_with_results["results"] = {"trade_a": {"points": [{"x": 1.0, "y": 6.0}]}}
@@ -214,7 +214,7 @@ def test_study_save_results_to_json_commit_uses_current_branch(tmp_path, demo_st
     calls = {}
 
     demo_study.save_model_to_json(str(out), commit=False)
-    loaded = Study.from_json(str(out))
+    loaded = Study.load_model_from_json(str(out / "model.json"))
 
     data_with_results = loaded._to_dict()
     data_with_results["results"] = {"trade_a": {"points": [{"x": 1.0, "y": 6.0}]}}

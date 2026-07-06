@@ -301,9 +301,6 @@ class Study:
             study.add_vehicle(Vehicle._from_dict(vdata))
         study.solution = Solution._from_dict(data["solution"])
         study.control = Control._from_dict(data["control"])
-        if "results" in data:
-            study.results = Results._from_dict(data["results"], study)
-            study._runtime_meta_data = data["execution_meta_data"]
 
         return study
 
@@ -756,29 +753,24 @@ class Study:
         repo.create_commit("HEAD", author, committer, commit_message, tree, [parents])
 
 
-
-
-
-
     @classmethod
-    def from_json(cls, variant_dir: str) -> "Study":
-        """Create a study from JSON artifacts in a variant directory.
+    def load_model_from_json(cls, model_json_path: str) -> "Study":
+        """Create a study from a serialized ``model.json`` file.
 
         Parameters
         ----------
-        variant_dir : str or path-like
-            Variant directory containing ``model.json`` and, optionally,
-            ``results.json`` and ``post.json``.
+        model_json_path : str or path-like
+            Path to the ``model.json`` file to load.
 
         Returns
         -------
         Study
-            Study reconstructed from the JSON artifacts in ``variant_dir``.
+            Study reconstructed from the serialized model data.
 
         """
         cls.log.debug("create study from json")
-        model_path=os.path.join(variant_dir,'model.json')
-        with open(model_path, "r") as f:
+        variant_dir=os.path.dirname(model_json_path)
+        with open(model_json_path, "r") as f:
             model_data = json.load(f)
 
         loaded_model_hash=model_data["control"]["model_hash"]
@@ -794,34 +786,74 @@ class Study:
         model_hash=Study._generate_data_hash(total_dict)
 
         if loaded_model_hash!=model_hash:
-            log.warning(
+            cls.log.warning(
             f'Warning, loaded model hash differs from model checksum at save point'
             )
 
-        results_path=os.path.join(variant_dir,'results.json')
-        results_hash=None
-        if os.path.exists(results_path):
-            with open(results_path,'r') as f:
-                result_data=json.load(f)
-
-            total_dict["results"]=result_data["results"]
-            total_dict["execution_meta_data"]=result_data["execution_meta_data"]
-            result_dict={
-                "results":result_data["results"],
-                "execution_meta_data":result_data["execution_meta_data"]
-            }
-            results_hash=Study._generate_data_hash(result_dict)
-
         study=cls._from_dict(total_dict,work_dir=variant_dir)
         study._model_dict_hash=model_hash
-        if results_hash:
-            study._results_dict_hash=results_hash
 
         for name in study.control.trade_studies.keys():
             study._post_data[name]={}
 
         return study
 
+    def load_results_from_json(self, results_json_path: str) -> "Study":
+        """Load serialized results onto an existing study instance.
+
+        Parameters
+        ----------
+        results_json_path : str or path-like
+            Path to the ``results.json`` file to load.
+
+        Returns
+        -------
+        Study
+            This study instance after its results and runtime metadata have
+            been updated from the serialized results data.
+
+        Raises
+        ------
+        ValueError
+            If ``results.json`` does not exist, if no model has been loaded
+            into this study, or if the loaded model hash does not match the
+            model hash stored in ``results.json``.
+
+        """
+        #if no model hash and results hash differs from model hash raise.
+        self.log.debug("load results from json")
+        results_hash=None
+        results_dict={}
+        if not os.path.exists(results_json_path):
+            raise ValueError(f'No results .json exists at path specified: {results_json_path}')
+        if not self._model_dict_hash:
+            raise ValueError(f'Must have model loaded in before loading in results')
+        if self._results_dict_hash!='':
+            self.log.warning(f'Results currently loaded in study, overwriting results')
+        with open(results_json_path,'r') as f:
+            result_data=json.load(f)
+
+        results_dict["results"]=result_data["results"]
+        results_dict["execution_meta_data"]=result_data["execution_meta_data"]
+        result_dict={
+            "results":result_data["results"],
+            "execution_meta_data":result_data["execution_meta_data"]
+        }
+
+
+        if result_data['header']['model_hash']!=self._model_dict_hash:
+            raise ValueError(f'Model hash from results json and from loaded model do not match')
+
+
+        results_hash=Study._generate_data_hash(result_dict)
+        self.results = Results._from_dict(result_data['results'], self)
+        self._runtime_meta_data =  defaultdict(dict, result_data["execution_meta_data"])
+
+        if results_hash:
+            self._results_dict_hash=results_hash
+
+
+        return self
 
     @staticmethod
     def _generate_data_hash(model_dict):
@@ -1228,33 +1260,33 @@ if __name__ == "__main__":
     control.add_tradestudy("sweep_with_opt", sweep)
 
     # Add everything to a Study
-    study = Study()
-    study.add_vehicle(v)
-    study.solution = solution
-    study.control = control
+    self = Study()
+    self.add_vehicle(v)
+    self.solution = solution
+    self.control = control
 
     # Print summary
-    print("Vehicles:", study.vehicles)
-    print("Solution steps:", study.solution.steps)
-    print("Control trades:", list(study.control.trade_studies.keys()))
+    print("Vehicles:", self.vehicles)
+    print("Solution steps:", self.solution.steps)
+    print("Control trades:", list(self.control.trade_studies.keys()))
     print("Parameter sweep states:")
     for state in sweep.get_states():
         print(state)
 
     # Test the new get_all_names method
     print("\n=== Testing get_all_names method ===")
-    vehicle_names = study.get_all_vehicle_param_names()
+    vehicle_names = self.get_all_vehicle_param_names()
     print("Vehicle names:")
     for name in vehicle_names:
         print(f"  {name}")
 
     # new tom checks
-    s = study
-    sv = study.vehicles
-    svt = study.vehicles.TestVehicle
-    svtl = study.vehicles.TestVehicle.left_wing
-    svtls = study.vehicles.TestVehicle.left_wing.span
-    svtlhs = study.vehicles.TestVehicle.left_wing.happy.span
+    s = self
+    sv = self.vehicles
+    svt = self.vehicles.TestVehicle
+    svtl = self.vehicles.TestVehicle.left_wing
+    svtls = self.vehicles.TestVehicle.left_wing.span
+    svtlhs = self.vehicles.TestVehicle.left_wing.happy.span
 
     svt1 = sv.TestVehicle
     svtl1 = sv.TestVehicle.left_wing
@@ -1280,6 +1312,6 @@ if __name__ == "__main__":
 
     from uam4x.execution_engine import Engine
 
-    engine = Engine(study, "test_work")
-    print(study.get_param_type("vehicles.TestVehicle.left_wing.happy.span"))
-    print(study.get_param_type("vehicles.TestVehicle.left_wing.span"))
+    engine = Engine(self, "test_work")
+    print(self.get_param_type("vehicles.TestVehicle.left_wing.happy.span"))
+    print(self.get_param_type("vehicles.TestVehicle.left_wing.span"))
