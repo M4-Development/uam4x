@@ -101,7 +101,10 @@ def test_study_to_dict_from_dict_roundtrip(monkeypatch, demo_study):
     assert rebuilt.get_vehicle("demo_vehicle").wing.span == 12.0
     assert rebuilt.solution.links == s.solution.links
     assert rebuilt.solution.tracked_outputs == s.solution.tracked_outputs
-    assert rebuilt._runtime_meta_data == {}
+    assert "roundtrip_trade" in rebuilt._runtime_meta_data
+    assert rebuilt._runtime_meta_data["roundtrip_trade"]["time_info"]["Start_Time"]
+    rebuilt._runtime_meta_data["new_trade"]["time_info"] = {"Start_Time": "now"}
+    assert rebuilt._runtime_meta_data["new_trade"]["time_info"]["Start_Time"] == "now"
 
 
 def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
@@ -125,6 +128,80 @@ def test_study_from_json_loads_study(tmp_path, demo_study):
 
     assert fresh.get_vehicle("demo_vehicle").wing.span == 12.0
     assert fresh.solution.links == demo_study.solution.links
+
+
+def test_study_load_results_from_json_updates_existing_instance(tmp_path, demo_study, monkeypatch):
+    out = tmp_path / "variant_results"
+    out.mkdir()
+
+    monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
+
+    demo_study._capture_environment("trade_a")
+    demo_study.save_model_to_json(str(out), commit=False)
+
+    loaded_model = Study.load_model_from_json(str(out / "model.json"))
+
+    data_with_results = loaded_model._to_dict()
+    data_with_results["results"] = {
+        "trade_a": {
+            "points": [
+                {
+                    "input_state": {"step1": {"x": 1.0}},
+                    "outputs": {"step1.y": 6.0},
+                }
+            ]
+        }
+    }
+    data_with_results["execution_meta_data"] = {
+        "trade_a": {"time_info": {"Start_Time": "saved"}}
+    }
+    monkeypatch.setattr(loaded_model, "_to_dict", lambda: data_with_results)
+    loaded_model.save_results_to_json(str(out), commit=False)
+
+    fresh_model = Study.load_model_from_json(str(out / "model.json"))
+    result = fresh_model.load_results_from_json(str(out / "results.json"))
+
+    assert result is None
+    assert "trade_a" in fresh_model.results.tradestudies
+    assert fresh_model._runtime_meta_data["trade_a"]["time_info"]["Start_Time"] == "saved"
+    fresh_model._runtime_meta_data["new_trade"]["time_info"] = {"Start_Time": "now"}
+    assert fresh_model._runtime_meta_data["new_trade"]["time_info"]["Start_Time"] == "now"
+
+
+def test_study_load_study_from_directory_loads_model_and_results(
+    tmp_path, demo_study, monkeypatch
+):
+    out = tmp_path / "variant_directory"
+    out.mkdir()
+
+    monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
+
+    demo_study._capture_environment("trade_a")
+    demo_study.save_model_to_json(str(out), commit=False)
+
+    loaded_model = Study.load_model_from_json(str(out / "model.json"))
+    data_with_results = loaded_model._to_dict()
+    data_with_results["results"] = {
+        "trade_a": {
+            "points": [
+                {
+                    "input_state": {"step1": {"x": 1.0}},
+                    "outputs": {"step1.y": 6.0},
+                }
+            ]
+        }
+    }
+    data_with_results["execution_meta_data"] = {
+        "trade_a": {"time_info": {"Start_Time": "saved"}}
+    }
+    monkeypatch.setattr(loaded_model, "_to_dict", lambda: data_with_results)
+    loaded_model.save_results_to_json(str(out), commit=False)
+
+    rebuilt = Study.load_study_from_directory(str(out))
+
+    assert rebuilt.get_vehicle("demo_vehicle").wing.span == 12.0
+    assert "trade_a" in rebuilt.results.tradestudies
+    assert rebuilt._runtime_meta_data["trade_a"]["time_info"]["Start_Time"] == "saved"
 
 
 def test_get_all_vehicle_param_names(demo_study):

@@ -301,6 +301,11 @@ class Study:
             study.add_vehicle(Vehicle._from_dict(vdata))
         study.solution = Solution._from_dict(data["solution"])
         study.control = Control._from_dict(data["control"])
+        if "results" in data:
+            study.results = Results._from_dict(data["results"], study)
+            study._runtime_meta_data = defaultdict(
+                dict, data["execution_meta_data"]
+            )
 
         return study
 
@@ -752,6 +757,67 @@ class Study:
         committer = pygit2.Signature(self.control.author, "fake@email")
         repo.create_commit("HEAD", author, committer, commit_message, tree, [parents])
 
+    @classmethod
+    def load_study_from_directory(cls, variant_dir: str) -> "Study":
+        """Create a study from JSON artifacts in a variant directory.
+
+        Parameters
+        ----------
+        variant_dir : str or path-like
+            Directory containing ``model.json`` and, optionally,
+            ``results.json`` using those conventional filenames.
+
+        Returns
+        -------
+        Study
+            Study reconstructed from the serialized data in ``variant_dir``.
+
+        """
+        cls.log.debug("create study from json")
+        model_path=os.path.join(variant_dir,'model.json')
+        with open(model_path, "r") as f:
+            model_data = json.load(f)
+
+        loaded_model_hash=model_data["control"]["model_hash"]
+        del model_data['control']['model_hash']
+        #initially loads in model
+        total_dict={
+            "control":model_data["control"],
+            "vehicles":model_data["vehicles"],
+            "solution":model_data["solution"],
+        }
+
+
+        model_hash=Study._generate_data_hash(total_dict)
+
+        if loaded_model_hash!=model_hash:
+            log.warning(
+            f'Warning, loaded model hash differs from model checksum at save point'
+            )
+
+        results_path=os.path.join(variant_dir,'results.json')
+        results_hash=None
+        if os.path.exists(results_path):
+            with open(results_path,'r') as f:
+                result_data=json.load(f)
+
+            total_dict["results"]=result_data["results"]
+            total_dict["execution_meta_data"]=result_data["execution_meta_data"]
+            result_dict={
+                "results":result_data["results"],
+                "execution_meta_data":result_data["execution_meta_data"]
+            }
+            results_hash=Study._generate_data_hash(result_dict)
+
+        study=cls._from_dict(total_dict,work_dir=variant_dir)
+        study._model_dict_hash=model_hash
+        if results_hash:
+            study._results_dict_hash=results_hash
+
+        for name in study.control.trade_studies.keys():
+            study._post_data[name]={}
+
+        return study
 
     @classmethod
     def load_model_from_json(cls, model_json_path: str) -> "Study":
@@ -798,7 +864,7 @@ class Study:
 
         return study
 
-    def load_results_from_json(self, results_json_path: str) -> "Study":
+    def load_results_from_json(self, results_json_path: str) -> None:
         """Load serialized results onto an existing study instance.
 
         Parameters
@@ -806,18 +872,17 @@ class Study:
         results_json_path : str or path-like
             Path to the ``results.json`` file to load.
 
-        Returns
-        -------
-        Study
-            This study instance after its results and runtime metadata have
-            been updated from the serialized results data.
-
         Raises
         ------
         ValueError
             If ``results.json`` does not exist, if no model has been loaded
             into this study, or if the loaded model hash does not match the
             model hash stored in ``results.json``.
+
+        Returns
+        -------
+        None
+            This method updates the existing study instance in place.
 
         """
         #if no model hash and results hash differs from model hash raise.
@@ -851,9 +916,6 @@ class Study:
 
         if results_hash:
             self._results_dict_hash=results_hash
-
-
-        return self
 
     @staticmethod
     def _generate_data_hash(model_dict):
