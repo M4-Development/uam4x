@@ -315,7 +315,7 @@ def test_set_child_good():
     assert PS.child is  opt
 
     new_opt = Optimization()
-    PS.add_child(new_opt)
+    PS.set_child(new_opt)
 
     assert PS.child is  not opt
     assert PS.child is new_opt
@@ -415,7 +415,7 @@ def test_set_child_bad_type(opt):
                     'sample_param2': [6.0, 7.0, 67.0, 6767., 676767.]}
     PS = ParameterSweep(sample_param_dict)
     with pytest.raises(TypeError):
-        PS.add_child(opt)
+        PS.set_child(opt)
 
 
 #------------------------------Control class
