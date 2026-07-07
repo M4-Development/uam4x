@@ -1703,7 +1703,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
         aleatory_dict = uq_distributor.aleatory_var_to_dist
 
         # Number of model evaluations used by the Sobol design.
-        num_samples = len(self.tradestudy._results)
+        num_samples = uq_distributor.num_samples
         # Number of aleatory vars
         # Calculates the number of samples needed to preallocate array shape
         second_order = uq_distributor.computeSecondOrder
