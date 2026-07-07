@@ -37,4 +37,4 @@ if __name__=='__main__':
     framework.add_variant('standard_uniform', standard_uniform)
     study = framework.generate_variants()[0]
     save_path = os.path.join(THIS_DIR, "variants","standard_uniform")
-    study_from_json = Study.from_json(save_path)
+    study_from_json = Study.load_study_from_directory(save_path)

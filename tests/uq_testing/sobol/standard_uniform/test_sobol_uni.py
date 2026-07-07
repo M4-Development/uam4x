@@ -24,11 +24,11 @@ def test_sobol_uniform():
     framework=Variants(THIS_DIR)
     framework.add_variant('standard_uniform', standard_uniform)
     framework.generate_variants()
-    study=Study.from_json(study_dir)
+    study=Study.load_study_from_directory(study_dir)
     engine=Engine(study,os.path.join(study_dir,'work'))
     engine.run_tradestudy('standard_uniform',create_step_work_dirs=False)
     study.save_results_to_json(study_dir)
-    study=Study.from_json(study_dir)
+    study=Study.load_study_from_directory(study_dir)
     #start asserting things
     ts=study.results.get_tradestudy('standard_uniform')
     uq_post=BasicAleatoryPost(ts)

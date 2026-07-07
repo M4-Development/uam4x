@@ -16,17 +16,17 @@ def _relative_error(estimate, reference,tol=10**-6):
     else:
         return (estimate-reference)/reference*100.
 
-def test_sobol_uniform():
+def test_halton_uniform():
     study_dir=os.path.join(THIS_DIR, "variants", "standard_uniform")
     standard_uniform=[setup_model,setup_solution,setup_tradestudy]
     framework=Variants(THIS_DIR)
     framework.add_variant('standard_uniform', standard_uniform)
     framework.generate_variants()
-    study=Study.from_json(study_dir)
+    study=Study.load_study_from_directory(study_dir)
     engine=Engine(study,os.path.join(study_dir,'work'))
     engine.run_tradestudy('standard_uniform',create_step_work_dirs=False)
     study.save_results_to_json(study_dir)
-    study=Study.from_json(study_dir)
+    study=Study.load_study_from_directory(study_dir)
     #start asserting things
     ts=study.results.get_tradestudy('standard_uniform')
     uq_post=BasicAleatoryPost(ts)
@@ -79,4 +79,4 @@ def test_sobol_uniform():
         else:
             assert _relative_error(uam4x_quantile,probability)<1.
 if __name__=="__main__":
-    test_sobol_uniform()
+    test_halton_uniform()
