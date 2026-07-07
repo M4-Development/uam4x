@@ -467,7 +467,7 @@ class Study:
         if commit:
             self._commit_json_to_branch(json_paths=[model_path],commit_message=msg,new_branch=new_branch)
 
-
+        return model_path
     @staticmethod
     def _generate_header_dict(control_dict,model_hash,results_hash):
         """Build header metadata for serialized results or post-processing data.
