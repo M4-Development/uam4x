@@ -1083,8 +1083,9 @@ class AleatorySurrogate:
 
         Returns
         -------
-        float
-            First-order Sobol sensitivity index.
+        float or None
+            First-order Sobol sensitivity index for ``var_name``. Returns
+            None if ``var_name`` is not present in the surrogate inputs.
 
         """
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
@@ -1103,8 +1104,9 @@ class AleatorySurrogate:
 
         Returns
         -------
-        float
-            Total-order Sobol sensitivity index.
+        float or None
+            Total-order Sobol sensitivity index for ``var_name``. Returns
+            None if ``var_name`` is not present in the surrogate inputs.
 
         """
         for i,name in enumerate(self.aleatory_var_to_dist.keys()):
@@ -1443,6 +1445,22 @@ class RegressionSurrogate(AleatorySurrogate):
     """
 
     def __init__(self, aleatory_var_to_dist, result,post_storage,X_test=None,y_test=None):
+        """Initialize a regression-fitted aleatory surrogate.
+
+        Parameters
+        ----------
+        aleatory_var_to_dist : dict
+            Mapping from aleatory variable names to distribution objects.
+        result : openturns.FunctionalChaosResult
+            OpenTURNS functional-chaos result object.
+        post_storage : dict
+            Post-processing storage dictionary associated with the trade study.
+        X_test : array-like or None, optional
+            Held-out validation inputs in physical variable space.
+        y_test : array-like or None, optional
+            Held-out validation outputs corresponding to ``X_test``.
+
+        """
         super().__init__(aleatory_var_to_dist, result,post_storage)
         if X_test is not None:
             self.X_test=X_test
@@ -2376,6 +2394,10 @@ class MixedSurrogate:
             Mapping from aleatory variable names to distribution objects.
         post_storage : dict
             Post-processing storage dictionary associated with the trade study.
+        X_test : array-like or None, optional
+            Held-out validation inputs in physical mixed-variable space.
+        y_test : array-like or None, optional
+            Held-out validation outputs corresponding to ``X_test``.
 
         """
         self.epistemic_var_to_interval=epistemic_var_to_interval
@@ -3049,8 +3071,9 @@ class MixedSurrogate:
 
         Returns
         -------
-        float
-            First-order Sobol sensitivity index.
+        float or None
+            First-order Sobol sensitivity index for ``var_name``. Returns
+            None if ``var_name`` is not present in the surrogate inputs.
 
         """
         for i,name in enumerate(self.all_var_to_dist.keys()):
@@ -3067,8 +3090,9 @@ class MixedSurrogate:
 
         Returns
         -------
-        float
-            Total-order Sobol sensitivity index.
+        float or None
+            Total-order Sobol sensitivity index for ``var_name``. Returns
+            None if ``var_name`` is not present in the surrogate inputs.
 
         """
         for i,name in enumerate(self.all_var_to_dist.keys()):

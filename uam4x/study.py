@@ -318,10 +318,6 @@ class Study:
             JSON-serializable data payload to write.
         json_path : str or path-like
             Output path for the JSON file.
-        commit : bool, optional
-            If True, commit the written file to the current git branch.
-        commit_message : str, optional
-            Commit message used when ``commit`` is True.
 
         Returns
         -------
@@ -440,7 +436,9 @@ class Study:
             Variant directory where ``model.json`` is written.
         commit : bool, optional
             If True, commit the generated JSON file to git.
-
+        new_branch : bool, optional
+            If True and ``commit`` is also True, create and check out a new
+            auto-generated branch before committing.
 
         Returns
         -------
@@ -645,6 +643,9 @@ class Study:
             Paths to JSON files to stage and commit.
         commit_message : str
             Git commit message used for the commit.
+        new_branch : bool
+            If True, create and check out a new auto-generated branch before
+            staging and committing the files.
 
         Returns
         -------
@@ -1098,11 +1099,39 @@ class Study:
         return vehicle_names
 
     def get_comp_type(self, vehicle, component):
+        """Return the component class name for one vehicle/component pair.
+
+        Parameters
+        ----------
+        vehicle : str
+            Vehicle name.
+        component : str
+            Component name within ``vehicle``.
+
+        Returns
+        -------
+        str
+            Component class name for the requested vehicle/component pair.
+
+        Raises
+        ------
+        KeyError
+            If the vehicle/component pair is not present in the study.
+
+        """
         component_type_dict = self.get_component_classes_dict()
         return component_type_dict[(vehicle, component)]
 
     def get_component_classes_dict(self):
-        """Create a dictionary mapping components to their type"""
+        """Return component class names for all vehicles in the study.
+
+        Returns
+        -------
+        dict
+            Mapping from ``(vehicle_name, component_name)`` tuples to
+            component class names.
+
+        """
         result = {}
 
         for vehicle in self.vehicles:
@@ -1112,7 +1141,15 @@ class Study:
         return result
 
     def get_component_paths(self):
-        """Create a list with all component paths for all vehicles"""
+        """Return all component and component-mode dotted paths.
+
+        Returns
+        -------
+        list of str
+            Dotted paths for every component and component mode in every
+            registered vehicle.
+
+        """
         paths = []
 
         for vehicle in self.vehicles:
@@ -1151,6 +1188,9 @@ class Variants:
         dir : str or path-like
             Repository or project directory where the ``variants``
             subdirectory is created.
+        git_dir : str or path-like, optional
+            Explicit repository root used for commit operations. If omitted,
+            the repository root is discovered automatically when possible.
 
         Notes
         -----

@@ -971,6 +971,22 @@ class Group:
         return paths
 
     def get_all_steps_dict(self, prefix=""):
+        """Return grouped dotted-path step listings for this group tree.
+
+        Parameters
+        ----------
+        prefix : str, optional
+            Dotted prefix used for the current group in the recursive
+            traversal. If omitted, the current group is recorded under
+            ``"solution"``.
+
+        Returns
+        -------
+        dict
+            Mapping from each visited group path to the list of dotted step
+            paths returned by :meth:`get_all_steps` for that group.
+
+        """
         result = {}
         current_key = prefix or "solution"
 
@@ -1153,7 +1169,20 @@ class Solution(Group):
         return plugins_names_to_classes
 
     def get_all_steps_of_type(self, plugin_type):
-        """Get all plugins of a certain type"""
+        """Return all solution steps that use a given plugin class.
+
+        Parameters
+        ----------
+        plugin_type : type
+            Plugin class to match against registered solution steps.
+
+        Returns
+        -------
+        list of str
+            Fully qualified step names whose plugin class is exactly
+            ``plugin_type``.
+
+        """
         steps_to_type = self.get_all_plugin_names_to_classes()
         plugins = []
         for name, plugin in steps_to_type.items():
@@ -1715,11 +1744,15 @@ class Plugin:
 
         Returns
         -------
-        None
+        dict or None
+            Mapping from declared plugin output names to computed values when a
+            concrete plugin implementation returns results. The base
+            implementation returns None.
 
         Notes
         -----
-        Concrete plugin subclasses typically override this method.
+        Concrete user-defined plugin subclasses typically override this method
+        to perform execution and return output values.
 
         """
         self.log.debug("run plugin")

@@ -292,6 +292,9 @@ class Vehicle:
         ------
         ValueError
             If ``component`` already belongs to another vehicle.
+        NameError
+            If adding ``component`` creates duplicate component names within
+            the vehicle.
 
         Notes
         -----
@@ -315,8 +318,9 @@ class Vehicle:
 
         Parameters
         ----------
-        component_name : str
-            Name of the component to remove.
+        component : Subsystem or str
+            Component object to remove, or the name of the component to
+            remove.
 
         Returns
         -------
@@ -325,8 +329,9 @@ class Vehicle:
         Raises
         ------
         ValueError
-            If no component with name ``component_name`` is attached to the
-            vehicle.
+            If ``component`` is a string and no component with that name is
+            attached to the vehicle, or if the component object is not present
+            in the vehicle.
 
         """
         self.log.debug("remove component")

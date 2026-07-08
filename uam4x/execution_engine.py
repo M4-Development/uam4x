@@ -135,6 +135,9 @@ class Engine:
         ----------
         state : dict
             State dictionary containing input values and execution flags.
+        trade_work_dir : str or path-like
+            Working directory for the trade study that owns this state
+            execution.
         iteration : int, optional
             Iteration index used to name per-state output directories.
         resort_steps : bool, optional
@@ -189,8 +192,8 @@ class Engine:
             State dictionary containing input values and execution flags.
         iteration : int, optional
             Iteration index used to name per-state output directories.
-        work_dir : str or path-like, optional
-            Working directory used for execution outputs.
+        trade_work_dir : str or path-like, optional
+            Working directory for the trade study being executed.
         create_step_work_dirs : bool, optional
             Whether to create per-step work directories inside the worker.
 
@@ -708,8 +711,7 @@ class Engine:
         study_result.add_tradestudy(trade_name, ts)
 
     def check_model(self, plugins, state=None):
-        """
-        Perform comprehensive model validation checks.
+        """Perform comprehensive model validation checks.
 
         Validates the model configuration by checking links, types,
         design variables, constraints, objectives, and discrete variables
@@ -719,8 +721,14 @@ class Engine:
         ----------
         plugins : dict
             Dictionary of plugin instances to validate.
-        state : dict
-            State dictionary containing model configuration.
+        state : dict, optional
+            State dictionary containing model configuration. When provided
+            with ``state["optimization"]`` set to True, optimization-specific
+            validation checks are also performed.
+
+        Returns
+        -------
+        None
 
         Raises
         ------
@@ -943,8 +951,9 @@ class Engine:
         Raises
         ------
         ValueError
-            If array bounds have incompatible shapes, or if scalar variables are
-            given nonscalar lower and upper bounds.
+            If a constraint declares neither a lower nor upper bound, if array
+            bounds have incompatible shapes, or if scalar variables are given
+            nonscalar lower and upper bounds.
 
         Notes
         -----
@@ -1048,11 +1057,10 @@ class Engine:
                     )
 
     def check_objective(self, plugins, state):
-        """
-        Validate objective function for optimization.
+        """Validate the optimization objective.
 
-        Checks that the objective function is of continuous type (float)
-        as required for gradient-based optimization.
+        Checks that the objective variable is of a continuous type as required
+        for gradient-based optimization.
 
         Parameters
         ----------
@@ -1060,6 +1068,10 @@ class Engine:
             Dictionary of plugin instances to validate.
         state : dict
             State dictionary containing objective information.
+
+        Returns
+        -------
+        None
 
         Raises
         ------
@@ -1080,19 +1092,20 @@ class Engine:
             )
 
     def check_optimization_discrete(self, plugins):
-        """
-        Validate that optimization links are continuous.
+        """Validate that optimization links are continuous.
 
         Checks that all links between optimization components use
-        continuous variables (float type) as required for gradient-based
+        continuous variables as required for gradient-based
         optimization.
 
         Parameters
         ----------
         plugins : dict
             Dictionary of plugin instances to validate.
-        state : dict
-            State dictionary containing optimization configuration.
+
+        Returns
+        -------
+        None
 
         Raises
         ------

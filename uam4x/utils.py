@@ -405,7 +405,7 @@ def _canonicalize_state(x):
     object
         Canonicalized representation with dictionaries sorted by key, NumPy
         arrays converted to lists, NumPy scalars converted to Python scalars,
-        and floating-point values rounded for stable hashing.
+        and Python ``float`` values rounded for stable hashing.
 
     """
     if isinstance(x, dict):
@@ -821,7 +821,8 @@ def split_dotted_path_and_indices(dotted_path):
     ----------
     dotted_path : str
         Dotted variable path with a trailing index expression, such as
-        ``"solution.step.output[0, 1:3]"``.
+        ``"solution.step.output[0, 1:3]"``. The string must include a
+        bracketed index suffix.
 
     Returns
     -------
@@ -829,6 +830,11 @@ def split_dotted_path_and_indices(dotted_path):
         Dotted path with the trailing index expression removed.
     inds : object
         Parsed index object suitable for NumPy-style indexing.
+
+    Raises
+    ------
+    ValueError
+        If the trailing index expression is not valid.
 
     """
     bracket_ind = dotted_path.find("[")
@@ -892,6 +898,30 @@ def replace_empty_quotes_with_none(value):
     return value
 
 def _get_class_from_file(class_name, file_path):
+    """Load a class object from a Python source file.
+
+    Parameters
+    ----------
+    class_name : str
+        Name of the class to retrieve from the loaded module.
+    file_path : str or path-like
+        Path to the Python source file.
+
+    Returns
+    -------
+    tuple
+        Two-element tuple ``(cls, message)`` where ``cls`` is the loaded class
+        object and ``message`` is an empty string on success. If module
+        execution or attribute lookup fails, returns ``(None, message)``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``file_path`` does not exist.
+    ImportError
+        If an import specification cannot be created for ``file_path``.
+
+    """
     file_path = os.path.abspath(file_path)
 
     if not os.path.exists(file_path):

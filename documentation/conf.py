@@ -110,6 +110,9 @@ autodoc_mock_imports = [
     'pygit2',
     'scipy',
     'scipy.stats',
+    'sklearn',
+    'sklearn.metrics',
+    'sklearn.model_selection',
     'sympy',
 ]
 

@@ -84,7 +84,7 @@ class Parameter:
             Declared Python type for the parameter value.
         unit_type : UnitType, optional
             Unit category associated with the parameter.
-        unit : Enum, optional
+        unit : Enum or str, optional
             Unit label associated with the parameter value.
         description : str, optional
             Human-readable parameter description.
@@ -1061,17 +1061,21 @@ def get_param_name_and_type_list(subsystem):
     return _subsystem_to_param_name_type_list[subsystem]
 
 def get_param_type(subsystem, param):
-    """Return the dtype of a parameter for a given subsystem, or None if not found.
+    """Return the declared dtype name for one subsystem parameter.
+
     Parameters
     ----------
     subsystem : str
-        The subsystem key to look up.
+        Registered subsystem class name.
     param : str
-        The parameter name to find the type for.
+        Parameter name to look up.
+
     Returns
     -------
     str or None
-        The dtype of the parameter, or None if the parameter does not exist in the subsystem.
+        Declared dtype name for ``param``, or None if the parameter is not
+        defined for ``subsystem``.
+
     """
     subsystem_params_to_type = get_param_name_and_type_list(subsystem)
     for parameter, dtype in subsystem_params_to_type:
@@ -1289,6 +1293,13 @@ class RotorBladeRegion(Subsystem):
 class Aircraft(Subsystem):
     """Represent an aircraft-level component."""
     def setup(self):
+        """Register baseline aircraft-level parameters.
+
+        Returns
+        -------
+        None
+
+        """
         self.add_parameter('Upass',0.0,float,description='Weight per passenger')
 
         self.add_parameter('Wenviron',75.,float,description='Environmental Control Lumped Weight')

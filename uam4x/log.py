@@ -195,7 +195,8 @@ class FileLogger(SimpleLogger):
         level : str, optional
             Base logger level passed to :class:`cpylog.SimpleLogger`.
         encoding : str, optional
-            Text encoding used for stdout and file writes.
+            Text encoding used for stdout writes and inherited logger
+            formatting.
 
         Notes
         -----
@@ -537,8 +538,8 @@ class FileLogger(SimpleLogger):
         Returns
         -------
         str
-            Representation including the configured log filename, stdout setting,
-            logger level, and encoding.
+            Representation including the configured log filename, file-write
+            setting, logger level, and encoding.
 
         """
         return (

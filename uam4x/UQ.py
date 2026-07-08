@@ -32,6 +32,17 @@ def gen_csv_states(csv_path,col_order):
 
 #--------------------Aleatory Suite-------------------------------------
 class AleatoryBaseClass:
+    """Base class for aleatory uncertainty workflows.
+
+    This class stores the mapping from UAM4X variable names to probability
+    distribution objects used by aleatory analyses.
+
+    Attributes
+    ----------
+    aleatory_var_to_dist : dict
+        Mapping from variable name to distribution object.
+
+    """
     def __init__(self):
         self.aleatory_var_to_dist={}
 
@@ -484,6 +495,9 @@ class SobolSensitivity(BasicAleatory):
             Base sample size used by the Sobol experiment.
         SamplingClass : type
             Sampler class used by OpenTURNS for the Sobol experiment.
+        seed : int, optional
+            OpenTURNS random seed used before sample generation. The default is
+            42.
         computeSecondOrder : bool, optional
             Whether to generate samples for second-order Sobol indices. The
             default is False.
@@ -611,11 +625,23 @@ class SobolSensitivity(BasicAleatory):
 
 #--------------------Epistemic Suite-------------------------------------
 class EpistemicBaseClass:
+    """Base class for epistemic uncertainty workflows.
+
+    This class stores the mapping from UAM4X variable names to interval-like
+    uncertainty objects used by epistemic analyses.
+
+    Attributes
+    ----------
+    epistemic_var_to_interval : dict
+        Mapping from variable name to epistemic uncertainty object.
+
+    """
     def __init__(self):
       self.epistemic_var_to_interval={}
 
     def add_epistemic_variable(self,name,interval):
         """Add an epistemic variable to the analysis.
+
         Parameters
         ----------
         name : str
@@ -668,6 +694,9 @@ class BasicEpistemic(EpistemicBaseClass):
             Number of epistemic samples to generate.
         SamplingClass : type
             Sampler class used to generate samples.
+        seed : int, optional
+            OpenTURNS random seed used before sample generation. The default is
+            42.
 
         """
         super().__init__()
@@ -758,6 +787,21 @@ class BasicEpistemic(EpistemicBaseClass):
 
 #--------------------Mixed Analysis Suite-------------------------------------
 class MixedBaseClass:
+    """Base class for mixed aleatory-epistemic workflows.
+
+    This class stores separate uncertainty definitions for aleatory and
+    epistemic variables so mixed propagation methods can build combined state
+    descriptions.
+
+    Attributes
+    ----------
+    aleatory_var_to_dist : dict
+        Mapping from aleatory variable name to distribution object.
+    epistemic_var_to_interval : dict
+        Mapping from epistemic variable name to interval-like uncertainty
+        object.
+
+    """
     def __init__(self):
         self.aleatory_var_to_dist={}
         self.epistemic_var_to_interval={}
@@ -850,6 +894,9 @@ class BasicSOP(MixedBaseClass):
             epistemic sample.
         AleatorySamplingClass : type
             Sampler class used to sample aleatory distributions.
+        seed : int, optional
+            OpenTURNS random seed used before sample generation. The default is
+            42.
 
         """
         super().__init__()
@@ -978,7 +1025,7 @@ class BasicSOP(MixedBaseClass):
 
         Parameters
         ----------
-        workflow_dict : dict
+        data : dict
             Serialized workflow dictionary, typically produced by
             :meth:`_to_dict`.
 
@@ -1050,6 +1097,9 @@ class BasicMixedIVP(MixedBaseClass):
             epistemic sample.
         AleatorySamplingClass : type
             Sampler class used to sample aleatory distributions.
+        seed : int, optional
+            OpenTURNS random seed used before sample generation. The default is
+            42.
 
         """
         super().__init__()
@@ -1153,7 +1203,7 @@ class BasicMixedIVP(MixedBaseClass):
 
         Parameters
         ----------
-        workflow_dict : dict
+        data : dict
             Serialized workflow dictionary, typically produced by
             :meth:`_to_dict`.
 
@@ -1371,7 +1421,7 @@ class MixedRegressionPCE(MixedBaseClass):
 
         Parameters
         ----------
-        workflow_dict : dict
+        data : dict
             Serialized workflow dictionary, typically produced by
             :meth:`_to_dict`.
 
@@ -1445,8 +1495,9 @@ class CSVPoints:
         Returns
         -------
         dict
-            JSON-compatible dictionary containing the workflow type and CSV
-            file path.
+            JSON-compatible dictionary containing the workflow type, CSV
+            file path, and any configured polynomial-order or
+            second-order-Sobol settings.
 
         """
         data= {

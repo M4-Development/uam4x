@@ -15,8 +15,11 @@ Each page follows the same workflow used by the examples themselves:
 .. toctree::
    :maxdepth: 1
 
+   examples/aleatory_cantilever
+   examples/mixed_cantilever
+   examples/ishigami_problem
+   examples/borehole_example
    examples/sellar_example
    examples/tilt_rotor
    examples/uam4x_quad
    examples/uam4x_ixgen_demo
-
