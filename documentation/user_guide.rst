@@ -1,7 +1,7 @@
 User Guide
 ==========
 
-This guide provides step-by-step instructions for using UAM4X.
+This guide provides step-by-step instructions for using uam4x.
 
 
 Getting Started: Multi-Objective Optimization Example
@@ -49,7 +49,7 @@ The ``multi_objective`` example uses ``OpenvspPlugin``:
 Before running the example, install both:
 
 1. OpenVSP itself (includes the Python API used by ``import openvsp``)
-2. The UAM4X OpenVSP plugin package (``uam4x_openvsp``)
+2. The uam4x OpenVSP plugin package (``uam4x_openvsp``)
 
 OpenVSP install:
 
@@ -96,7 +96,7 @@ The first plugin computes area and exposes exact derivatives:
 .. note::
 
    Plugin inputs must declare a concrete Python type in ``setup_plugin`` (for example ``float`` or ``int``).
-   Use ``self.declare_input("name", input_type, default_value)`` for every input so UAM4X can validate links and
+   Use ``self.declare_input("name", input_type, default_value)`` for every input so uam4x can validate links and
    correctly construct optimization variables/derivatives.
 
 .. code-block:: python
@@ -291,7 +291,7 @@ You should get a plot of the pareto front that looks like:
 GUI Usage
 ---------
 
-The UAM4X GUI provides a graphical interface for managing studies and workflows:
+The uam4x GUI provides a graphical interface for managing studies and workflows:
 
 1. **Launch the GUI**: Run the GUI application
 2. **Create Studies**: Use the study management interface

@@ -1,7 +1,7 @@
-UAM4X Documentation
+uam4x Documentation
 ===================
 
-Welcome to UAM4X, the Urban Air Mobility 4X Framework for aircraft design and optimization.
+Welcome to uam4x, the Urban Air Mobility 4X Framework for aircraft design and optimization.
 
 .. toctree::
    :maxdepth: 2
@@ -17,7 +17,7 @@ Welcome to UAM4X, the Urban Air Mobility 4X Framework for aircraft design and op
 Overview
 --------
 
-UAM4X is a comprehensive framework for Urban Air Mobility (UAM) aircraft design, analysis, and optimization. It provides tools for:
+uam4x is a comprehensive framework for Urban Air Mobility (UAM) aircraft design, analysis, and optimization. It provides tools for:
 
 * Aircraft component modeling and analysis
 * Multi-objective optimization

@@ -1,4 +1,4 @@
-UAM4X IXGEN Demo
+uam4x IXGEN Demo
 ================
 
 First, check out the example repository:

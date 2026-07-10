@@ -4,7 +4,7 @@ Installation
 Prerequisites
 -------------
 
-UAM4X requires Python 3.11 or higher. The following packages are required
+uam4x requires Python 3.11 or higher. The following packages are required
 (as defined in ``setup.py``):
 
 * ``numpy>=2.2.6``
@@ -47,7 +47,7 @@ Installation Procedure
       conda create -n uam4x python=3.11
       conda activate uam4x
 
-3. Install UAM4X in development mode (this installs all required packages from ``setup.py``):
+3. Install uam4x in development mode (this installs all required packages from ``setup.py``):
 
    .. code-block:: bash
 
@@ -61,7 +61,7 @@ To verify the installation, run:
 .. code-block:: python
 
    import uam4x
-   print("UAM4X version:", uam4x.__version__)
+   print("uam4x version:", uam4x.__version__)
 
 Optional Dependencies
 ---------------------
@@ -72,11 +72,30 @@ For documentation generation:
 
    pip install -r requirements-docs.txt
 
-For GUI development:
+For the GUI:
+
+The uam4x GUI requires Python 3.11.
+
+The GUI depends on the following packages:
+
+* ``wxpython``
+* ``numpy``
+* ``uam4x``
+* ``openvsp``
+* ``rcotools``
+* ``uam4x_openvsp``
+
+Install those dependencies in your active environment before installing the
+GUI wheel.
+
+To install the GUI itself, use the wheel file provided for your platform:
 
 .. code-block:: bash
 
-   pip install wxpython
+   pip install path/to/uam4x_gui-<version>-<platform>.whl
+
+The GUI wheel is platform dependent, so install the wheel that matches your
+operating system and Python environment.
 
 For plugin packages (from ``uam4x_plugins``):
 

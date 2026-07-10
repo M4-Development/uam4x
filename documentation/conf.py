@@ -20,9 +20,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # -- Project information -----------------------------------------------------
 
-project = 'UAM4X'
-copyright = '2024, NASA'
-author = 'NASA'
+project = 'uam4x'
+copyright = '2026, M4 Engineering'
+author = 'M4 Engineering'
 
 # The full version, including alpha/beta/rc tags
 release = '0.4.0'
@@ -169,7 +169,7 @@ napoleon_attr_annotations = True
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'UAM4Xdoc'
+htmlhelp_basename = 'uam4xdoc'
 
 # -- Options for LaTeX output ------------------------------------------------
 
@@ -195,8 +195,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'UAM4X.tex', 'UAM4X Documentation',
-     'NASA', 'manual'),
+    (master_doc, 'uam4x.tex', 'uam4x Documentation',
+     'M4 Engineering', 'manual'),
 ]
 
 # -- Options for manual page output ------------------------------------------
@@ -204,7 +204,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'uam4x', 'UAM4X Documentation',
+    (master_doc, 'uam4x', 'uam4x Documentation',
      [author], 1)
 ]
 
@@ -214,8 +214,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'UAM4X', 'UAM4X Documentation',
-     author, 'UAM4X', 'Urban Air Mobility 4X Framework',
+    (master_doc, 'uam4x', 'uam4x Documentation',
+     author, 'uam4x', 'Urban Air Mobility 4X Framework',
      'Miscellaneous'),
 ]
 

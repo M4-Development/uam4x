@@ -1,4 +1,4 @@
-UAM4X Quad
+uam4x Quad
 ==========
 
 First, check out the example repository:

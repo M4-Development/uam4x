@@ -129,7 +129,7 @@ studies before saving results back to the variant directory.
 --------------------
 
 The post-processing script builds regression and quadrature surrogates,
-computes moments, evaluates surrogate quality metrics, and compares UAM4X
+computes moments, evaluates surrogate quality metrics, and compares uam4x
 results against the reference ``m4uq_ref`` data set.
 
 For example, it constructs post-processing helpers from completed trade

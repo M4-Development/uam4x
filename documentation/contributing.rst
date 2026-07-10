@@ -1,7 +1,7 @@
 Contributing
 ============
 
-We welcome contributions to UAM4X! This guide will help you get started.
+We welcome contributions to uam4x! This guide will help you get started.
 
 Development Setup
 -----------------
@@ -32,7 +32,7 @@ Development Setup
 Code Style
 ----------
 
-UAM4X follows PEP 8 style guidelines with some modifications:
+uam4x follows PEP 8 style guidelines with some modifications:
 
 * Use 4 spaces for indentation
 * Maximum line length of 88 characters
@@ -147,4 +147,4 @@ Getting Help
 * Ask questions in discussions
 * Join our community chat
 
-Thank you for contributing to UAM4X!
+Thank you for contributing to uam4x!

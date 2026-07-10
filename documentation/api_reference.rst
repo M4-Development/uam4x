@@ -1,7 +1,7 @@
 API Reference
 =============
 
-This section contains the complete API reference for UAM4X.
+This section contains the complete API reference for uam4x.
 
 Package Interface
 -----------------
