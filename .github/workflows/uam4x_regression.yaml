@@ -1,0 +1,399 @@
+name: UAM4x Regression Tests
+
+on:
+  schedule:
+    - cron: "0 8 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression-examples:
+    name: Sequential Example Regressions
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "{0}"
+
+    steps:
+      # ------------------------------------------------------------
+      # Workspace hygiene (self-hosted runners)
+      # ------------------------------------------------------------
+      - name: Clean workspace
+        run: |
+          $ErrorActionPreference = "Continue"
+          Write-Host "Cleaning workspace..."
+          Get-ChildItem -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+      # ------------------------------------------------------------
+      # Checkout uam4x (PR context)
+      # ------------------------------------------------------------
+      - name: Checkout uam4x
+        uses: actions/checkout@v5
+        with:
+          path: uam4x
+
+      # ------------------------------------------------------------
+      # Create GitHub App installation token
+      # ------------------------------------------------------------
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.UAM4X_APP_ID }}
+          private-key: ${{ secrets.UAM4X_APP_PRIVATE_KEY }}
+          owner: M4-Development
+
+      # ------------------------------------------------------------
+      # Checkout shared plugins repo (prerelease)
+      # ------------------------------------------------------------
+      - name: Checkout uam4x_plugins
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_plugins
+          ref: prerelease
+          path: uam4x_plugins
+          token: ${{ steps.app-token.outputs.token }}
+
+      # ------------------------------------------------------------
+      # Checkout example repos (prerelease)
+      # ------------------------------------------------------------
+      - name: Checkout uam4x_multiobjective
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_multiobjective
+          ref: prerelease
+          path: uam4x_multiobjective
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout uam4x_quad
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_quad
+          ref: prerelease
+          path: uam4x_quad
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout uam4x_tiltrotor
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_tiltrotor
+          ref: prerelease
+          path: uam4x_tiltrotor
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout uam4x_ixgen_demo
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_ixgen_demo
+          ref: prerelease
+          path: uam4x_ixgen_demo
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout uam4x_mixed_cantilever
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_mixed_cantilever
+          ref: prerelease
+          path: uam4x_mixed_cantilever
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout uam4x_ishigami
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_ishigami
+          ref: prerelease
+          path: uam4x_ishigami
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout uam4x_borehole_example
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_borehole_example
+          ref: prerelease
+          path: uam4x_borehole_example
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout uam4x_aleatory_cantilever
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_aleatory_cantilever
+          ref: prerelease
+          path: uam4x_aleatory_cantilever
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout uam4x_sellar_example
+        uses: actions/checkout@v5
+        with:
+          repository: M4-Development/uam4x_sellar_example
+          ref: prerelease
+          path: uam4x_sellar_example
+          token: ${{ steps.app-token.outputs.token }}
+
+
+
+      # ------------------------------------------------------------
+      # Verify conda + env
+      # ------------------------------------------------------------
+      - name: Verify conda + uam4x env
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+          if (!(Test-Path $conda)) { throw "conda.bat not found at $conda" }
+
+          & $conda env list
+          & $conda run -n uam4x python --version
+          & $conda run -n uam4x python -m pip --version
+
+      # ------------------------------------------------------------
+      # Install shared deps ONCE (uam4x + plugins)
+      # ------------------------------------------------------------
+      - name: Install uam4x_plugins (editable)
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          $plugins_dir = Join-Path $PWD "uam4x_plugins"
+          if (!(Test-Path $plugins_dir)) { throw "uam4x_plugins dir not found: $plugins_dir" }
+
+          Push-Location $plugins_dir
+          & $conda run -n uam4x python -m pip install -r requirements.txt
+          Pop-Location
+
+      - name: Install uam4x (editable)
+        run: |
+          $ErrorActionPreference = "Stop"
+          #set location of conda executable
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          #path of dir on vm
+          $uam4x_dir = Join-Path $PWD "uam4x"
+          #check if path exists
+          if (!(Test-Path $uam4x_dir)) { throw "uam4x dir not found: $uam4x_dir" }
+
+          #temp change of directory into desired directory for install
+          Push-Location $uam4x_dir
+          & $conda run -n uam4x python -m pip install -e .
+          #then return to main workspace
+          Pop-Location
+
+          # quick sanity
+          & $conda run -n uam4x python -c "import uam4x; import inspect; print('uam4x OK:', uam4x.__file__); print('has Plugin:', hasattr(uam4x, 'Plugin'))"
+
+      # ------------------------------------------------------------
+      # CRITICAL: force plugin imports to resolve against the installed uam4x
+      # (prevents 'cannot import name Plugin from uam4x (unknown location)')
+      # ------------------------------------------------------------
+      - name: Add uam4x to PYTHONPATH for subsequent steps
+        run: |
+          $ErrorActionPreference = "Stop"
+          $uam4x_pkg_root = Join-Path $PWD "uam4x"
+          if (!(Test-Path $uam4x_pkg_root)) { throw "uam4x checkout not found: $uam4x_pkg_root" }
+          "PYTHONPATH=$uam4x_pkg_root" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # ------------------------------------------------------------
+      # Run regressions SEQUENTIALLY
+      # ------------------------------------------------------------
+      - name: Run multiobjective regression test
+        id: test_multiobjective
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          & $conda run -n uam4x python -u -m pytest `
+            "uam4x_multiobjective\tests\test_multiobjective.py" `
+            -s -rA
+
+      - name: Run quad regression test
+        id: test_quad
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          # run from repo root so relative imports like "from branching_script import ..." work reliably
+          Push-Location (Join-Path $PWD "uam4x_quad")
+          & $conda run -n uam4x python -u -m pytest `
+            "tests\test_quadrotor.py" `
+            -s -rA
+          Pop-Location
+
+      - name: Run tiltrotor regression test
+        id: test_tiltrotor
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          # run from repo root so relative imports + local files work (vsp3, .job, etc.)
+          Push-Location (Join-Path $PWD "uam4x_tiltrotor")
+          & $conda run -n uam4x python -u -m pytest `
+            "tests\test_tiltrotor.py" `
+            -s -rA
+          Pop-Location
+
+      - name: Run ixgen demo regression test
+        id: test_ixgen
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          # run from repo root so relative imports like "import custom" / "branching_script" work
+          Push-Location (Join-Path $PWD "uam4x_ixgen_demo")
+          & $conda run -n uam4x python -u -m pytest `
+            "tests\test_ixgen.py" `
+            -s -rA
+          Pop-Location
+
+
+      - name: Run mixed cantilever demo regression test
+        id: test_mixed_cantilever
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          # run from repo root so relative imports like "import custom" / "branching_script" work
+          Push-Location (Join-Path $PWD "uam4x_mixed_cantilever")
+          & $conda run -n uam4x python -u -m pytest `
+            "tests\test_mixed_cantilever.py" `
+            -s -rA
+          Pop-Location
+
+
+      - name: Run ishigami regression test
+        id: test_ishigami
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          # run from repo root so relative imports like "import custom" / "branching_script" work
+          Push-Location (Join-Path $PWD "uam4x_ishigami")
+          & $conda run -n uam4x python -u -m pytest `
+            "tests\test_ishigami.py" `
+            -s -rA
+          Pop-Location
+
+
+      - name: Run borehole example regression test
+        id: test_borehole
+        continue-on-error: true
+        env:
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          OPENBLAS_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          # run from repo root so relative imports like "import custom" / "branching_script" work
+          Push-Location (Join-Path $PWD "uam4x_borehole_example")
+          & $conda run -n uam4x python -u -m pytest `
+            "tests\test_borehole.py" `
+            -s -rA
+          Pop-Location
+
+      - name: Run aleatory cantilever example regression test
+        id: test_aleatory_cantilever
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          # run from repo root so relative imports like "import custom" / "branching_script" work
+          Push-Location (Join-Path $PWD "uam4x_aleatory_cantilever")
+          & $conda run -n uam4x python -u -m pytest `
+            "tests\test_aleatory_cantilever.py" `
+            -s -rA
+          Pop-Location
+
+      - name: Run sellar example regression test
+        id: test_sellar
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+
+          # run from repo root so relative imports like "import custom" / "branching_script" work
+          Push-Location (Join-Path $PWD "uam4x_sellar_example")
+          & $conda run -n uam4x python -u -m pytest `
+            "tests\test_sellar_example.py" `
+            -s -rA
+          Pop-Location
+
+      - name: Collect failures if needed
+        if: always()
+        run: |
+          $failed = @()
+
+          if ("${{ steps.test_multiobjective.outcome }}" -ne "success") { $failed += "multiobjective" }
+          if ("${{ steps.test_quad.outcome }}" -ne "success") { $failed += "quad" }
+          if ("${{ steps.test_tiltrotor.outcome }}" -ne "success") { $failed += "tiltrotor" }
+          if ("${{ steps.test_ixgen.outcome }}" -ne "success") { $failed += "ixgen" }
+          if ("${{ steps.test_mixed_cantilever.outcome }}" -ne "success") { $failed += "mixed_cantilever" }
+          if ("${{ steps.test_ishigami.outcome }}" -ne "success") { $failed += "ishigami" }
+          if ("${{ steps.test_borehole.outcome }}" -ne "success") { $failed += "borehole" }
+          if ("${{ steps.test_aleatory_cantilever.outcome }}" -ne "success") { $failed += "aleatory_cantilever" }
+          if ("${{ steps.test_sellar.outcome }}" -ne "success") { $failed += "sellar" }
+
+          if ($failed.Count -gt 0) {
+            Write-Host "Failed regressions: $($failed -join ', ')"
+            exit 1
+          }
+
+          Write-Host "All regression examples passed."
+
+      - name: Get commit info (uam4x)
+        if: always()
+        id: commit_info
+        run: |
+          $ErrorActionPreference = "Continue"
+          Push-Location (Join-Path $PWD "uam4x")
+          $author  = git log -1 --pretty=format:'%an <%ae>'
+          $message = git log -1 --pretty=format:'%s'
+          $sha     = git rev-parse --short HEAD
+          Pop-Location
+
+          "author=$author"  >> $env:GITHUB_OUTPUT
+          "message=$message" >> $env:GITHUB_OUTPUT
+          "sha=$sha"        >> $env:GITHUB_OUTPUT
+
+      - name: Send regression status email
+        if: always()
+        uses: dawidd6/action-send-mail@v6
+        with:
+          server_address: smtp.office365.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.M4_JENKINS_EMAIL }}
+          password: ${{ secrets.M4_JENKINS_PASS }}
+          from: ${{ secrets.M4_JENKINS_EMAIL }}
+          to: |
+            nlang@m4-engineering.com,xgedney@m4-engineering.com,tnascenzi@m4-engineering.com
+          subject: >
+            UAM4x Regression Tests — ${{ job.status }} —
+            ${{ github.ref_name }} @ ${{ steps.commit_info.outputs.sha }}
+          body: |
+            UAM4x Regression Test Summary
+
+            Repository: ${{ github.repository }}
+            Branch:     ${{ github.ref_name }}
+            Commit:     ${{ steps.commit_info.outputs.sha }}
+
+            Commit Author (Blame):
+              ${{ steps.commit_info.outputs.author }}
+
+            Commit Message:
+              ${{ steps.commit_info.outputs.message }}
+
+            Workflow:   ${{ github.workflow }}
+            Run ID:     ${{ github.run_id }}
+            Job Status: ${{ job.status }}
+
+
