@@ -26,6 +26,9 @@ TYPE_MAP = {
     "ndarray": np.ndarray,
 }
 
+REVERSE_TYPE_MAP={
+    type_:name for name,type_ in TYPE_MAP.items()
+}
 
 def is_main_process():
     """Return whether the current process is the Python main process.

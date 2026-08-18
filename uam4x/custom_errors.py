@@ -38,3 +38,8 @@ class OpenvspM4ssExternalException(PluginExternalException):
     """Exception raised for combined OpenVSP and M4SS execution errors."""
 
     pass
+
+class CamradExternalException(PluginExternalException):
+    """Exception raised for CAMRADII-related external execution errors."""
+
+    pass
