@@ -20,6 +20,9 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import shutil
+from pathlib import Path
+
+from uam4x.n2_viewer import build_n2_data, render_n2_html
 
 
 class Engine:
@@ -127,6 +130,129 @@ class Engine:
 
         problem.check_partials(step=step, form=form, compact_print=True)
         os.chdir(cwd)
+
+    def generate_N2(
+        self,
+        trade_name=None,
+        root_dir=None,
+        outfile=None,
+        *,
+        show_browser=True,
+        check=True,
+        include_values=False,
+        title=None,
+        path=None,
+        auto_collapse=True,
+        max_visible_rows=120,
+    ):
+        """Generate a standalone, interactive N² diagram from the uam4x model.
+
+        Parameters
+        ----------
+        trade_name : str, optional
+            Analysis whose design variables, constraints, and objective should be
+            highlighted. If omitted, the base solution structure is displayed.
+        root_dir : str or path-like, optional
+            Directory in which to write the diagram. The filename is ``n2.html``
+            for the base model or ``<trade_name>N2.html`` for an analysis. Use
+            ``outfile`` when an explicit filename is required.
+        outfile : str or path-like, optional
+            Output HTML path. Defaults to ``<work_dir>/<trade_name>_n2.html`` or
+            ``<work_dir>/n2.html`` when no analysis is selected.
+        show_browser : bool, optional
+            If True, open the generated file in the default browser.
+        check : bool, optional
+            If True, run uam4x link and analysis checks before writing the file.
+        include_values : bool, optional
+            If True, include declared/default values in the embedded model data.
+            Plugins are never executed to obtain values.
+        title : str, optional
+            Diagram title. Defaults to ``"uam4x N² Diagram"``.
+        path : str, optional
+            uam4x group or component path to use as the initial diagram root.
+            A leading ``"solution."`` is optional.
+        auto_collapse : bool, optional
+            Automatically aggregate oversized hierarchy scopes. A focused
+            component is never aggregated; its variables remain available in
+            a scrollable detail view.
+        max_visible_rows : int, optional
+            Approximate row budget used by automatic hierarchy collapsing.
+
+        Returns
+        -------
+        pathlib.Path
+            Absolute path to the generated HTML file.
+
+        Notes
+        -----
+        This viewer is built directly from uam4x ``Solution``, ``Group``, link,
+        and plugin-declaration data. It does not construct an OpenMDAO problem
+        and does not execute plugins.
+
+        """
+        if root_dir is not None and outfile is not None:
+            raise ValueError("Specify either root_dir or outfile, not both")
+        if isinstance(max_visible_rows, bool) or not isinstance(
+            max_visible_rows, int
+        ):
+            raise TypeError("max_visible_rows must be an integer")
+        if max_visible_rows < 10:
+            raise ValueError("max_visible_rows must be at least 10")
+
+        self.log.debug("generate native N2")
+        self.study.solution.sort_steps()
+
+        state = {}
+        if trade_name is not None:
+            tradestudy = self.study.control.trade_studies[trade_name]
+            if isinstance(tradestudy, UAM4XOptimization):
+                state = tradestudy._to_dict()
+                state["optimization"] = True
+            else:
+                states = tradestudy.get_states()
+                if not states:
+                    raise ValueError(
+                        f"The analysis {trade_name!r} did not produce any states"
+                    )
+                state = copy.deepcopy(states[0])
+
+        plugins = self.study.solution.generate_plugins()
+        if check:
+            self.check_model(plugins, state)
+
+        if outfile is None:
+            if root_dir is not None:
+                filename = "n2.html" if trade_name is None else f"{trade_name}N2.html"
+                outfile = Path(root_dir) / filename
+            else:
+                if trade_name is None:
+                    filename = "n2.html"
+                else:
+                    safe_trade_name = "".join(
+                        character if character.isalnum() or character in "-_" else "_"
+                        for character in trade_name
+                    )
+                    filename = f"{safe_trade_name}_n2.html"
+                outfile = Path(self.work_dir) / filename
+
+        model_data = build_n2_data(
+            self.study,
+            plugins,
+            state=state,
+            trade_name=trade_name,
+            title=title,
+            include_values=include_values,
+            initial_path=path,
+            auto_collapse=auto_collapse,
+            max_visible_rows=max_visible_rows,
+        )
+        output_path = render_n2_html(model_data, outfile)
+
+        if show_browser:
+            import webbrowser
+
+            webbrowser.open(output_path.as_uri())
+        return output_path
 
     def _run_state(self, state, trade_work_dir,iteration=None, resort_steps=False,):
         """Execute one analysis state.
@@ -354,6 +480,7 @@ class Engine:
         self.study.solution.sort_steps()
         plugins = self.study.solution.generate_plugins()
         state = {}
+        self.check_model(plugins, state)
         out_dir = os.path.join(self.work_dir,'Default_State')
         if os.path.exists(out_dir):
             shutil.rmtree(out_dir)
@@ -738,6 +865,7 @@ class Engine:
             If parameter types are incompatible.
         """
         self.log.debug("check model")
+        state = state or {}
         self.check_links_to_plugins(plugins)
         self.check_link_types(plugins)
         self.check_link_indices(plugins)

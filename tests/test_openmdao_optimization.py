@@ -165,3 +165,19 @@ def test_run_problem_handles_indexed_tracked_output_and_failed_driver(monkeypatc
 
     assert result.convergence_status is False
     assert result.outputs["analysis.y_arr[1]"] == pytest.approx(20.0)
+
+
+def test_run_problem_returns_openmdao_problem_for_partial_checks(monkeypatch, tmp_path):
+    study, state, plugins, out_dir = _build_study_and_state(tmp_path, ["analysis.y"])
+
+    monkeypatch.setattr(omo.om, "Problem", _FakeProblem)
+    monkeypatch.setitem(omo.driver_name_to_driver, "ScipyOptimizeDriver", _FakeDriver)
+    monkeypatch.setattr(omo, "OpenmdaoPreComp", _FakeComp)
+    monkeypatch.setattr(omo, "UniversalOpenmdaoComp", _FakeComp)
+    monkeypatch.setattr(omo, "UniversalOpenMDAOGroup", _FakeComp)
+
+    opt = omo.Optimization(study, state, plugins, out_dir, check_partials=True)
+    problem = opt.run_problem()
+
+    assert isinstance(problem, _FakeProblem)
+    assert problem.driver is not None

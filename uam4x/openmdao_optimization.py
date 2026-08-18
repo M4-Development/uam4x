@@ -84,10 +84,11 @@ class Optimization:
 
         Returns
         -------
-        Result
-            Result object containing tracked outputs, design-variable values,
-            convergence status, and template checksums captured during the
-            optimization run.
+        Result or openmdao.api.Problem
+            A result containing tracked outputs, design-variable values,
+            convergence status, and template checksums. When ``check_partials``
+            is enabled, returns the configured OpenMDAO problem so the caller
+            can invoke ``check_partials`` on it.
 
         Notes
         -----
@@ -241,6 +242,9 @@ class Optimization:
 
         problem.setup()
         problem.run_driver()
+
+        if self.check_partials:
+            return problem
 
         if problem.driver.fail:
             result._add_convergence_status(False)

@@ -244,6 +244,68 @@ This script loads the generated variant and runs both trade studies.
     engine.run_tradestudy("optimization_only")
     study.save_results_to_json(study_dir)
 
+Generate an N² diagram
+^^^^^^^^^^^^^^^^^^^^^^^
+
+An execution engine can generate a standalone interactive N² diagram without
+executing the solution:
+
+.. code-block:: python
+
+    engine = Engine(study, os.path.join(study_dir, "work"))
+
+    # Show the base uam4x solution structure.
+    engine.generate_N2()
+
+    # Highlight one analysis's design variables, constraints, and objective.
+    engine.generate_N2(
+        "optimization_only",
+        outfile=os.path.join(study_dir, "optimization_n2.html"),
+        show_browser=False,
+    )
+
+    # Open directly inside one large group or plugin.
+    engine.generate_N2(
+        path="aerodynamics.rotor_analysis",
+        max_visible_rows=100,
+    )
+
+The native viewer displays the solution/group hierarchy, declared plugin inputs
+and outputs, unconnected inputs, indexed links, feed-forward and feedback
+connections, cycles, tracked outputs, and optimization roles. Its OpenMDAO-style
+controls support hierarchy zoom and history, system collapse and aggregation,
+connection tracing and pinning, search, solver/execution-order columns,
+and optimization highlighting. The matrix renders ``solution`` as its
+outermost system column and adds
+one lateral column for every nested uam4x group level before the leaf plugin and
+variable columns. Clicking any group or plugin band focuses that system and adds
+the view to navigation history. ``Fit`` scales the complete diagram—hierarchy,
+variables, matrix, and solver bands—against both the available width and height.
+For large models, the initial view automatically collapses the largest plugins
+and then nested groups until it is near ``max_visible_rows``. The aggregated
+rows preserve connections that cross each collapsed boundary. Users can expand
+systems explicitly or click a plugin to focus it. A focused plugin is never
+collapsed or truncated: it initially opens at a readable detail scale and the
+matrix panel supplies horizontal and vertical scroll bars. Manual zoom-out can
+enter overview mode, and ``Fit`` scales the entire focused plugin into the
+available viewport. The optional
+``path`` argument starts the diagram at a particular group or plugin; a leading
+``solution.`` is optional. Setting ``auto_collapse=False`` restores a fully
+expanded initial view. Select a plugin and press ``VIS`` (or Alt-right-click its
+band) to choose exactly which inputs and outputs remain visible. Variable
+suppression is diagram-only and is included in Back/Forward history. ``JAC``
+separately hides or shows declared component partials, which is useful for
+plugins with a dense finite-difference dependency declaration.
+Black cells inside component outlines represent native input-to-output
+dependencies, using declared plugin partials when available and a dense
+dependency assumption otherwise. Dependency arrows appear on hover and can be
+pinned or released by clicking their matrix cell or associated diagonal
+variable square. Hierarchy and variable bands are sized from their rendered
+labels, and variable bands retain a visible gap even when optimization-role
+outlines are displayed.
+The output is one self-contained HTML file and does not require OpenMDAO model
+construction.
+
 
 Step 4: ``post_process.py`` (inspect results)
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""

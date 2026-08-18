@@ -1,4 +1,8 @@
 import os
+import base64
+import json
+import re
+from pathlib import Path
 
 os.environ.setdefault("UAM4X_DISABLE_REGISTRY_WRITES", "1")
 
@@ -13,7 +17,7 @@ from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Subsystem, register_subsystem
 from uam4x.solution import Plugin, register_plugin, Group
-from uam4x.control import ParameterSweep
+from uam4x.control import Optimization as ControlOptimization, ParameterSweep
 
 
 @register_subsystem
@@ -322,9 +326,18 @@ def test_run_state_parallel_rebuilds_study_and_runs(tmp_path):
 def test_run_solution_populates_results_and_runtime_metadata(engine_setup, monkeypatch):
     study, engine, _ = engine_setup
     _mock_python_cmd(monkeypatch)
+    checked_states = []
+    original_check_model = engine.check_model
+
+    def record_check_model(plugins, state=None):
+        checked_states.append(state)
+        return original_check_model(plugins, state)
+
+    monkeypatch.setattr(engine, "check_model", record_check_model)
 
     engine.run_solution()
 
+    assert checked_states == [{}]
     ts = study.results.tradestudies["Default State"]
     assert len(ts._results) == 1
     assert ts._results[0].outputs["stage2.objective"] == pytest.approx(40.0)
@@ -357,6 +370,203 @@ def test_run_parameter_sweep_invalid_num_processors_raises(engine_setup):
 
     with pytest.raises(ValueError, match="num_processors must be None or an integer >=1"):
         engine._run_parameter_sweep("invalid_np", trade_states=[{}], num_processors=-1)
+
+
+def _read_n2_model(path):
+    document = path.read_text(encoding="utf-8")
+    match = re.search(r'const encodedModel="([^"]+)"', document)
+    assert match is not None
+    payload = base64.b64decode(match.group(1)).decode("utf-8")
+    return document, json.loads(payload)
+
+
+def test_generate_N2_creates_native_standalone_html(engine_setup, tmp_path):
+    _, engine, _ = engine_setup
+    outfile = tmp_path / "native_n2.html"
+
+    path = engine.generate_N2(
+        outfile=outfile,
+        show_browser=False,
+        title="Execution engine model",
+    )
+
+    assert path == outfile.resolve()
+    assert path.exists()
+
+    document, model = _read_n2_model(path)
+    assert "<!doctype html>" in document
+    assert 'id="component-mode"' not in document
+    assert 'id="variable-mode"' not in document
+    assert "component-band" in document
+    assert "variable-band" in document
+    assert 'id="undo-graph"' in document
+    assert 'id="collapse-element"' in document
+    assert 'id="show-all-connections"' in document
+    assert 'id="solver-button"' in document
+    assert 'id="save-button"' not in document
+    assert 'id="save-state-button"' not in document
+    assert 'id="load-state-button"' not in document
+    assert "MIN_CELL=1" in document
+    assert "DETAIL_MIN_CELL=20" in document
+    assert "function autoCollapsedFor(rootId)" in document
+    assert "nodes.slice(0" not in document
+    assert 'id="variables-button"' in document
+    assert 'id="partials-button"' in document
+    assert "function variableVisibilityDialog(componentId)" in document
+    assert "hiddenVariables:new Set()" in document
+    assert "const compact=cell<state.font+6" in document
+    assert "function applyPreferredScale()" in document
+    assert "state.cell=Math.max(MIN_CELL" in document
+    assert "function boundaryFor(cell)" in document
+    assert '" · overview"' in document
+    assert "OpenMDAO" not in model["title"]
+    assert model["title"] == "Execution engine model"
+    assert model["schema_version"] == 1
+    assert model["viewer"] == {
+        "initial_path": "solution",
+        "auto_collapse": True,
+        "max_visible_rows": 120,
+    }
+    assert [component["id"] for component in model["components"]] == [
+        "vehicles",
+        "stage1",
+        "stage2",
+    ]
+
+    connection = next(
+        item
+        for item in model["connections"]
+        if item["target"] == "stage1.arr_row"
+    )
+    assert connection["source"] == "vehicles.exec_vehicle.core.arr"
+    assert connection["source_indices"] == "[0,:]"
+
+    variable = next(
+        item for item in model["variables"] if item["id"] == "stage1.arr_out"
+    )
+    assert variable["direction"] == "output"
+    assert variable["shape"] == [2, 2]
+    assert variable["connected"] is False
+
+
+def test_generate_N2_does_not_execute_plugins(engine_setup, monkeypatch, tmp_path):
+    _, engine, plugins = engine_setup
+
+    def fail_if_executed(*args, **kwargs):
+        raise AssertionError("N2 generation must not execute plugins")
+
+    for plugin in plugins.values():
+        monkeypatch.setattr(plugin.__class__, "run_plugin", fail_if_executed)
+
+    path = engine.generate_N2(
+        outfile=tmp_path / "no_execution.html",
+        show_browser=False,
+    )
+
+    assert path.exists()
+
+
+def test_generate_N2_includes_optimization_roles(engine_setup, tmp_path):
+    study, engine, _ = engine_setup
+    optimization = ControlOptimization()
+    optimization.add_design_var(
+        "vehicles.exec_vehicle.core.x",
+        lower=0.0,
+        upper=10.0,
+    )
+    optimization.add_constraint("stage1.arr_scalar", upper=10.0)
+    optimization.add_objective("stage2.objective")
+    study.add_trade("optimization", optimization)
+
+    path = engine.generate_N2(
+        "optimization",
+        outfile=tmp_path / "optimization_n2.html",
+        show_browser=False,
+    )
+
+    _, model = _read_n2_model(path)
+    assert model["optimization"] == {
+        "enabled": True,
+        "design_variables": ["vehicles.exec_vehicle.core.x"],
+        "constraints": ["stage1.arr_scalar"],
+        "objectives": ["stage2.objective"],
+    }
+    variables = {variable["id"]: variable for variable in model["variables"]}
+    assert variables["vehicles.exec_vehicle.core.x"]["design_var"] is True
+    assert variables["stage1.arr_scalar"]["constraint"] is True
+    assert variables["stage2.objective"]["objective"] is True
+
+
+def test_generate_N2_is_the_only_n2_generation_method(engine_setup):
+    _, engine, _ = engine_setup
+
+    path = engine.generate_N2(show_browser=False)
+
+    assert path == (Path(engine.work_dir) / "n2.html").resolve()
+    assert path.exists()
+    assert not hasattr(engine, "generate_n2")
+
+
+def test_generate_N2_supports_root_directory(engine_setup, tmp_path):
+    _, engine, _ = engine_setup
+
+    path = engine.generate_N2(root_dir=tmp_path, show_browser=False)
+
+    assert path == (tmp_path / "n2.html").resolve()
+
+
+def test_generate_N2_rejects_root_directory_and_outfile(engine_setup, tmp_path):
+    _, engine, _ = engine_setup
+
+    with pytest.raises(ValueError, match="either root_dir or outfile"):
+        engine.generate_N2(
+            root_dir=tmp_path,
+            outfile=tmp_path / "explicit.html",
+            show_browser=False,
+        )
+
+
+def test_generate_N2_supports_initial_component_path(engine_setup, tmp_path):
+    _, engine, _ = engine_setup
+
+    path = engine.generate_N2(
+        outfile=tmp_path / "focused.html",
+        path="solution.stage1",
+        max_visible_rows=40,
+        show_browser=False,
+    )
+
+    document, model = _read_n2_model(path)
+    assert model["viewer"] == {
+        "initial_path": "stage1",
+        "auto_collapse": True,
+        "max_visible_rows": 40,
+    }
+    assert "A focused component is never aggregated or truncated" in document
+
+
+def test_generate_N2_rejects_unknown_path(engine_setup, tmp_path):
+    _, engine, _ = engine_setup
+
+    with pytest.raises(ValueError, match="not a unique uam4x group or component path"):
+        engine.generate_N2(
+            outfile=tmp_path / "unknown.html",
+            path="missing.system",
+            show_browser=False,
+        )
+
+
+@pytest.mark.parametrize("row_limit", [True, 1, 9, 12.5])
+def test_generate_N2_validates_visible_row_limit(engine_setup, tmp_path, row_limit):
+    _, engine, _ = engine_setup
+
+    expected = TypeError if isinstance(row_limit, (bool, float)) else ValueError
+    with pytest.raises(expected):
+        engine.generate_N2(
+            outfile=tmp_path / "bad_limit.html",
+            max_visible_rows=row_limit,
+            show_browser=False,
+        )
 
 
 def test_capture_execution_data_stores_plugin_hashes(engine_setup, monkeypatch):
