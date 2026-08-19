@@ -412,7 +412,17 @@ def test_generate_N2_creates_native_standalone_html(engine_setup, tmp_path):
     assert "nodes.slice(0" not in document
     assert 'id="variables-button"' in document
     assert 'id="partials-button"' in document
+    assert 'id="info-collapse"' in document
+    assert 'id="info-reopen"' in document
+    assert 'id="hierarchy-collapse"' in document
+    assert 'id="hierarchy-reopen"' in document
+    assert 'id="zoom-level" type="number"' in document
+    assert 'id="matrix-controls-drag"' in document
     assert "function variableVisibilityDialog(componentId)" in document
+    assert "function setZoomPercent(raw)" in document
+    assert "34*percent/100" in document
+    assert "Math.round(34*percent/100)" not in document
+    assert "function moveMatrixControls(left,top)" in document
     assert "hiddenVariables:new Set()" in document
     assert "const compact=cell<state.font+6" in document
     assert "function applyPreferredScale()" in document

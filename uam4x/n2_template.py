@@ -25,6 +25,7 @@ input{font:inherit}#search{width:min(360px,32vw);padding:6px 9px;border:1px soli
 .layout{height:calc(100vh - 52px);display:grid;
 grid-template-columns:52px var(--hierarchy-width) minmax(0,1fr);
 gap:1px;background:var(--line)}
+.layout.hierarchy-hidden{grid-template-columns:52px minmax(0,1fr)}
 #toolbarLoc{grid-column:1;grid-row:1;background:var(--nav);overflow-y:auto;overflow-x:hidden;
 padding:5px 4px;position:relative;z-index:15;width:52px;transition:width .16s ease,box-shadow .16s ease}
 #toolbarLoc:hover,#toolbarLoc:focus-within{width:224px;box-shadow:5px 0 16px #0004}
@@ -40,7 +41,14 @@ font:600 18px/1 system-ui;cursor:pointer}.tool:hover,.tool.active{background:var
 .tool:disabled{opacity:.35;cursor:default}.tool.small{font-size:12px}.panel{background:#fff;overflow:auto}
 .panel-title{position:sticky;top:0;z-index:5;padding:8px 10px;background:#edf2f8;
 border-bottom:1px solid var(--line);font-weight:700}
-#hierarchy-panel{grid-column:2;grid-row:1}#tree{padding:8px 7px 20px}
+#hierarchy-panel{grid-column:2;grid-row:1}.hierarchy-title{display:flex;align-items:center;
+justify-content:space-between}#hierarchy-collapse{border:0;background:transparent;color:#344054;
+font:700 18px/1 system-ui;cursor:pointer;padding:2px 5px;border-radius:4px}
+#hierarchy-collapse:hover{background:#dce5f0}#hierarchy-reopen{position:fixed;z-index:11;left:52px;
+top:78px;border:1px solid #b8c3d3;border-left:0;border-radius:0 7px 7px 0;padding:9px 7px;
+background:#edf2f8;color:#26364f;font:700 11px system-ui;cursor:pointer;box-shadow:2px 2px 8px #0002;
+writing-mode:vertical-rl}.layout.hierarchy-hidden #hierarchy-panel{display:none}
+.layout.hierarchy-hidden #matrix-panel{grid-column:2}#tree{padding:8px 7px 20px}
 .tree-group,.tree-component{margin:0;list-style:none}.tree-group{margin-left:7px}
 .tree-group>summary,.component-label{padding:4px 5px;border-radius:4px;cursor:pointer;user-select:none}
 .tree-group>summary:hover,.component-label:hover,.view-root{background:#e4efff}
@@ -53,13 +61,17 @@ border-bottom:1px solid var(--line);font-weight:700}
 padding:1px 3px;margin-left:3px}.dv{background:#7c3aed}.obj{background:#b42318}
 .con{background:#d97706}.track{background:#16845a}
 #matrix-panel{grid-column:3;grid-row:1;position:relative;overflow:auto;background:#fff}
-#matrix-controls{position:sticky;z-index:12;top:8px;margin:8px 12px -44px auto;width:max-content;
+#matrix-controls{position:fixed;z-index:12;top:60px;right:12px;width:max-content;
 display:flex;align-items:center;gap:4px;padding:5px;background:#14213de8;border-radius:8px;
 box-shadow:0 2px 9px #0004}
 #matrix-controls button{min-width:35px;height:31px;border:1px solid #ffffff55;border-radius:5px;
 background:#294368;color:#fff;font:700 15px system-ui;cursor:pointer}
-#matrix-controls button:hover{background:#3e6599}#zoom-level{min-width:82px;text-align:center;
-color:#e7effc;font-size:11px}
+#matrix-controls button:hover{background:#3e6599}.drag-handle{height:31px;display:grid;place-items:center;
+padding:0 3px;color:#c9d7eb;font-size:17px;cursor:grab;user-select:none;touch-action:none}.drag-handle:active{cursor:grabbing}
+.drag-handle:focus-visible{outline:2px solid #fff;border-radius:4px}#zoom-entry{display:flex;
+align-items:center;gap:2px;color:#e7effc;font-size:11px}#zoom-level{width:55px;padding:5px 4px;
+border:1px solid #ffffff66;border-radius:4px;background:#fff;color:#172033;text-align:right}
+#zoom-mode{min-width:48px;color:#c9d7eb;font-size:10px}
 #matrix{display:block;min-width:100%}.component-band{fill:var(--group);
 stroke:#fff;stroke-width:2;rx:6;cursor:pointer}
 .component-band.group-level{fill:#35bfe9}.component-band.solution-level{fill:#78a6c2}
@@ -83,7 +95,12 @@ marker-end:url(#arrowhead);pointer-events:none}.arrow.pinned{stroke:#268c5e}
 stroke:#fff;stroke-width:2;rx:6;cursor:pointer}.solver-text{font-size:10px;fill:#16332e;
 pointer-events:none}.empty-note{font-size:16px;fill:#667085}
 #info-panel{position:fixed;z-index:11;right:0;top:52px;bottom:0;width:276px;
-box-shadow:-3px 0 14px #0002}#details{padding:10px}.detail-title{font-size:15px;
+box-shadow:-3px 0 14px #0002}.info-title{display:flex;align-items:center;justify-content:space-between}
+#info-collapse{border:0;background:transparent;color:#344054;font:700 18px/1 system-ui;cursor:pointer;
+padding:2px 5px;border-radius:4px}#info-collapse:hover{background:#dce5f0}#info-reopen{position:fixed;
+z-index:11;right:0;top:78px;border:1px solid #b8c3d3;border-right:0;border-radius:7px 0 0 7px;
+padding:9px 7px;background:#edf2f8;color:#26364f;font:700 11px system-ui;cursor:pointer;
+box-shadow:-2px 2px 8px #0002;writing-mode:vertical-rl}#details{padding:10px}.detail-title{font-size:15px;
 font-weight:750;margin-bottom:8px}.detail-grid{display:grid;grid-template-columns:94px 1fr;gap:5px 8px}
 .key{color:var(--muted)}.connection-list{padding-left:18px}.connection-list li{margin:5px 0;
 word-break:break-word}.footer-note{font-size:11px;color:var(--muted)}
@@ -100,8 +117,8 @@ border-top:1px solid #edf0f4}.picker-row:hover{background:#f4f7fb}.picker-row sp
 .picker-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:10px}
 .hidden{display:none!important}
 @media(max-width:1050px){.layout{grid-template-columns:52px var(--hierarchy-width) minmax(0,1fr)}
-#info-panel{display:none}}@media(max-width:720px){.layout{grid-template-columns:52px minmax(0,1fr)}
-#hierarchy-panel{display:none}#matrix-panel{grid-column:2}}
+#info-panel,#info-reopen{display:none!important}}@media(max-width:720px){.layout{grid-template-columns:52px minmax(0,1fr)}
+#hierarchy-panel,#hierarchy-reopen{display:none!important}#matrix-panel{grid-column:2}}
 </style>
 </head>
 <body>
@@ -145,19 +162,28 @@ border-top:1px solid #edf0f4}.picker-row:hover{background:#f4f7fb}.picker-row sp
     <button class="tool" id="question-button" title="Show interaction help">?</button>
   </div>
 </nav>
-<section class="panel" id="hierarchy-panel"><div class="panel-title">uam4x model hierarchy</div>
+<section class="panel" id="hierarchy-panel"><div class="panel-title hierarchy-title"><span>uam4x model hierarchy</span>
+  <button id="hierarchy-collapse" type="button" aria-label="Collapse model hierarchy"
+    title="Collapse model hierarchy">‹</button></div>
   <div id="tree"></div></section>
+<button id="hierarchy-reopen" class="hidden" type="button" aria-label="Open model hierarchy">Hierarchy</button>
 <section id="matrix-panel">
   <div id="matrix-controls" aria-label="Matrix zoom controls">
+    <span class="drag-handle" id="matrix-controls-drag" role="button" tabindex="0"
+      aria-label="Move zoom controls" title="Drag to move zoom controls">⠿</span>
     <button id="matrix-zoom-out" title="Zoom out">−</button>
-    <span id="zoom-level">100%</span>
+    <label id="zoom-entry"><input id="zoom-level" type="number" min="3" max="941" step="1"
+      value="100" aria-label="Zoom percentage"><span>%</span></label>
+    <span id="zoom-mode" aria-live="polite"></span>
     <button id="matrix-fit" title="Fit matrix to the available height">Fit</button>
     <button id="matrix-zoom-in" title="Zoom in">+</button>
   </div>
   <svg id="matrix" role="img" aria-label="N-squared connection matrix"></svg>
 </section>
-<aside class="panel" id="info-panel"><div class="panel-title">N² information</div>
+<aside class="panel" id="info-panel"><div class="panel-title info-title"><span>N² information</span>
+  <button id="info-collapse" type="button" aria-label="Collapse links panel" title="Collapse panel">›</button></div>
   <div id="details"></div></aside>
+<button id="info-reopen" class="hidden" type="button" aria-label="Open links panel">Links</button>
 </div>
 <div id="modal-host"></div>
 <script>
@@ -185,7 +211,7 @@ indexTree(model.tree);
 const initialRoot=treeById.has(viewer.initial_path)?viewer.initial_path:model.tree.id;
 const initial={cell:34,font:13,query:"",rootId:initialRoot,collapsed:[],
   selectedNode:null,pinned:[],hiddenVariables:[],solverMode:"cycle",optimization:true,
-  partials:true,info:false,depth:0};
+  partials:true,info:false,hierarchy:true,depth:0};
 const state={...initial,collapsed:new Set(),pinned:new Set(),hiddenVariables:new Set()};
 let history=[],historyIndex=-1,lastLayout=null;
 document.getElementById("title").textContent=model.title;
@@ -198,9 +224,11 @@ function htmlEl(name,cls="",text=null){const n=document.createElement(name);n.cl
 function snapshot(){return{cell:state.cell,font:state.font,query:state.query,rootId:state.rootId,
   collapsed:[...state.collapsed],selectedNode:state.selectedNode,pinned:[...state.pinned],
   hiddenVariables:[...state.hiddenVariables],solverMode:state.solverMode,
-  optimization:state.optimization,partials:state.partials,info:state.info,depth:state.depth}}
+  optimization:state.optimization,partials:state.partials,info:state.info,
+  hierarchy:state.hierarchy,depth:state.depth}}
 function restore(s){Object.assign(state,s);state.collapsed=new Set(s.collapsed||[]);
   state.pinned=new Set(s.pinned||[]);state.hiddenVariables=new Set(s.hiddenVariables||[]);
+  state.hierarchy=s.hierarchy!==false;
   document.getElementById("search").value=state.query||"";renderAll()}
 function commit(change){change();history=history.slice(0,historyIndex+1);history.push(snapshot());
   historyIndex=history.length-1;renderAll()}
@@ -579,7 +607,14 @@ function focusSystem(id){
     applyAutomaticCollapse(id);applyPreferredScale()});
   const panel=document.getElementById("matrix-panel");panel.scrollTop=0;panel.scrollLeft=0
 }
-function renderAll(){renderTree();renderMatrix();document.getElementById("info-panel").classList.toggle("hidden",!state.info);
+function renderAll(){const layout=document.querySelector(".layout");
+  layout.classList.toggle("hierarchy-hidden",!state.hierarchy);
+  document.getElementById("hierarchy-reopen").classList.toggle("hidden",state.hierarchy);
+  renderTree();renderMatrix();document.getElementById("info-panel").classList.toggle("hidden",!state.info);
+  document.getElementById("hierarchy-collapse").setAttribute("aria-expanded",String(state.hierarchy));
+  if(matrixControls.style.left){const controlsRect=matrixControls.getBoundingClientRect();
+    moveMatrixControls(controlsRect.left,controlsRect.top)}
+  document.getElementById("info-reopen").classList.toggle("hidden",state.info);
   document.getElementById("undo-graph").disabled=historyIndex<=0;
   document.getElementById("redo-graph").disabled=historyIndex>=history.length-1;
   document.getElementById("solver-button").textContent=state.solverMode==="cycle"?"CYC":state.solverMode==="execution"?"ORD":"SOL";
@@ -589,7 +624,9 @@ function renderAll(){renderTree();renderMatrix();document.getElementById("info-p
   const focusedComponent=componentById.has(state.rootId);
   const compact=state.cell<state.font+6;
   const mode=compact?" · overview":focusedComponent?" · detail":"";
-  document.getElementById("zoom-level").textContent=`${Math.round(state.cell/34*100)}%${mode}`;
+  const zoomLevel=document.getElementById("zoom-level");
+  if(document.activeElement!==zoomLevel)zoomLevel.value=String(Math.round(state.cell/34*100));
+  document.getElementById("zoom-mode").textContent=mode.replace(" · ","");
   document.getElementById("variables-button").disabled=!selectedComponent()}
 function selectedSystem(){const id=state.selectedNode;return componentById.has(id)||treeById.get(id)?.kind==="group"?id:null}
 function selectedComponent(){
@@ -621,11 +658,41 @@ document.getElementById("font-smaller").onclick=()=>commit(()=>{
 document.getElementById("font-larger").onclick=()=>commit(()=>{state.font=Math.min(16,state.font+1);
   applyPreferredScale()});
 function zoomBy(factor){commit(()=>{
-  const scaled=factor<1?Math.floor(state.cell*factor):Math.ceil(state.cell*factor);
-  state.cell=Math.max(MIN_CELL,Math.min(MAX_CELL,scaled))
+  state.cell=Math.max(MIN_CELL,Math.min(MAX_CELL,state.cell*factor))
 })}
 document.getElementById("zoom-out").onclick=()=>zoomBy(1/1.15);
 document.getElementById("zoom-in").onclick=()=>zoomBy(1.15);
+function setZoomPercent(raw){
+  const percent=Number.parseFloat(raw);
+  if(!Number.isFinite(percent)){renderAll();return}
+  commit(()=>{state.cell=Math.max(MIN_CELL,Math.min(MAX_CELL,34*percent/100))})
+}
+const zoomInput=document.getElementById("zoom-level");
+zoomInput.onchange=()=>setZoomPercent(zoomInput.value);
+zoomInput.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();zoomInput.blur()}
+  else if(e.key==="Escape"){zoomInput.value=String(Math.round(state.cell/34*100));zoomInput.blur()}};
+const matrixControls=document.getElementById("matrix-controls"),dragHandle=document.getElementById("matrix-controls-drag");
+function moveMatrixControls(left,top){
+  const bounds=document.getElementById("matrix-panel").getBoundingClientRect();
+  const maxLeft=Math.max(bounds.left,bounds.right-matrixControls.offsetWidth);
+  const maxTop=Math.max(bounds.top,bounds.bottom-matrixControls.offsetHeight);
+  matrixControls.style.left=`${Math.max(bounds.left,Math.min(maxLeft,left))}px`;
+  matrixControls.style.top=`${Math.max(bounds.top,Math.min(maxTop,top))}px`;
+  matrixControls.style.right="auto"
+}
+dragHandle.onpointerdown=e=>{
+  if(e.button!==0)return;e.preventDefault();dragHandle.setPointerCapture(e.pointerId);
+  const start=matrixControls.getBoundingClientRect(),originX=e.clientX,originY=e.clientY;
+  const move=event=>moveMatrixControls(start.left+event.clientX-originX,start.top+event.clientY-originY);
+  const finish=()=>{dragHandle.onpointermove=null;dragHandle.onpointerup=null;dragHandle.onpointercancel=null};
+  dragHandle.onpointermove=move;dragHandle.onpointerup=finish;dragHandle.onpointercancel=finish
+};
+dragHandle.onkeydown=e=>{if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key))return;
+  e.preventDefault();const rect=matrixControls.getBoundingClientRect(),step=e.shiftKey?20:5;
+  moveMatrixControls(rect.left+(e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0),
+    rect.top+(e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0))};
+window.addEventListener("resize",()=>{if(matrixControls.style.left){const rect=matrixControls.getBoundingClientRect();
+  moveMatrixControls(rect.left,rect.top)}});
 function fittedScale(){
   const nodes=buildLayout().nodes,n=Math.max(1,nodes.length);
   const paths=nodes.map(node=>systemPath(node.kind==="aggregate"?node.id:node.component));
@@ -658,6 +725,10 @@ document.getElementById("matrix-zoom-in").onclick=()=>zoomBy(1.15);
 document.getElementById("matrix-fit").onclick=fitMatrix;
 document.getElementById("depth-button").onclick=()=>commit(()=>state.depth=(state.depth+1)%(Math.max(2,groupIds.length+1)));
 document.getElementById("info-button").onclick=()=>commit(()=>state.info=!state.info);
+document.getElementById("info-collapse").onclick=()=>commit(()=>state.info=false);
+document.getElementById("info-reopen").onclick=()=>commit(()=>state.info=true);
+document.getElementById("hierarchy-collapse").onclick=()=>commit(()=>state.hierarchy=false);
+document.getElementById("hierarchy-reopen").onclick=()=>commit(()=>state.hierarchy=true);
 function modal(title,body){const host=document.getElementById("modal-host"),bg=htmlEl("div","modal-bg"),box=htmlEl("div","modal");
   box.innerHTML=`<h2>${title}</h2>${body}`;const close=htmlEl("button","","Close");close.onclick=()=>host.replaceChildren();
   bg.onclick=e=>{if(e.target===bg)host.replaceChildren()};box.appendChild(close);bg.appendChild(box);host.replaceChildren(bg)}
