@@ -431,10 +431,21 @@ class Engine:
                 else:
                     if ".".join(dependent_split[:step_name_ind]) == step_name:
                         var_name = ".".join(dependent_split[step_name_ind:])
-                        if independent in temp_state:
-                            plugin_inputs[var_name] = temp_state[independent]
+
+                        inds=None
+                        source_name=independent
+                        if "[" in independent:
+                            source_name, inds = split_dotted_path_and_indices(
+                                                        independent
+                                                        )
+                        if source_name in temp_state:
+                            if inds is not None:
+                                plugin_inputs[var_name]=temp_state[source_name][inds]
+                            else:
+                                plugin_inputs[var_name] = temp_state[independent]
                         else:
-                            plugin_inputs[var_name] = self.study.get_value(independent)
+                            plugin_inputs[var_name]=self.study.get_value(independent)
+
             results = plugin.run_plugin(plugin_inputs, work_dir)
 
             for var_name, result in results.items():

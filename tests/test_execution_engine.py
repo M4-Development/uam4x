@@ -298,6 +298,57 @@ def test_run_single_point_returns_tracked_output(engine_setup, tmp_path):
     assert result.outputs["stage2.objective"] == pytest.approx(40.0)
 
 
+def test_run_single_point_applies_slice_to_runtime_plugin_output(tmp_path):
+    study = Study()
+    vehicle = Vehicle("exec_vehicle")
+    vehicle.add_component(ExecSubsystem("core"))
+    study.add_vehicle(vehicle)
+
+    study.solution.add_step(Stage1Plugin, "stage1")
+    study.solution.add_step(NestedVectorSinkPlugin, "vector_sink")
+    study.solution.add_link("vehicles.exec_vehicle.core.x", "stage1.x")
+    study.solution.add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
+    study.solution.add_link("vehicles.exec_vehicle.core.n", "stage1.n")
+    study.solution.add_link("stage1.arr_out[1,:]", "vector_sink.in_vec")
+    study.solution.add_tracked_output("vector_sink.scalar")
+    study.solution.sort_steps()
+
+    engine = Engine(study, work_dir=str(tmp_path / "work"))
+    plugins = study.solution.generate_plugins()
+    result = engine._run_single_point(
+        state={}, plugins=plugins, out_dir=str(tmp_path / "single")
+    )
+
+    # Stage1 adds x=2 to [[1, 2], [3, 4]], so row 1 is [5, 6].
+    assert result.outputs["vector_sink.scalar"] == pytest.approx(11.0)
+
+
+def test_run_single_point_applies_element_index_to_runtime_plugin_output(tmp_path):
+    study = Study()
+    vehicle = Vehicle("exec_vehicle")
+    vehicle.add_component(ExecSubsystem("core"))
+    study.add_vehicle(vehicle)
+
+    study.solution.add_step(Stage1Plugin, "stage1")
+    study.solution.add_step(Stage2Plugin, "stage2")
+    study.solution.add_link("vehicles.exec_vehicle.core.x", "stage1.x")
+    study.solution.add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
+    study.solution.add_link("vehicles.exec_vehicle.core.n", "stage1.n")
+    study.solution.add_link("stage1.arr_out[0,0]", "stage2.y")
+    study.solution.add_link("stage1.arr_out[0,1]", "stage2.arr_scalar")
+    study.solution.add_tracked_output("stage2.objective")
+    study.solution.sort_steps()
+
+    engine = Engine(study, work_dir=str(tmp_path / "work"))
+    plugins = study.solution.generate_plugins()
+    result = engine._run_single_point(
+        state={}, plugins=plugins, out_dir=str(tmp_path / "single")
+    )
+
+    # Stage1's first row is [3, 4]; Stage2 adds its two scalar inputs.
+    assert result.outputs["stage2.objective"] == pytest.approx(7.0)
+
+
 def test_run_state_parallel_rebuilds_study_and_runs(tmp_path):
     study = Study()
     vehicle = Vehicle("exec_vehicle")
