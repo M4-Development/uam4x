@@ -846,6 +846,11 @@ def split_dotted_path_and_indices(dotted_path):
 
     return dotted_path, inds
 
+def parse_variable_reference(name):
+    if "[" in name:
+        return split_dotted_path_and_indices(name)
+    return name,None
+
 
 def replace_none_with_empty_quotes(value):
     """Replace None values recursively with empty strings.

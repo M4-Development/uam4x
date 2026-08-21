@@ -1757,7 +1757,7 @@ class Plugin:
         """
         self.log.debug("run plugin")
 
-    def declare_partials_plugin(
+    def declare_partials(
         self,
         of: str | Sequence[str],
         wrt: str | Sequence[str],

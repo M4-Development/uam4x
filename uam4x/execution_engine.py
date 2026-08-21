@@ -13,6 +13,7 @@ from uam4x.utils import (
     is_scalar_type_or_value,
     log,
     split_dotted_path_and_indices,
+    parse_variable_reference
 )
 from uam4x.results import Result, Tradestudy
 import concurrent.futures
@@ -21,9 +22,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import shutil
 from pathlib import Path
-
+from uam4x.linking import uam4xLinkHandler,uam4xVariable
 from uam4x.n2_viewer import build_n2_data, render_n2_html
-
 
 class Engine:
     """Execute UAM4X analyses.
@@ -423,28 +423,47 @@ class Engine:
                 os.makedirs(work_dir, exist_ok=True)
             else:
                 work_dir = out_dir
+            step_prefix=step_name+'.'
             plugin_inputs = {}
-            for independent, dependent in full_links:
-                dependent_split = dependent.split(".")
-                if len(dependent_split) <= step_name_ind:
+            for independent_var_name, dependent_var_name in full_links:
+                dependent_split = dependent_var_name.split(".")
+                #this essentially avoids doing links not belonging to this step
+                if not dependent_var_name.startswith(step_prefix):
                     continue
                 else:
                     if ".".join(dependent_split[:step_name_ind]) == step_name:
-                        var_name = ".".join(dependent_split[step_name_ind:])
 
-                        inds=None
-                        source_name=independent
-                        if "[" in independent:
-                            source_name, inds = split_dotted_path_and_indices(
-                                                        independent
-                                                        )
-                        if source_name in temp_state:
-                            if inds is not None:
-                                plugin_inputs[var_name]=temp_state[source_name][inds]
-                            else:
-                                plugin_inputs[var_name] = temp_state[independent]
+                        #this is where we want to be able to handle the scalar/subarray to subarray/scalar
+                        #basically for the opposite direction, if linking into a subarray, you instantiate
+                        #it with np.zeros and query the shape from the plugin definition, then set the perscribed
+                        #indices, and thats it.
+
+                        var_name,_ = parse_variable_reference(".".join(dependent_split[step_name_ind:]))
+                        dependent_var=uam4xVariable(dependent_var_name)
+                        independent_var=uam4xVariable(independent_var_name)
+                        link_handler=uam4xLinkHandler(independent=independent_var,dependent=dependent_var)
+                        source_value=link_handler.get_source_value(state=temp_state,study=self.study)
+                        if not dependent_var.has_inds:
+                            plugin_inputs[var_name]=source_value
+
                         else:
-                            plugin_inputs[var_name]=self.study.get_value(independent)
+
+                            if var_name in plugin_inputs:
+                                solution_value=link_handler.apply_to_target(target_value=plugin_inputs[var_name],
+                                                                            source_value=source_value)
+                            else:
+                                metadata=plugin.plugin_input_names[var_name]
+                                shape=metadata["shape"]
+                                default_value=metadata["value"]
+                                if default_value is None:
+                                    target_value=np.zeros(shape=shape)
+                                elif is_scalar_type_or_value(default_value):
+                                    target_value=np.full(shape,default_value)
+                                else:
+                                    target_value=np.array(default_value,copy=True)
+                                solution_value=link_handler.apply_to_target(target_value=target_value,source_value=source_value)
+                            plugin_inputs[var_name]=solution_value
+
 
             results = plugin.run_plugin(plugin_inputs, work_dir)
 

@@ -323,7 +323,7 @@ def test_plugin_declare_array_shape_rules():
 def test_plugin_declare_partials_and_build_partials_positive():
     p = ProducerPlugin()
     p.setup_plugin({})
-    p.declare_partials_plugin(of="y", wrt="x", method="fd", step=1e-6, form="forward")
+    p.declare_partials(of="y", wrt="x", method="fd", step=1e-6, form="forward")
 
     partials = p.build_partials(["producer.x"], ["producer.y"], "producer")
     categorized = p.categorize_partials()
@@ -336,7 +336,7 @@ def test_plugin_declare_partials_and_build_partials_positive():
 def test_plugin_build_partials_rejects_unknown_names():
     p = ProducerPlugin()
     p.setup_plugin({})
-    p.declare_partials_plugin(of="y", wrt="missing", method="fd")
+    p.declare_partials(of="y", wrt="missing", method="fd")
 
     with pytest.raises(KeyError, match="declared as a partial is not an input in the Plugin"):
         p.build_partials(["producer.x"], ["producer.y"], "producer")
@@ -345,7 +345,7 @@ def test_plugin_build_partials_rejects_unknown_names():
 def test_plugin_build_partials_requires_continuous_types():
     p = IntSinkPlugin()
     p.setup_plugin({})
-    p.declare_partials_plugin(of="n_out", wrt="n_in", method="fd")
+    p.declare_partials(of="n_out", wrt="n_in", method="fd")
 
     with pytest.raises(TypeError, match="must be continuous"):
         p.build_partials(["int_sink.n_in"], ["int_sink.n_out"], "int_sink")
