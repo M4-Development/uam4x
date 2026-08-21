@@ -82,6 +82,16 @@ class MatrixSinkPlugin(Plugin):
         return {"total": float(np.sum(np.asarray(links["arr_in"])))}
 
 
+@register_plugin
+class VectorSinkPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("arr_in", np.ndarray, shape=(3,))
+        self.declare_output("total", float)
+
+    def run_plugin(self, links, work_dir):
+        return {"total": float(np.sum(np.asarray(links["arr_in"])))}
+
+
 @pytest.fixture
 def study_with_solution():
     study = Study()
@@ -121,10 +131,24 @@ def test_group_add_step_rejects_invalid_inputs():
         g.add_step(ProducerPlugin, step_name="bad[name")
 
 
-def test_group_add_link_rejects_indexed_dependent():
+def test_group_add_link_accepts_indexed_dependent():
     g = Group()
-    with pytest.raises(ValueError):
-        g.add_link("a.x", "b.y[0]")
+    g.add_link("a.x", "b.y[0]")
+
+    assert g.links == [["a.x", "b.y[0]"]]
+
+
+def test_group_get_plugin_names_strips_indices_from_both_sides():
+    g = Group()
+    g.add_link("producer.arr_out[0]", "sink.arr_in[0]")
+
+    input_names, output_names = g.get_plugin_input_and_output_names("sink")
+    assert input_names == {"sink.arr_in"}
+    assert output_names == set()
+
+    input_names, output_names = g.get_plugin_input_and_output_names("producer")
+    assert input_names == set()
+    assert output_names == {"producer.arr_out"}
 
 
 def test_group_sort_steps_topological_and_unlinked():
@@ -221,6 +245,15 @@ def test_solution_check_links_to_plugins_positive(study_with_solution):
     study.solution._check_links_to_plugins(plugins)
 
 
+def test_solution_check_links_to_plugins_accepts_indexed_input(study_with_solution):
+    study, _ = study_with_solution
+    study.solution.add_step(MatrixSinkPlugin, "sink")
+    study.solution.add_link("producer.y", "sink.arr_in[0]")
+    plugins = study.solution.generate_plugins()
+
+    study.solution._check_links_to_plugins(plugins)
+
+
 def test_solution_check_links_to_plugins_negative_missing_input(study_with_solution):
     study, plugins = study_with_solution
     study.solution.add_link("producer.y", "consumer.not_declared")
@@ -242,6 +275,15 @@ def test_solution_check_link_types_positive(study_with_solution):
     study.solution._check_link_types(plugins, study)
 
 
+def test_solution_check_link_types_allows_scalar_to_indexed_array(study_with_solution):
+    study, _ = study_with_solution
+    study.solution.add_step(MatrixSinkPlugin, "sink")
+    study.solution.add_link("producer.y", "sink.arr_in[0]")
+    plugins = study.solution.generate_plugins()
+
+    study.solution._check_link_types(plugins, study)
+
+
 def test_solution_check_link_types_negative_mismatch(study_with_solution):
     study, plugins = study_with_solution
     study.solution.add_step(IntSinkPlugin, "int_sink")
@@ -255,6 +297,14 @@ def test_solution_check_link_types_negative_mismatch(study_with_solution):
 def test_solution_check_link_types_negative_index_on_scalar(study_with_solution):
     study, plugins = study_with_solution
     study.solution.add_link("producer.y[0]", "consumer.y_in")
+
+    with pytest.raises(ValueError, match="Indexes may only be specified for arrays"):
+        study.solution._check_link_types(plugins, study)
+
+
+def test_solution_check_link_types_negative_index_on_scalar_input(study_with_solution):
+    study, plugins = study_with_solution
+    study.solution.add_link("producer.y", "consumer.y_in[0]")
 
     with pytest.raises(ValueError, match="Indexes may only be specified for arrays"):
         study.solution._check_link_types(plugins, study)
@@ -286,6 +336,100 @@ def test_solution_check_link_indices_nested_group_shape_mismatch_raises(study_wi
     plugins = study.solution.generate_plugins()
 
     with pytest.raises(ValueError, match="source indices must match the target shape"):
+        study.solution._check_link_indices(plugins, study)
+
+
+def test_solution_check_link_indices_allows_vehicle_scalar_to_array_element(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    study.solution.add_step(VectorSinkPlugin, "sink")
+    study.solution.add_link("vehicles.veh.core.x", "sink.arr_in[1]")
+    plugins = study.solution.generate_plugins()
+
+    study.solution._check_link_indices(plugins, study)
+
+
+def test_solution_check_link_indices_allows_plugin_scalar_to_array_element(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    study.solution.add_step(VectorSinkPlugin, "sink")
+    study.solution.add_link("producer.y", "sink.arr_in[1]")
+    plugins = study.solution.generate_plugins()
+
+    study.solution._check_link_indices(plugins, study)
+
+
+def test_solution_check_link_indices_allows_scalar_broadcast_to_array_slice(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    study.solution.add_step(VectorSinkPlugin, "sink")
+    study.solution.add_link("vehicles.veh.core.x", "sink.arr_in[0:2]")
+    plugins = study.solution.generate_plugins()
+
+    study.solution._check_link_indices(plugins, study)
+
+
+def test_solution_check_link_indices_allows_matching_source_and_target_slices(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    study.solution.add_step(MatrixProducerPlugin, "matrix")
+    study.solution.add_step(VectorSinkPlugin, "sink")
+    study.solution.add_link("matrix.grid[0,:]", "sink.arr_in[0:2]")
+    plugins = study.solution.generate_plugins()
+
+    study.solution._check_link_indices(plugins, study)
+
+
+def test_solution_check_link_indices_rejects_mismatched_target_slice(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    study.solution.add_step(MatrixProducerPlugin, "matrix")
+    study.solution.add_step(VectorSinkPlugin, "sink")
+    study.solution.add_link("matrix.grid[0,:]", "sink.arr_in[0]")
+    plugins = study.solution.generate_plugins()
+
+    with pytest.raises(ValueError, match="source indices must match the target shape"):
+        study.solution._check_link_indices(plugins, study)
+
+
+def test_solution_check_link_indices_rejects_array_broadcasting(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    study.solution.add_step(VectorSinkPlugin, "sink")
+    study.solution.add_link("producer.arr_out[0:1]", "sink.arr_in[0:2]")
+    plugins = study.solution.generate_plugins()
+
+    with pytest.raises(ValueError, match="source indices must match the target shape"):
+        study.solution._check_link_indices(plugins, study)
+
+
+def test_solution_check_link_indices_rejects_array_element_broadcast_to_slice(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    study.solution.add_step(VectorSinkPlugin, "sink")
+    study.solution.add_link("producer.arr_out[0]", "sink.arr_in[0:2]")
+    plugins = study.solution.generate_plugins()
+
+    with pytest.raises(ValueError, match="source indices must match the target shape"):
+        study.solution._check_link_indices(plugins, study)
+
+
+def test_solution_check_link_indices_rejects_invalid_target_index(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    study.solution.add_step(VectorSinkPlugin, "sink")
+    study.solution.add_link("vehicles.veh.core.x", "sink.arr_in[5]")
+    plugins = study.solution.generate_plugins()
+
+    with pytest.raises(ValueError, match="Invalid inds or shape"):
         study.solution._check_link_indices(plugins, study)
 
 

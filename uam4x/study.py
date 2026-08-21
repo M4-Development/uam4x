@@ -10,6 +10,7 @@ from uam4x.utils import (
     log,
     split_dotted_path_and_indices,
     replace_none_with_empty_quotes,
+    parse_variable_reference
 )
 from operator import attrgetter
 import sys
@@ -965,14 +966,7 @@ class Study:
 
         """
         self.log.debug(f"get the value of {dotted_path}")
-        inds = None
-        if "[" in dotted_path:
-            # Functionality exists that checks for brackets in: step name (plugins)
-            # vehicles names, component names, mode names, and parameter names. which [ is not allowed
-            # are all not allowed.
-            # This handles and has checks for the brackets.
-            dotted_path, inds = split_dotted_path_and_indices(dotted_path)
-
+        dotted_path,inds=parse_variable_reference(dotted_path)
         value = attrgetter(dotted_path)(self)
         if inds is not None:
             value = value[inds]
@@ -1038,9 +1032,11 @@ class Study:
 
         Notes
         -----
-        Indexed paths are not currently supported by this method.
+        A trailing array index or slice is ignored when resolving the declared
+        type of a parameter.
 
         """
+        dotted_path,_=parse_variable_reference(dotted_path)
         split_up_path = dotted_path.split(".")
 
         param = split_up_path[-1]

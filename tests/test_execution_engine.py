@@ -91,6 +91,41 @@ class NestedVectorSinkPlugin(Plugin):
         return {"scalar": float(np.sum(links["in_vec"]))}
 
 
+@register_plugin
+class ArrayAssemblySinkPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input(
+            "values",
+            np.ndarray,
+            value=np.array([10.0, 20.0, 30.0]),
+            shape=(3,),
+        )
+        self.declare_output("total", float)
+
+    def run_plugin(self, links, work_dir):
+        return {"total": float(np.sum(links["values"]))}
+
+
+@register_plugin
+class ZeroInitializedArraySinkPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("values", np.ndarray, shape=(3,))
+        self.declare_output("values_out", np.ndarray, shape=(3,))
+
+    def run_plugin(self, links, work_dir):
+        return {"values_out": links["values"]}
+
+
+@register_plugin
+class ScalarDefaultArraySinkPlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("values", np.ndarray, value=6.0, shape=(3,))
+        self.declare_output("values_out", np.ndarray, shape=(3,))
+
+    def run_plugin(self, links, work_dir):
+        return {"values_out": links["values"]}
+
+
 @pytest.fixture
 def engine_setup(tmp_path):
     study = Study()
@@ -347,6 +382,57 @@ def test_run_single_point_applies_element_index_to_runtime_plugin_output(tmp_pat
 
     # Stage1's first row is [3, 4]; Stage2 adds its two scalar inputs.
     assert result.outputs["stage2.objective"] == pytest.approx(7.0)
+
+
+def test_run_single_point_assembles_scalar_links_into_array_input(tmp_path):
+    study = Study()
+    vehicle = Vehicle("exec_vehicle")
+    vehicle.add_component(ExecSubsystem("core"))
+    study.add_vehicle(vehicle)
+
+    study.solution.add_step(ArrayAssemblySinkPlugin, "sink")
+    study.solution.add_link("vehicles.exec_vehicle.core.x", "sink.values[0]")
+    study.solution.add_link("vehicles.exec_vehicle.core.x", "sink.values[2]")
+    study.solution.add_tracked_output("sink.total")
+    study.solution.sort_steps()
+
+    engine = Engine(study, work_dir=str(tmp_path / "work"))
+    plugins = study.solution.generate_plugins()
+    result = engine._run_single_point(
+        state={}, plugins=plugins, out_dir=str(tmp_path / "single")
+    )
+
+    # The declared default [10, 20, 30] becomes [2, 20, 2].
+    assert result.outputs["sink.total"] == pytest.approx(24.0)
+
+
+@pytest.mark.parametrize(
+    "plugin_class, expected",
+    [
+        (ZeroInitializedArraySinkPlugin, np.array([0.0, 2.0, 0.0])),
+        (ScalarDefaultArraySinkPlugin, np.array([6.0, 2.0, 6.0])),
+    ],
+)
+def test_run_single_point_initializes_partially_linked_array_input(
+    tmp_path, plugin_class, expected
+):
+    study = Study()
+    vehicle = Vehicle("exec_vehicle")
+    vehicle.add_component(ExecSubsystem("core"))
+    study.add_vehicle(vehicle)
+
+    study.solution.add_step(plugin_class, "sink")
+    study.solution.add_link("vehicles.exec_vehicle.core.x", "sink.values[1]")
+    study.solution.add_tracked_output("sink.values_out")
+    study.solution.sort_steps()
+
+    engine = Engine(study, work_dir=str(tmp_path / "work"))
+    plugins = study.solution.generate_plugins()
+    result = engine._run_single_point(
+        state={}, plugins=plugins, out_dir=str(tmp_path / "single")
+    )
+
+    np.testing.assert_array_equal(result.outputs["sink.values_out"], expected)
 
 
 def test_run_state_parallel_rebuilds_study_and_runs(tmp_path):

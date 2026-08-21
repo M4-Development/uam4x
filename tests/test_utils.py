@@ -553,6 +553,21 @@ def test_handle_brackets_positive(dotted_path, expected_path, expected_inds):
     assert path == expected_path
     assert inds == expected_inds
 
+
+@pytest.mark.parametrize(
+    "reference, expected_name, expected_indices",
+    [
+        ("component.value", "component.value", None),
+        ("component.array[2]", "component.array", 2),
+        ("component.array[1:3]", "component.array", (slice(1, 3, None),)),
+    ],
+)
+def test_parse_variable_reference(reference, expected_name, expected_indices):
+    name, indices = parse_variable_reference(reference)
+
+    assert name == expected_name
+    assert indices == expected_indices
+
 @pytest.mark.parametrize(
     "value, expected, check_idempotence",
     [

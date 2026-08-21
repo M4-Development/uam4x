@@ -85,6 +85,7 @@ def test_study_get_param_type_valid_and_invalid_path(demo_study):
 
     assert s.get_param_type("vehicles.demo_vehicle.wing.span") is float
     assert s.get_param_type("vehicles.demo_vehicle.wing.count") is int
+    assert s.get_param_type("vehicles.demo_vehicle.wing.vec[1]") is np.ndarray
 
     with pytest.raises(ValueError, match="Invalid vehicle parameter"):
         s.get_param_type("vehicles.demo_vehicle.wing")

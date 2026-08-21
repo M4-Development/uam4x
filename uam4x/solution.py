@@ -13,6 +13,7 @@ from uam4x.utils import (
     registry_writes_enabled,
     is_continuous_type_or_value,
     split_dotted_path_and_indices,
+    parse_variable_reference
 )
 from collections.abc import Sequence
 from numbers import Real
@@ -23,7 +24,7 @@ import numpy as np
 import inspect
 import hashlib
 import copy
-
+from uam4x.linking import uam4xVariable,uam4xLinkHandler
 _plugin_registry = {}
 
 
@@ -122,12 +123,6 @@ class Group:
         self.log.debug(
             f"add link. independent link: {independent}, dependent link: {dependent}"
         )
-        # need slicing here dependent cannot
-        if "[" in dependent:
-            raise ValueError(
-                rf"Only independent variables can have indices specified. The independent variable {dependent}\n"
-                rf"has slices indices specified."
-            )
         link = [independent, dependent]
         if link not in self.links:
             self.links.append(link)
@@ -689,7 +684,7 @@ class Group:
                 )
                 # check coherance of declared I/O from plugin and from branching script
                 for input_name in input_names:
-                    name = ".".join(input_name.split(".")[1:])
+                    name,_ = parse_variable_reference(".".join(input_name.split(".")[1:]))
                     if name not in plugins[step_name].plugin_input_names:
                         self.log.error(
                             f'The input {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
@@ -700,11 +695,7 @@ class Group:
                             f"Check your plugin's setup() step for I/O declaration"
                         )
                 for output_name in output_names:
-                    name = ".".join(output_name.split(".")[1:])
-                    if "[" in name:
-                        # any time where indexes are specified in the link, this is required to be
-                        # an index specification, nothing to do with the variable name.
-                        name, _ = split_dotted_path_and_indices(name)
+                    name,_ = parse_variable_reference(".".join(output_name.split(".")[1:]))
                     if name not in plugins[step_name].plugin_output_names:
                         self.log.error(
                             f'The output {name} was not declared in the plugin: {step_name.split(".")[0]}\n'
@@ -744,9 +735,8 @@ class Group:
         input_names = []
         output_names = []
         for independent, dependent in self.links:
-            # remove indices from index based links
-            if "[" in independent:
-                independent, _ = split_dotted_path_and_indices(independent)
+            independent,_=parse_variable_reference(independent)
+            dependent,_=parse_variable_reference(dependent)
             if dependent.split(".")[0] == step_name:
                 input_names.append(dependent)
             if independent.split(".")[0] == step_name:
@@ -1256,8 +1246,8 @@ class Solution(Group):
         output_names = []
         for independent, dependent in self.links:
             # remove indices from index based links
-            if "[" in independent:
-                independent, _ = split_dotted_path_and_indices(independent)
+            independent,_=parse_variable_reference(independent)
+            dependent,_=parse_variable_reference(dependent)
             if dependent.split(".")[0] == step_name:
                 input_names.append(dependent)
             if independent.split(".")[0] == step_name:
@@ -1399,31 +1389,38 @@ class Solution(Group):
             else:
                 split_name = split_name[1:]
                 local_plugins = self.recurse_plugin_dict(split_name, plugins)
-            for output_link, input_link in group.links:
-                indexes_specified = False
+            for output_link_name, input_link_name in group.links:
+                output_link=uam4xVariable(output_link_name)
+                input_link=uam4xVariable(input_link_name)
 
-                if "[" in output_link:
-                    output_link, _ = split_dotted_path_and_indices(output_link)
-                    indexes_specified = True
-                if output_link.split(".")[0] == "vehicles":
-                    output_type = study.get_param_type(output_link)
+                if output_link_name.split(".")[0] == "vehicles":
+                    output_type = study.get_param_type(output_link_name)
                 else:
-                    output_type = self.get_var_type(output_link, local_plugins)
+                    output_type = self.get_var_type(output_link.cleaned_name, local_plugins)
 
-                input_type = self.get_var_type(input_link, local_plugins)
-                if indexes_specified and output_type != np.ndarray:
+                input_type = self.get_var_type(input_link.cleaned_name, local_plugins)
+
+                if ((output_link.has_inds and output_type != np.ndarray) or
+                    (input_link.has_inds and input_type!=np.ndarray)):
                     raise ValueError(
-                        f"Indexes may only be specified for arrays. The link: {input_link} is not valid"
+                        f"Indexes may only be specified for arrays. The link: {input_link_name} is not valid"
                     )
-                if (
-                    indexes_specified
+                #1.) allow for arrays to connect to floats e.g link[0]-->float
+                # 2.) allow for floats to connect to np.ndarrays e.g float-->link[5:9]
+                if ((
+                    output_link.has_inds
                     and output_type == np.ndarray
                     and is_continuous_type_or_value(input_type)
                     and input_type != np.ndarray
-                ):
+                ) or
+                (
+                    input_link.has_inds
+                    and input_type==np.ndarray
+                    and is_continuous_type_or_value(output_type)
+                    and output_type!= np.ndarray)):
                     pass
                 elif output_type != input_type:
-                    bad_links.append((output_link, output_type, input_link, input_type))
+                    bad_links.append((output_link_name, output_type, input_link_name, input_type))
 
         if bad_links:
             msg = (
@@ -1601,68 +1598,89 @@ class Solution(Group):
             else:
                 split_name = split_name[1:]
                 local_plugins = self.recurse_plugin_dict(split_name, plugins)
-            for output_link, input_link in group.links:
-                indexes_specified = False
-
-                if "[" in output_link:
-                    cleaned_output_name, inds = split_dotted_path_and_indices(
-                        output_link
-                    )
-                    if output_link.split(".")[0] == "vehicles":
-                        try:
-                            a = study.get_value(output_link)
-                            src_shape = a.shape
-                        except:
-                            raise ValueError(
-                                f"The indices in {output_link} provided are not a valid means to index\n"
-                            )
-                    else:
-                        a = self.get_var_value(cleaned_output_name, local_plugins)
-                        a_shape = self.get_var_shape(cleaned_output_name, local_plugins)
-                        if a is not None:
+            for output_link_name, input_link_name in group.links:
+                input_link=uam4xVariable(input_link_name)
+                output_link=uam4xVariable(output_link_name)
+                if output_link.has_inds or input_link.has_inds:
+                    #get all data for the input and output vars
+                    if output_link.has_inds:
+                        if output_link_name.split(".")[0] == "vehicles":
                             try:
-                                a[inds]
-                                src_shape = a[inds].shape
+                                a = study.get_value(output_link_name)
+                                src_shape = a.shape
+                                a_type=type(a)
                             except:
                                 raise ValueError(
-                                    f"Invalid indices or array. Array: {a} and inds: {inds}"
-                                )
-                        elif a_shape is not None:
-                            try:
-                                src_shape = np.ones(shape=a_shape)[inds].shape
-                            except:
-                                raise ValueError(
-                                    f"Invalid inds or shape: shape: {a_shape}, inds:{inds}"
+                                    f"The indices in {output_link_name} provided are not a valid means to index\n"
                                 )
                         else:
-                            # Note, this should already be caught for arrays in plugin declaration
+                            _,src_shape=self.check_array_basic(output_link,local_plugins=local_plugins)
+                            a_type=self.get_var_shape(output_link.cleaned_name,local_plugins)
+                    else:
+                        if output_link_name.split(".")[0]=="vehicles":
+                            a=study.get_value(output_link_name)
+                            if study.get_param_type(output_link_name)==np.ndarray:
+                                src_shape=a.shape
+                                a_type=type(a)
+                            else:
+                                #float case
+                                src_shape=()
+                                a_type=type(a)
+                        else:
+                            a=self.get_var_value(output_link.cleaned_name,local_plugins)
+                            src_shape=self.get_var_shape(output_link.cleaned_name,local_plugins)
+                            a_type=self.get_var_type(output_link.cleaned_name,local_plugins)
+                            if a_type == float:
+                                src_shape=()
+
+                    b_type = self.get_var_type(input_link.cleaned_name, local_plugins)
+                    if input_link.has_inds:
+                        b,b_shape=self.check_array_basic(input_link,local_plugins=local_plugins)
+                    else:
+                        b = self.get_var_value(input_link.cleaned_name, local_plugins)
+                        b_shape = self.get_var_shape(input_link.cleaned_name, local_plugins)
+
+
+                    if src_shape==() and b_type==float:
+                        continue
+
+                    elif (b_shape==() or input_link.has_inds) and a_type==float:
+                        continue
+
+                    else:
+                        if b_shape!=src_shape:
                             raise ValueError(
-                                "Developer: Check error catching capaibilities in plugin declaration"
+                            f"The source indices must match the target shape. The input {output_link_name} with indices.\n"
+                            f"The size of the source indices is {src_shape} and the destination has shape {b_shape}"
                             )
 
-                    b = self.get_var_value(input_link, local_plugins)
-                    b_shape = self.get_var_shape(input_link, local_plugins)
-                    b_type = self.get_var_type(input_link, local_plugins)
 
-                    src_size = 1 if src_shape == () else int(np.prod(src_shape))
-                    # float case
-                    if src_size == 1 and b_type == float:
-                        pass
-                    elif b is not None:
-                        if src_shape != b.shape:
-                            raise ValueError(
-                                f"The source indices must match the target shape. The input {output_link} with indices.\n"
-                                f"The size of the source indices is {src_shape} and the destination has shape {b.shape}"
-                            )
+    def check_array_basic(self,var,local_plugins):
+        a = self.get_var_value(var.cleaned_name, local_plugins)
+        a_shape = self.get_var_shape(var.cleaned_name, local_plugins)
+        indexed_val=None
+        if a is not None:
+            try:
+                indexed_val=a[var.inds]
+                array_shape = a[var.inds].shape
+            except:
+                raise ValueError(
+                    f"Invalid indices or array. Array: {a} and inds: {var.inds}"
+                )
+        elif a_shape is not None:
+            try:
+                array_shape = np.ones(shape=a_shape)[var.inds].shape
+            except:
+                raise ValueError(
+                    f"Invalid inds or shape: shape: {a_shape}, inds:{var.inds}"
+                )
+        else:
+            # Note, this should already be caught for arrays in plugin declaration
+            raise ValueError(
+                "Developer: Check error catching capabilities in plugin declaration"
+            )
 
-                    elif b_shape is not None:
-                        if src_shape != b_shape:
-                            raise ValueError(
-                                f"The source indices must match the target shape. The input {output_link} with indices.\n"
-                                f"The size of the source indices is {src_shape} and the destination has shape {b_shape}"
-                            )
-
-
+        return indexed_val,array_shape
 class Plugin:
     """Represent the base class for executable solution plugins.
 
