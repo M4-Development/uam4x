@@ -10,18 +10,20 @@ from uam4x.utils import (
     is_scalar_type_or_value,
     split_dotted_path_and_indices,
     is_numpy_array,
+    parse_variable_reference
 )
 from uam4x.log import get_log
 from uam4x.utils import log
-from uam4x.results import Results, Result
+from uam4x.results import Result
 from uam4x.solution import Group
+from uam4x.linking import uam4xLinkHandler,uam4xVariable
 
-driver_name_to_driver = {
+DRIVER_NAME_TO_DRIVER = {
     "pyOptSparseDriver": om.pyOptSparseDriver,
     "ScipyOptimizeDriver": om.ScipyOptimizeDriver,
 }
 
-cycle_solver_name_to_solver = {"NonlinearBlockGS": om.NonlinearBlockGS}
+CYCLE_SOLVER_NAME_TO_SOLVER = {"NonlinearBlockGS": om.NonlinearBlockGS}
 
 
 class Optimization:
@@ -165,17 +167,23 @@ class Optimization:
                     group.options["sub_plugins"] = None
 
         # Add connections
-        for independent, dependent in self.study.solution.links:
 
-            # parse slices where applicable here:
-            inds = None
-            if "[" in independent:
-                independent, inds = split_dotted_path_and_indices(independent)
-            problem.model.connect(
-                independent.replace(".", "~"),
-                dependent.replace(".", "~"),
-                src_indices=inds,
-            )
+        #general idea:
+            #1.) when the output array has indices in a link, you need to
+            #create a component, the values themselves link to a version of themselves
+            #and then are transformed via the component into the entire array
+        links=self.study.solution.links
+        dependent_ind_names_to_sources, dependent_ind_names_to_data=organize_links(links=links,
+                      vehicle_val_dict=vehicle_val_dict,
+                      uamgroup=self.study.solution,
+                      group_name='',
+                      plugins=self.plugins,
+                      mdao_group=problem.model
+                      )
+        if dependent_ind_names_to_sources:
+            connect_indexed_variables(dependent_ind_names_to_sources=dependent_ind_names_to_sources,
+                                      dependent_ind_names_to_data=dependent_ind_names_to_data,
+                                      mdao_group=problem.model)
 
         # add desvars
         for name, data in self.state["des_vars"].items():
@@ -231,7 +239,7 @@ class Optimization:
         # add objectives
         problem.model.add_objective(self.state["objective_name"].replace(".", "~"))
         driver_name = self.state["driver"]
-        driver_cls = driver_name_to_driver[driver_name]
+        driver_cls = DRIVER_NAME_TO_DRIVER[driver_name]
         problem.driver = driver_cls()
 
         for name, value in self.state["driver_options"].items():
@@ -240,6 +248,7 @@ class Optimization:
             for name, value in self.state["optimizer_options"].items():
                 problem.driver.opt_settings[name] = value
 
+        problem.model.options["auto_order"]=True
         problem.setup()
         problem.run_driver()
 
@@ -277,13 +286,104 @@ class Optimization:
                 # strings might be treated differently
                 if not var_type is np.ndarray:
                     if is_numpy_array(value) and is_scalar_type_or_value(var_type):
-                        value = value[0]
+                        value = np.asarray(value).item()
                     else:
                         value = var_type(value)
 
                 result._add_result(tracked_output, value)
 
         return result
+
+def qualify_name(name,group_name):
+    if name.startswith('vehicles.'):
+        return name.replace(".","~")
+    if group_name:
+        return f"{group_name}.{name}".replace('.','~')
+    return name.replace(".","~")
+
+def organize_links(links, vehicle_val_dict, uamgroup,group_name,plugins,mdao_group):
+    dependent_ind_names_to_sources={}
+    dependent_ind_names_to_data={}
+    for independent_name, dependent_name in links:
+        independent=uam4xVariable(independent_name)
+        dependent=uam4xVariable(dependent_name)
+        dependent_cleaned_name=qualify_name(dependent.cleaned_name,group_name=group_name)
+        independent_cleaned_name=qualify_name(independent.cleaned_name,group_name=group_name)
+        if dependent.has_inds:
+            #must be array since indexed
+            dependent_data=uamgroup.get_var_data(
+                dependent.cleaned_name,plugins
+                )
+
+            if independent.cleaned_name.startswith('vehicles.'):
+                val=vehicle_val_dict[independent.cleaned_name]
+                independent_data={'shape':np.shape(val),'value':val}
+
+            else:
+                temp_data=uamgroup.get_var_data(
+                    independent.cleaned_name,plugins
+                )
+                if temp_data['type']==np.ndarray:
+                    independent_data={'shape':temp_data['shape'],'value':temp_data['value']}
+                else:
+                    independent_data={'value':temp_data['value'],'shape':np.shape(temp_data['value'])}
+
+            if dependent_cleaned_name not in dependent_ind_names_to_data:
+                dependent_ind_names_to_data[dependent_cleaned_name]={
+                    'shape':dependent_data['shape'],
+                    'value':dependent_data['value']
+                }
+                dependent_ind_names_to_sources[dependent_cleaned_name]={
+                    independent_cleaned_name:{
+                        'src_inds':[independent.inds],
+                        'target_inds':[dependent.inds],
+                        'src_shape':independent_data['shape'],
+                        'src_value':independent_data['value']
+                                              }
+                }
+            else:
+                dep_data=dependent_ind_names_to_sources[dependent_cleaned_name]
+                if independent_cleaned_name not in dep_data:
+                    dep_data[independent_cleaned_name]={
+                            'src_inds':[independent.inds],
+                            'target_inds':[dependent.inds],
+                            'src_shape':independent_data['shape'],
+                            'src_value':independent_data['value']
+                                                  }
+                else:
+                    indep_data=dep_data[independent_cleaned_name]
+                    indep_data['src_inds'].append(independent.inds)
+                    indep_data['target_inds'].append(dependent.inds)
+        else:
+            mdao_group.connect(
+                            independent_cleaned_name,
+                            dependent_cleaned_name,
+                            src_indices=independent.inds
+                        )
+
+    return dependent_ind_names_to_sources,dependent_ind_names_to_data
+
+def connect_indexed_variables(dependent_ind_names_to_sources,
+                              dependent_ind_names_to_data,mdao_group):
+    for dependent_name,input_data in dependent_ind_names_to_sources.items():
+                    step_name=dependent_name.replace('.','_').replace('~','_')+'_'+'array_helper'
+                    # create component
+                    array_helper=mdao_group.add_subsystem(step_name,ArrayAdapter(),promotes=['*'])
+                    #set options
+                    array_helper.options["output_data"]=dependent_ind_names_to_data[dependent_name]
+                    array_helper.options["input_data"]=input_data
+                    array_helper.options["step_name"]=step_name
+                    mdao_dependent_name=dependent_name.replace('.','~')
+                    array_helper.options["output_name"]=step_name+'~'+mdao_dependent_name
+                    #create connections
+                    for input_name in input_data.keys():
+                        clean_input_name,inds=parse_variable_reference(input_name)
+                        mdao_input_name=clean_input_name.replace('.','~')
+                        mdao_group.connect(mdao_input_name,
+                                              step_name+'~'+mdao_input_name,src_indices=inds)
+
+                    mdao_group.connect(step_name+'~'+mdao_dependent_name,
+                                        mdao_dependent_name)
 
 
 class OpenmdaoPreComp(om.IndepVarComp):
@@ -433,7 +533,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             var_type = self.plugin.plugin_input_names[var_name]["type"]
             if not self.plugin.plugin_input_names[var_name]["type"] is np.ndarray:
                 if is_numpy_array(value) and is_scalar_type_or_value(var_type):
-                    value = value[0]
+                    value = np.asarray(value).item()
                 else:
                     value = self.plugin.plugin_input_names[var_name]["type"](value)
             self.plugin_dict[var_name] = value
@@ -502,10 +602,10 @@ class UniversalOpenMDAOGroup(om.Group):
 
         """
         group_name = self.options["step_name"]
-        group = self.options["group"]
+        uamgroup = self.options["group"]
         sub_plugs = self.options["sub_plugins"]
         work_dir = self.options["work_dir"]
-        for step_name, data in group._execution_steps.items():
+        for step_name, data in uamgroup._execution_steps.items():
             if isinstance(data, dict):
                 input_names = set(
                     [
@@ -534,36 +634,93 @@ class UniversalOpenMDAOGroup(om.Group):
                 os.makedirs(work_dir)
                 comp.options["step_name"] = group_name + "." + step_name
             elif isinstance(data, Group):
-                group = self.add_subsystem(
+                nested_om_group = self.add_subsystem(
                     step_name, UniversalOpenMDAOGroup(), promotes=["*"]
                 )
-                group.options["group"] = data
-                group.options["step_name"] = group_name + "." + step_name
-                group.options["work_dir"] = work_dir
-                group.options["links"] = data.links
+                nested_om_group.options["group"] = data
+                nested_om_group.options["step_name"] = group_name + "." + step_name
+                nested_om_group.options["work_dir"] = work_dir
+                nested_om_group.options["links"] = data.links
                 if isinstance(sub_plugs[step_name], dict):
-                    group.options["sub_plugins"] = sub_plugs[step_name]
+                    nested_om_group.options["sub_plugins"] = sub_plugs[step_name]
                 else:
-                    group.options["sub_plugins"] = None
+                    nested_om_group.options["sub_plugins"] = None
 
-        for independent, dependent in self.options["links"]:
+        dependent_ind_names_to_sources,dependent_ind_names_to_data=organize_links(links=self.options['links'],
+                      vehicle_val_dict={},
+                      uamgroup=uamgroup,
+                      plugins=sub_plugs,
+                      mdao_group=self,
+                      group_name=group_name
+                      )
+        if dependent_ind_names_to_sources:
+                connect_indexed_variables(dependent_ind_names_to_sources=dependent_ind_names_to_sources,
+                                          dependent_ind_names_to_data=dependent_ind_names_to_data,
+                                          mdao_group=self)
 
-            # parse slices where applicable here:
-            inds = None
-            if "[" in independent:
-                independent, inds = split_dotted_path_and_indices(independent)
-            independent = group_name + "." + independent
-            dependent = group_name + "." + dependent
-            self.connect(
-                independent.replace(".", "~"),
-                dependent.replace(".", "~"),
-                src_indices=inds,
-            )
-        if group._is_cycle:
-            self.nonlinear_solver = cycle_solver_name_to_solver[group.cycle_solver]()
-        approx_totals_dict = group._approx_totals
+        if uamgroup._is_cycle:
+            self.nonlinear_solver = CYCLE_SOLVER_NAME_TO_SOLVER[uamgroup.cycle_solver]()
+
+        approx_totals_dict = uamgroup._approx_totals
         if approx_totals_dict["compute"]:
             method = approx_totals_dict["method"]
             form = approx_totals_dict["form"]
             step = approx_totals_dict["step"]
             self.approx_totals(method=method, form=form, step=step)
+
+        self.options["auto_order"]=True
+
+
+class ArrayAdapter(om.ExplicitComponent):
+
+    #you essentially need to know all of the variables connecting
+    # into a particular array at the outset, you need to collect them all
+    # then declare them as inputs to that particular output then you just assign
+    def initialize(self):
+        self.options.declare("output_data")
+        self.options.declare("input_data")
+        self.options.declare("step_name")
+        self.options.declare("output_name")
+
+    def setup(self):
+        step_name=self.options["step_name"]
+        for input_name,data in self.options["input_data"].items():
+            if data['src_value'] is None:
+                self.add_input(step_name+'~'+input_name.replace('.','~'),val=np.zeros(data['src_shape']),shape=data['src_shape'])
+            else:
+                self.add_input(step_name+'~'+input_name.replace('.','~'),val=data['src_value'],shape=data['src_shape'])
+
+        output_data=self.options["output_data"]
+        output_name=self.options["output_name"]
+        #todo: add analytical sparse matrix partials
+        self.add_output(output_name,val=output_data["value"],shape=output_data["shape"])
+
+        self.declare_partials('*','*',method='fd')
+    def compute(self,inputs,outputs,discrete_inputs={},discrete_outputs={}):
+        step_name=self.options["step_name"]
+        output_name=self.options["output_name"]
+        shape = self.options["output_data"]["shape"]
+        value = self.options["output_data"]["value"]
+
+        if value is None:
+            output_val = np.zeros(shape)
+        elif np.shape(value) == ():
+            output_val = np.full(shape, value)
+        else:
+            output_val = np.array(value, copy=True)
+
+        input_data=self.options["input_data"]
+        for input_name,data in input_data.items():
+            mdao_input_name=step_name+'~'+input_name.replace('.','~')
+            for src_ind,target_ind in zip(data['src_inds'],data['target_inds']):
+                if src_ind is not None:
+                    output_val[target_ind]=inputs[mdao_input_name][src_ind]
+                else:
+                    output_val[target_ind]=inputs[mdao_input_name]
+
+        outputs[output_name]=output_val
+
+    #def compute_partials(self,inputs,partials,discrete_inputs={}):
+    #    for input_name in self.options["input_data"]:
+    #        mdao_input_name=self.options["step_name"]+'~'+input_name.replace('.','~')
+    #        partials[self.options["output_name"],mdao_input_name]=np.eye(self.options['output_data']['shape'])

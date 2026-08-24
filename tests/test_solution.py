@@ -275,6 +275,44 @@ def test_solution_check_link_types_positive(study_with_solution):
     study.solution._check_link_types(plugins, study)
 
 
+def test_solution_check_link_types_rejects_vehicle_link_declared_in_group():
+    study = Study()
+    vehicle = Vehicle("veh")
+    vehicle.add_component(CoreSubsystem("core"))
+    study.add_vehicle(vehicle)
+
+    nested = Group()
+    nested.add_step(ProducerPlugin, "producer")
+    nested.add_link("vehicles.veh.core.x", "producer.x")
+    study.solution.add_step(nested, "nested")
+
+    study.solution.sort_steps()
+    plugins = study.solution.generate_plugins()
+
+    with pytest.raises(
+        ValueError,
+        match="Vehicle links inside groups are not supported",
+    ):
+        study.solution._check_link_types(plugins, study)
+
+
+def test_solution_check_link_types_allows_top_level_vehicle_link_to_group():
+    study = Study()
+    vehicle = Vehicle("veh")
+    vehicle.add_component(CoreSubsystem("core"))
+    study.add_vehicle(vehicle)
+
+    nested = Group()
+    nested.add_step(ProducerPlugin, "producer")
+    study.solution.add_step(nested, "nested")
+    study.solution.add_link("vehicles.veh.core.x", "nested.producer.x")
+
+    study.solution.sort_steps()
+    plugins = study.solution.generate_plugins()
+
+    study.solution._check_link_types(plugins, study)
+
+
 def test_solution_check_link_types_allows_scalar_to_indexed_array(study_with_solution):
     study, _ = study_with_solution
     study.solution.add_step(MatrixSinkPlugin, "sink")
@@ -429,7 +467,7 @@ def test_solution_check_link_indices_rejects_invalid_target_index(
     study.solution.add_link("vehicles.veh.core.x", "sink.arr_in[5]")
     plugins = study.solution.generate_plugins()
 
-    with pytest.raises(ValueError, match="Invalid inds or shape"):
+    with pytest.raises(ValueError, match="Invalid indices or array"):
         study.solution._check_link_indices(plugins, study)
 
 
@@ -462,6 +500,40 @@ def test_plugin_declare_array_shape_rules():
 
     with pytest.raises(ValueError, match="must have either the shape or value defined"):
         p.declare_output("x", np.ndarray)
+
+
+def test_plugin_declare_io_sets_supported_scalar_defaults():
+    p = Plugin()
+
+    p.declare_input("float_input", float)
+    p.declare_input("int_input", int)
+    p.declare_output("bool_output", bool)
+    p.declare_output("str_output", str)
+
+    assert p.plugin_input_names["float_input"]["value"] == 0.0
+    assert p.plugin_input_names["int_input"]["value"] == 0
+    assert p.plugin_output_names["bool_output"]["value"] is False
+    assert p.plugin_output_names["str_output"]["value"] == ""
+    assert p.plugin_input_names["float_input"]["shape"] is None
+
+
+def test_plugin_declare_array_defaults_and_shape_inference():
+    p = Plugin()
+    explicit_value = np.array([3.0, 4.0])
+
+    p.declare_input("zeros", np.ndarray, shape=(2, 3))
+    p.declare_output("explicit", np.ndarray, value=explicit_value, shape=(2,))
+    p.declare_output("inferred", np.ndarray, value=np.ones((3, 1)))
+
+    zeros = p.plugin_input_names["zeros"]
+    explicit = p.plugin_output_names["explicit"]
+    inferred = p.plugin_output_names["inferred"]
+
+    assert zeros["shape"] == (2, 3)
+    np.testing.assert_array_equal(zeros["value"], np.zeros((2, 3)))
+    assert explicit["value"] is explicit_value
+    assert explicit["shape"] == (2,)
+    assert inferred["shape"] == (3, 1)
 
 
 def test_plugin_declare_partials_and_build_partials_positive():

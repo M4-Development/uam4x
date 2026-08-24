@@ -11,7 +11,7 @@ import uam4x.openmdao_optimization as omo
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Subsystem, register_subsystem
-from uam4x.solution import Plugin, register_plugin
+from uam4x.solution import Group, Plugin, register_plugin
 
 
 @register_subsystem
@@ -32,6 +32,27 @@ class OMOPlugin(Plugin):
         return {"y": x + 1.0, "y_arr": np.array([x, x + 2.0])}
 
 
+@register_plugin
+class OMOArrayProducer(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_output("values", np.ndarray, value=np.array([3.0, 4.0]))
+
+    def run_plugin(self, links, work_dir):
+        return {"values": np.array([3.0, 4.0])}
+
+
+@register_plugin
+class OMOArraySink(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input(
+            "values", np.ndarray, value=np.array([10.0, 20.0, 30.0])
+        )
+        self.declare_output("total", float)
+
+    def run_plugin(self, links, work_dir):
+        return {"total": float(np.sum(links["values"]))}
+
+
 class _FakeComp:
     def __init__(self):
         self.options = {}
@@ -46,6 +67,7 @@ class _FakeDriver:
 
 class _FakeModel:
     def __init__(self):
+        self.options = {}
         self.subsystems = {}
         self.connections = []
         self.design_vars = []
@@ -131,7 +153,7 @@ def test_run_problem_builds_model_and_collects_outputs(monkeypatch, tmp_path):
     }
 
     monkeypatch.setattr(omo.om, "Problem", _FakeProblem)
-    monkeypatch.setitem(omo.driver_name_to_driver, "ScipyOptimizeDriver", _FakeDriver)
+    monkeypatch.setitem(omo.DRIVER_NAME_TO_DRIVER, "ScipyOptimizeDriver", _FakeDriver)
     monkeypatch.setattr(omo, "OpenmdaoPreComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenmdaoComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenMDAOGroup", _FakeComp)
@@ -155,7 +177,7 @@ def test_run_problem_handles_indexed_tracked_output_and_failed_driver(monkeypatc
     }
 
     monkeypatch.setattr(omo.om, "Problem", _FakeProblem)
-    monkeypatch.setitem(omo.driver_name_to_driver, "ScipyOptimizeDriver", _FakeDriver)
+    monkeypatch.setitem(omo.DRIVER_NAME_TO_DRIVER, "ScipyOptimizeDriver", _FakeDriver)
     monkeypatch.setattr(omo, "OpenmdaoPreComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenmdaoComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenMDAOGroup", _FakeComp)
@@ -171,7 +193,7 @@ def test_run_problem_returns_openmdao_problem_for_partial_checks(monkeypatch, tm
     study, state, plugins, out_dir = _build_study_and_state(tmp_path, ["analysis.y"])
 
     monkeypatch.setattr(omo.om, "Problem", _FakeProblem)
-    monkeypatch.setitem(omo.driver_name_to_driver, "ScipyOptimizeDriver", _FakeDriver)
+    monkeypatch.setitem(omo.DRIVER_NAME_TO_DRIVER, "ScipyOptimizeDriver", _FakeDriver)
     monkeypatch.setattr(omo, "OpenmdaoPreComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenmdaoComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenMDAOGroup", _FakeComp)
@@ -181,3 +203,41 @@ def test_run_problem_returns_openmdao_problem_for_partial_checks(monkeypatch, tm
 
     assert isinstance(problem, _FakeProblem)
     assert problem.driver is not None
+
+
+@pytest.mark.parametrize(
+    ("name", "group_name", "expected"),
+    [
+        ("vehicles.v.core.x", "array_group", "vehicles~v~core~x"),
+        ("producer.values", "array_group", "array_group~producer~values"),
+        ("producer.values", "", "producer~values"),
+    ],
+)
+def test_qualify_name(name, group_name, expected):
+    assert omo.qualify_name(name, group_name) == expected
+
+
+def test_openmdao_group_assembles_indexed_destination(tmp_path):
+    group = Group()
+    group.add_step(OMOArrayProducer, "producer")
+    group.add_step(OMOArraySink, "sink")
+    group.add_link("producer.values[0]", "sink.values[1]")
+    group.add_link("producer.values[1]", "sink.values[2]")
+    group.sort_steps()
+
+    plugins = group.generate_plugins()
+    problem = omo.om.Problem()
+    om_group = problem.model.add_subsystem(
+        "array_group", omo.UniversalOpenMDAOGroup(), promotes=["*"]
+    )
+    om_group.options["group"] = group
+    om_group.options["step_name"] = "array_group"
+    om_group.options["sub_plugins"] = plugins
+    om_group.options["work_dir"] = str(tmp_path / "group_work")
+    om_group.options["links"] = group.links
+
+    problem.model.options["auto_order"] = True
+    problem.setup()
+    problem.run_model()
+
+    assert problem.get_val("array_group~sink~total").item() == pytest.approx(17.0)

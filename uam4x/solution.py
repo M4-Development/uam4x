@@ -27,6 +27,12 @@ import copy
 from uam4x.linking import uam4xVariable,uam4xLinkHandler
 _plugin_registry = {}
 
+TYPE_TO_DEFAULT_VALUE={
+    float:0.0,
+    int:0,
+    bool:False,
+    str:''
+}
 
 class Group:
     """Represent a solution group containing steps, links, and subgroups.
@@ -1390,6 +1396,17 @@ class Solution(Group):
                 split_name = split_name[1:]
                 local_plugins = self.recurse_plugin_dict(split_name, plugins)
             for output_link_name, input_link_name in group.links:
+                if (
+                    group_name != "solution"
+                    and output_link_name.startswith("vehicles.")
+                ):
+                    qualified_group_name = group_name.removeprefix("solution.")
+                    raise ValueError(
+                        "Vehicle links inside groups are not supported. "
+                        "Declare the link on the top-level Solution using "
+                        f"the fully qualified destination: {qualified_group_name}."
+                        f"{input_link_name}"
+                    )
                 output_link=uam4xVariable(output_link_name)
                 input_link=uam4xVariable(input_link_name)
 
@@ -1449,6 +1466,7 @@ class Solution(Group):
             for independent, _ in group.links:
                 independent_group = independent.split(".")[0]
                 if independent_group == "vehicles":
+                    independent,_=parse_variable_reference(independent)
                     all_used_vehicle_params.append(independent)
         return all_used_vehicle_params
 
@@ -1615,7 +1633,7 @@ class Solution(Group):
                                 )
                         else:
                             _,src_shape=self.check_array_basic(output_link,local_plugins=local_plugins)
-                            a_type=self.get_var_shape(output_link.cleaned_name,local_plugins)
+                            a_type=self.get_var_type(output_link.cleaned_name,local_plugins)
                     else:
                         if output_link_name.split(".")[0]=="vehicles":
                             a=study.get_value(output_link_name)
@@ -2138,10 +2156,10 @@ class Plugin:
 
         Returns
         -------
-        tuple or None
-            Normalized shape metadata. If ``shape`` is omitted for an array-valued
-            declaration and the value is an array, the shape is inferred from the
-            value.
+        tuple
+            A ``(value, shape)`` pair. Array shapes are normalized or inferred from
+            the value, and shaped arrays without a value receive a zero-filled
+            default.
 
         Raises
         ------
@@ -2186,6 +2204,9 @@ class Plugin:
                             f"If the value of an array is not declared as a scalar, then the shape must match\n"
                             f"the declared shape. The variable {name} has declared shape {shape} and actual shape {value.shape}"
                         )
+                else:
+                    value=np.zeros(shape)
+                return value, shape
         else:
 
             if value is None and var_type is np.ndarray:
@@ -2209,7 +2230,7 @@ class Plugin:
             ):
                 shape = value.shape
 
-        return shape
+        return value, shape
 
     def declare_input(
         self, name, var_type, value=None, shape: int | tuple | None = None
@@ -2244,7 +2265,9 @@ class Plugin:
         propagation.
 
         """
-        shape = self.check_declared_IO(name, var_type, value, shape)
+        value,shape = self.check_declared_IO(name, var_type, value, shape)
+        if value is None and var_type in TYPE_TO_DEFAULT_VALUE:
+            value=TYPE_TO_DEFAULT_VALUE[var_type]
         self.plugin_input_names[name] = {
             "type": var_type,
             "value": value,
@@ -2284,7 +2307,9 @@ class Plugin:
         propagation.
 
         """
-        shape = self.check_declared_IO(name, var_type, value, shape)
+        value,shape = self.check_declared_IO(name, var_type, value, shape)
+        if value is None and var_type in TYPE_TO_DEFAULT_VALUE:
+            value=TYPE_TO_DEFAULT_VALUE[var_type]
         self.plugin_output_names[name] = {
             "type": var_type,
             "value": value,
