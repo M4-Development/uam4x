@@ -11,7 +11,7 @@ def test_uam4x_variable_parses_optional_indices():
     assert scalar.inds is None
     assert scalar.has_inds is False
     assert indexed.cleaned_name == "step.array"
-    assert indexed.inds == (slice(1, 3, None),)
+    assert indexed.inds == slice(1, 3, None)
     assert indexed.has_inds is True
 
 

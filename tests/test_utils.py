@@ -482,11 +482,11 @@ def test_parse_complicated_valid(value, expected):
     ("[[1,2],[3,4],5]", ([1, 2], [3, 4], 5)),
 
     # 4) Pure slicing (parse_complicated + parse_slice)
-    ("[:]", (slice(None, None, None),)),                    # [:]
-    ("[::2]", (slice(None, None, 2),)),                     # [::2]
+    ("[:]", slice(None, None, None)),                       # [:]
+    ("[::2]", slice(None, None, 2)),                        # [::2]
     ("[1:,2:-1,3]",
      (slice(1, None, None), slice(2, -1, None), 3)),
-    ("[1::2]", (slice(1, None, 2),)),                       # start + step
+    ("[1::2]", slice(1, None, 2)),                          # start + step
 
     # 5) Fancy + slice mix
     ("[[6,7],3:-4:2,4]",
@@ -515,7 +515,7 @@ def test_parse_index_positive(value, expected):
     # Slicing on last term
     ("vehicles.test_vehicle.chord.span[1:3]",
      "vehicles.test_vehicle.chord.span",
-     (slice(1, 3, None),)),
+     slice(1, 3, None)),
 
     ("obj.data[1:,2:-1,3]",
      "obj.data",
@@ -523,7 +523,7 @@ def test_parse_index_positive(value, expected):
 
     ("x.y[::2]",
      "x.y",
-     (slice(None, None, 2),)),
+     slice(None, None, 2)),
 
     # Fancy (advanced) indexing on last term
     ("system.array[[1,2],[3,4]]",
@@ -559,7 +559,7 @@ def test_handle_brackets_positive(dotted_path, expected_path, expected_inds):
     [
         ("component.value", "component.value", None),
         ("component.array[2]", "component.array", 2),
-        ("component.array[1:3]", "component.array", (slice(1, 3, None),)),
+        ("component.array[1:3]", "component.array", slice(1, 3, None)),
     ],
 )
 def test_parse_variable_reference(reference, expected_name, expected_indices):

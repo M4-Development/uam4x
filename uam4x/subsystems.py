@@ -1288,6 +1288,14 @@ class RotorBladeRegion(Subsystem):
             "mainsparweb_angle", 0.0, float, unit_type=UnitType.ANGLE, description=""
         )
 
+        self.add_parameter(
+            'RICWG',0.0,float
+        )
+        self.add_parameter(
+            'chord_array',np.array([0.0,0.0]),np.ndarray
+        )
+
+
 
 @register_subsystem
 class Aircraft(Subsystem):

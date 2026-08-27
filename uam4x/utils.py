@@ -226,7 +226,32 @@ def convert_numpy_to_python(value):
         return {k: convert_numpy_to_python(x) for k, x in value.items()}
 
     return value
+    
+def convert_numpy_to_python(value):
+    """Convert NumPy scalar and array values to Python-serializable objects.
 
+    Parameters
+    ----------
+    value : object
+        Value to convert recursively.
+
+    Returns
+    -------
+    object
+        Converted value with NumPy scalars converted to Python scalars and
+        NumPy arrays converted to nested Python lists.
+
+    """
+    if isinstance(value, (np.integer, np.floating, np.bool_)):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return [convert_numpy_to_python(x) for x in value.tolist()]
+    if isinstance(value, list):
+        return [convert_numpy_to_python(x) for x in value]
+    if isinstance(value, dict):
+        return {k: convert_numpy_to_python(x) for k, x in value.items()}
+
+    return value
 
 def check_numpy_shape(shape):
     # Integer shapes are allowed
@@ -786,6 +811,9 @@ def _parse_complicated(string):
         else:
             raise ValueError(f"Issue")
 
+    if len(full_index) == 1:
+        return full_index[0]
+
     return tuple(full_index)
 
 
@@ -808,6 +836,7 @@ def _parse_index(string):
         If the bracket structure or index syntax is invalid.
 
     """
+    string=string.replace(' ','')
     _is_valid_square_brackets(string)
     _is_valid_index(string)
     # Try first form:

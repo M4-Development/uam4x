@@ -466,6 +466,17 @@ class Group:
                 plugin_name = step_data["plugin"]
                 step = get_plugin_class(plugin_name)
                 plugin_options = step_data["plugin_options"]
+                #handle standardized input dict and output dict for built in plugins
+                if 'input_dict' in plugin_options:
+                    input_dict=plugin_options['input_dict']
+                    for name,input_data in input_dict.items():
+                        if input_data['type']=='ndarray':
+                            input_data['default_value']=np.array(input_data['default_value'])
+                if 'output_dict' in plugin_options:
+                       input_dict=plugin_options['output_dict']
+                       for name,input_data in input_dict.items():
+                           if input_data['type']=='ndarray':
+                               input_data['default_value']=np.array(input_data['default_value'])
                 plugin_hash = step_data["plugin_hash"]
             elif step_data["specification"] == "group":
                 step = Group._from_dict(step_data)
@@ -1119,6 +1130,16 @@ class Solution(Group):
                 plugin_name = step_data["plugin"]
                 step = get_plugin_class(plugin_name)
                 plugin_options = step_data["plugin_options"]
+                if 'input_dict' in plugin_options:
+                                    input_dict=plugin_options['input_dict']
+                                    for name,input_data in input_dict.items():
+                                        if input_data['type']=='ndarray':
+                                            input_data['default_value']=np.array(input_data['default_value'])
+                if 'output_dict' in plugin_options:
+                       input_dict=plugin_options['output_dict']
+                       for name,input_data in input_dict.items():
+                           if input_data['type']=='ndarray':
+                               input_data['default_value']=np.array(input_data['default_value'])
                 plugin_hash = step_data["plugin_hash"]
             elif step_data["specification"] == "group":
 
