@@ -13,6 +13,7 @@ pytest.importorskip("openmdao.api")
 
 import uam4x.study as study_module
 from uam4x.execution_engine import Engine
+from uam4x.results import Result
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Subsystem, register_subsystem
@@ -477,6 +478,8 @@ def test_run_solution_populates_results_and_runtime_metadata(engine_setup, monke
     assert checked_states == [{}]
     ts = study.results.tradestudies["Default State"]
     assert len(ts._results) == 1
+    assert ts._results[0].case_id == 0
+    assert ts.get_case(0) is ts._results[0]
     assert ts._results[0].outputs["stage2.objective"] == pytest.approx(40.0)
 
     md = study._runtime_meta_data["Default State"]
@@ -496,9 +499,30 @@ def test_run_tradestudy_parameter_sweep(engine_setup, monkeypatch):
 
     ts = study.results.tradestudies["sweep"]
     assert len(ts._results) == 2
+    assert [result.case_id for result in ts._results] == [0, 1]
+    assert ts.get_case(0) is ts._results[0]
+    assert ts.get_case(1) is ts._results[1]
 
     values = [r.outputs["stage2.objective"] for r in ts._results]
     assert values == [pytest.approx(38.0), pytest.approx(40.0)]
+
+
+def test_run_tradestudy_optimization_uses_case_zero(engine_setup, monkeypatch):
+    study, engine, _ = engine_setup
+    _mock_python_cmd(monkeypatch)
+    study.add_trade("optimization", ControlOptimization())
+    optimization_result = Result(state={"optimization": True})
+    monkeypatch.setattr(
+        engine,
+        "_run_optimization",
+        lambda state, plugins, out_dir: optimization_result,
+    )
+
+    engine.run_tradestudy("optimization", check=False)
+
+    ts = study.results.tradestudies["optimization"]
+    assert len(ts._results) == 1
+    assert ts.get_case(0) is optimization_result
 
 
 def test_run_parameter_sweep_invalid_num_processors_raises(engine_setup):

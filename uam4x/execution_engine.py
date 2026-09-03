@@ -861,7 +861,8 @@ class Engine:
                 f"Overwriting existing results for trade study {trade_name}"
             )
         ts = Tradestudy(trade_name)
-        for result in outputs:
+        for i,result in enumerate(outputs):
+            result._set_case_id(i)
             ts._results.append(result)
             ts._hash_to_result[result.state_hash] = result
 

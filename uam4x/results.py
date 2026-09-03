@@ -161,6 +161,12 @@ class Tradestudy:
         self.trade_name = trade_name
         self._results_owner = None
 
+    def get_case(self,case_id):
+        for result in self._results:
+            if result.case_id==case_id:
+                return result
+
+        raise ValueError(f'no case found for case id {case_id}')
 
     @property
     def study(self):
@@ -406,11 +412,23 @@ class Result:
         result hash is computed.
 
         """
-        self.state = convert_numpy_to_python(copy.deepcopy(state))
+        self.state = copy.deepcopy(state)
         self.state_hash = hash_state(self.state)
         self.template_hashes = {}
         self.outputs = {}
         self.convergence_status = None
+        self.case_id=0
+
+    def _set_case_id(self,case_id):
+        self.case_id=case_id
+
+    def get_var_val(self,name):
+        if name in self.state:
+            return self.state[name]
+        elif name in self.outputs:
+            return self.outputs[name]
+
+        raise ValueError(f'Variable with name {name} not in result')
 
     def _add_convergence_status(self, convergence_status):
         """Store optimization convergence status.
@@ -488,7 +506,7 @@ class Result:
 
         """
         d = {
-            "input_state": self.state,
+            "input_state": convert_numpy_to_python(self.state),
             "outputs": self.outputs,
         }
         if self.template_hashes:
@@ -496,6 +514,9 @@ class Result:
 
         if self.convergence_status is not None:
             d["converged"] = self.convergence_status
+
+
+        d["case_id"]=self.case_id
 
         return d
 
@@ -549,5 +570,8 @@ class Result:
 
         if "converged" in results_dict:
             result._add_convergence_status(results_dict["converged"])
+
+        if "case_id" in results_dict:
+            result._set_case_id(results_dict['case_id'])
 
         return result

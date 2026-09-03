@@ -67,15 +67,53 @@ def test_result_roundtrip_and_equal_states():
     r._add_result("y", np.array([3.0, 4.0]))
     r._add_template_checksum("path", "abc")
     r._add_convergence_status(True)
+    r._set_case_id(7)
 
     data = r._to_dict()
     rebuilt = Result._from_dict(data)
 
+    assert data["case_id"] == 7
+    assert rebuilt.case_id == 7
     np.testing.assert_allclose(rebuilt.state["x"], np.array([1.0, 2.0]))
     np.testing.assert_allclose(rebuilt.outputs["y"], np.array([3.0, 4.0]))
     assert rebuilt.template_hashes["path"] == "abc"
     assert rebuilt.convergence_status is True
     assert r.equal_states(rebuilt)
+
+
+def test_tradestudy_get_case_by_case_id():
+    ts = Tradestudy("trade")
+    first = Result(state={"x": 1.0})
+    second = Result(state={"x": 2.0})
+    first._set_case_id(0)
+    second._set_case_id(1)
+    ts._results.extend([first, second])
+
+    assert ts.get_case(0) is first
+    assert ts.get_case(1) is second
+
+    with pytest.raises(ValueError, match="no case found for case id 2"):
+        ts.get_case(2)
+
+
+def test_result_get_var_val_from_state_and_outputs():
+    result = Result(state={"sweep_x": 10.0, "shared": "state"})
+    result._add_result("tracked.y", 5.0)
+    result._add_result("shared", "output")
+
+    assert result.get_var_val("sweep_x") == 10.0
+    assert result.get_var_val("tracked.y") == 5.0
+    assert result.get_var_val("shared") == "state"
+
+
+def test_result_get_var_val_unknown_name_raises():
+    result = Result(state={"sweep_x": 10.0})
+
+    with pytest.raises(
+        ValueError,
+        match="Variable with name missing.variable not in result",
+    ):
+        result.get_var_val("missing.variable")
 
 
 def test_tradestudy_get_variable_error_paths():
@@ -133,6 +171,7 @@ def test_tradestudy_to_dict_and_from_dict_roundtrip():
     res.add_tradestudy("trade", ts)
 
     r = Result(state={"x": 1.0})
+    r._set_case_id(4)
     r._add_result("tracked.y", 10.0)
     ts._results.append(r)
     ts._hash_to_result[r.state_hash] = r
@@ -141,6 +180,7 @@ def test_tradestudy_to_dict_and_from_dict_roundtrip():
     rebuilt_ts = Tradestudy._from_dict("trade", d)
 
     assert len(rebuilt_ts._results) == 1
+    assert rebuilt_ts.get_case(4).case_id == 4
     assert rebuilt_ts._results[0].outputs["tracked.y"] == 10.0
 
     rebuilt_results = Results._from_dict({"trade": d}, study)
