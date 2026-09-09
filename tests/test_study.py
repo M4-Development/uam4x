@@ -10,7 +10,10 @@ import uam4x.study as study_module
 from uam4x.study import Study, Variants
 from uam4x.vehicle import Vehicle, VehicleManager
 from uam4x.subsystems import Subsystem, register_subsystem
-from uam4x.solution import Solution, Plugin, register_plugin
+from uam4x.solution import Solution, SolutionManager, Plugin, register_plugin
+
+
+SOLUTION_NAME = "test_solution"
 
 
 @register_subsystem
@@ -34,13 +37,15 @@ class StudyPlugin(Plugin):
 @pytest.fixture
 def demo_study():
     s = Study()
+    solution = Solution(SOLUTION_NAME)
+    s.add_solution(solution)
     v = Vehicle("demo_vehicle")
     v.add_component(StudySubsystem("wing"))
     s.add_vehicle(v)
 
-    s.solution.add_step(StudyPlugin, "step1")
-    s.solution.add_link("vehicles.demo_vehicle.wing.span", "step1.x")
-    s.solution.add_tracked_output("step1.y")
+    solution.add_step(StudyPlugin, "step1")
+    solution.add_link("vehicles.demo_vehicle.wing.span", "step1.x")
+    solution.add_tracked_output("step1.y")
 
     return s
 
@@ -48,7 +53,25 @@ def demo_study():
 def test_study_initialization_types():
     s = Study()
     assert isinstance(s.vehicles, VehicleManager)
-    assert isinstance(s.solution, Solution)
+    assert isinstance(s.solutions, SolutionManager)
+    assert len(s.solutions) == 0
+
+
+def test_study_manages_multiple_named_solutions():
+    study = Study()
+    first = Solution("first")
+    second = Solution("second")
+
+    study.add_solution(first)
+    study.add_solution(second)
+
+    assert len(study.solutions) == 2
+    assert list(study.solutions) == [first, second]
+    assert study.get_solution("first") is first
+    assert study.get_solution("second") is second
+
+    with pytest.raises(ValueError, match="Repeated Solution names"):
+        study.add_solution(Solution("first"))
 
 
 def test_study_add_get_vehicle(demo_study):
@@ -61,12 +84,12 @@ def test_study_capture_environment(monkeypatch):
     monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
 
     s = Study()
-    s._capture_environment("trade_a")
+    s._capture_environment(SOLUTION_NAME, "trade_a")
 
-    assert "trade_a" in s._runtime_meta_data
-    env = s._runtime_meta_data["trade_a"]["environment"]
+    assert "trade_a" in s._runtime_meta_data[SOLUTION_NAME]
+    env = s._runtime_meta_data[SOLUTION_NAME]["trade_a"]["environment"]
     assert set(env) == {"Machine", "Python", "Packages"}
-    assert "Start_Time" in s._runtime_meta_data["trade_a"]["time_info"]
+    assert "Start_Time" in s._runtime_meta_data[SOLUTION_NAME]["trade_a"]["time_info"]
 
 
 def test_study_get_value_scalar_and_indexed_array(demo_study):
@@ -95,17 +118,23 @@ def test_study_to_dict_from_dict_roundtrip(monkeypatch, demo_study):
     monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
 
     s = demo_study
-    s._capture_environment("roundtrip_trade")
+    s.add_solution(Solution("alternate"))
+    s._capture_environment(SOLUTION_NAME, "roundtrip_trade")
     raw = s._to_dict()
     rebuilt = Study._from_dict(raw)
 
     assert rebuilt.get_vehicle("demo_vehicle").wing.span == 12.0
-    assert rebuilt.solution.links == s.solution.links
-    assert rebuilt.solution.tracked_outputs == s.solution.tracked_outputs
-    assert "roundtrip_trade" in rebuilt._runtime_meta_data
-    assert rebuilt._runtime_meta_data["roundtrip_trade"]["time_info"]["Start_Time"]
-    rebuilt._runtime_meta_data["new_trade"]["time_info"] = {"Start_Time": "now"}
-    assert rebuilt._runtime_meta_data["new_trade"]["time_info"]["Start_Time"] == "now"
+    assert rebuilt.get_solution(SOLUTION_NAME).links == s.get_solution(SOLUTION_NAME).links
+    assert rebuilt.get_solution(SOLUTION_NAME).tracked_outputs == s.get_solution(SOLUTION_NAME).tracked_outputs
+    assert rebuilt.get_solution("alternate").name == "alternate"
+    assert {solution.name for solution in rebuilt.solutions} == {
+        SOLUTION_NAME,
+        "alternate",
+    }
+    assert "roundtrip_trade" in rebuilt._runtime_meta_data[SOLUTION_NAME]
+    assert rebuilt._runtime_meta_data[SOLUTION_NAME]["roundtrip_trade"]["time_info"]["Start_Time"]
+    rebuilt._get_runtime_metadata(SOLUTION_NAME, "new_trade")["time_info"] = {"Start_Time": "now"}
+    assert rebuilt._runtime_meta_data[SOLUTION_NAME]["new_trade"]["time_info"]["Start_Time"] == "now"
 
 
 def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
@@ -116,8 +145,8 @@ def test_study_save_and_from_json_roundtrip(tmp_path, demo_study):
     loaded = Study.load_model_from_json(str(path / "model.json"))
 
     assert loaded.get_vehicle("demo_vehicle").wing.span == 12.0
-    assert loaded.solution.links == demo_study.solution.links
-    assert loaded.solution.tracked_outputs == ["step1.y"]
+    assert loaded.get_solution(SOLUTION_NAME).links == demo_study.get_solution(SOLUTION_NAME).links
+    assert loaded.get_solution(SOLUTION_NAME).tracked_outputs == ["step1.y"]
 
 
 def test_study_from_json_loads_study(tmp_path, demo_study):
@@ -128,7 +157,7 @@ def test_study_from_json_loads_study(tmp_path, demo_study):
     fresh = Study.load_model_from_json(str(path / "model.json"))
 
     assert fresh.get_vehicle("demo_vehicle").wing.span == 12.0
-    assert fresh.solution.links == demo_study.solution.links
+    assert fresh.get_solution(SOLUTION_NAME).links == demo_study.get_solution(SOLUTION_NAME).links
 
 
 def test_study_load_results_from_json_updates_existing_instance(tmp_path, demo_study, monkeypatch):
@@ -137,24 +166,26 @@ def test_study_load_results_from_json_updates_existing_instance(tmp_path, demo_s
 
     monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
 
-    demo_study._capture_environment("trade_a")
+    demo_study._capture_environment(SOLUTION_NAME, "trade_a")
     demo_study.save_model_to_json(str(out), commit=False)
 
     loaded_model = Study.load_model_from_json(str(out / "model.json"))
 
     data_with_results = loaded_model._to_dict()
     data_with_results["results"] = {
-        "trade_a": {
-            "points": [
-                {
-                    "input_state": {"step1": {"x": 1.0}},
-                    "outputs": {"step1.y": 6.0},
-                }
-            ]
+        SOLUTION_NAME: {
+            "trade_a": {
+                "points": [
+                    {
+                        "input_state": {"step1": {"x": 1.0}},
+                        "outputs": {"step1.y": 6.0},
+                    }
+                ]
+            }
         }
     }
     data_with_results["execution_meta_data"] = {
-        "trade_a": {"time_info": {"Start_Time": "saved"}}
+        SOLUTION_NAME: {"trade_a": {"time_info": {"Start_Time": "saved"}}}
     }
     monkeypatch.setattr(loaded_model, "_to_dict", lambda: data_with_results)
     loaded_model.save_results_to_json(str(out), commit=False)
@@ -163,10 +194,10 @@ def test_study_load_results_from_json_updates_existing_instance(tmp_path, demo_s
     result = fresh_model.load_results_from_json(str(out / "results.json"))
 
     assert result is None
-    assert "trade_a" in fresh_model.results.tradestudies
-    assert fresh_model._runtime_meta_data["trade_a"]["time_info"]["Start_Time"] == "saved"
-    fresh_model._runtime_meta_data["new_trade"]["time_info"] = {"Start_Time": "now"}
-    assert fresh_model._runtime_meta_data["new_trade"]["time_info"]["Start_Time"] == "now"
+    assert fresh_model.results.get_tradestudy(SOLUTION_NAME, "trade_a") is not None
+    assert fresh_model._runtime_meta_data[SOLUTION_NAME]["trade_a"]["time_info"]["Start_Time"] == "saved"
+    fresh_model._get_runtime_metadata(SOLUTION_NAME, "new_trade")["time_info"] = {"Start_Time": "now"}
+    assert fresh_model._runtime_meta_data[SOLUTION_NAME]["new_trade"]["time_info"]["Start_Time"] == "now"
 
 
 def test_study_load_study_from_directory_loads_model_and_results(
@@ -177,23 +208,25 @@ def test_study_load_study_from_directory_loads_model_and_results(
 
     monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
 
-    demo_study._capture_environment("trade_a")
+    demo_study._capture_environment(SOLUTION_NAME, "trade_a")
     demo_study.save_model_to_json(str(out), commit=False)
 
     loaded_model = Study.load_model_from_json(str(out / "model.json"))
     data_with_results = loaded_model._to_dict()
     data_with_results["results"] = {
-        "trade_a": {
-            "points": [
-                {
-                    "input_state": {"step1": {"x": 1.0}},
-                    "outputs": {"step1.y": 6.0},
-                }
-            ]
+        SOLUTION_NAME: {
+            "trade_a": {
+                "points": [
+                    {
+                        "input_state": {"step1": {"x": 1.0}},
+                        "outputs": {"step1.y": 6.0},
+                    }
+                ]
+            }
         }
     }
     data_with_results["execution_meta_data"] = {
-        "trade_a": {"time_info": {"Start_Time": "saved"}}
+        SOLUTION_NAME: {"trade_a": {"time_info": {"Start_Time": "saved"}}}
     }
     monkeypatch.setattr(loaded_model, "_to_dict", lambda: data_with_results)
     loaded_model.save_results_to_json(str(out), commit=False)
@@ -201,8 +234,8 @@ def test_study_load_study_from_directory_loads_model_and_results(
     rebuilt = Study.load_study_from_directory(str(out))
 
     assert rebuilt.get_vehicle("demo_vehicle").wing.span == 12.0
-    assert "trade_a" in rebuilt.results.tradestudies
-    assert rebuilt._runtime_meta_data["trade_a"]["time_info"]["Start_Time"] == "saved"
+    assert rebuilt.results.get_tradestudy(SOLUTION_NAME, "trade_a") is not None
+    assert rebuilt._runtime_meta_data[SOLUTION_NAME]["trade_a"]["time_info"]["Start_Time"] == "saved"
 
 
 def test_get_all_vehicle_param_names(demo_study):
@@ -225,9 +258,11 @@ def test_variants_generate_variants(tmp_path):
         study.add_vehicle(v)
 
     def add_solution_func(study):
-        study.solution.add_step(StudyPlugin, "step1")
-        study.solution.add_link("vehicles.variant_vehicle.wing.span", "step1.x")
-        study.solution.add_tracked_output("step1.y")
+        solution = Solution(SOLUTION_NAME)
+        solution.add_step(StudyPlugin, "step1")
+        solution.add_link("vehicles.variant_vehicle.wing.span", "step1.x")
+        solution.add_tracked_output("step1.y")
+        study.add_solution(solution)
 
     variants = Variants(str(root))
     variants.add_variant("v1", [add_vehicle_func, add_solution_func])
@@ -241,22 +276,25 @@ def test_variants_generate_variants(tmp_path):
 
 def test_study_runtime_metadata_helpers(demo_study):
     s = demo_study
-    s._add_runtime_plugin_checksums("t1", {"step1": "abc"})
-    s._add_runtime_external_executable_data("t1", {"exe": {"version": "1.0"}})
+    s._add_runtime_plugin_checksums(SOLUTION_NAME, "t1", {"step1": "abc"})
+    s._add_runtime_external_executable_data(
+        SOLUTION_NAME, "t1", {"exe": {"version": "1.0"}}
+    )
 
-    assert s._runtime_meta_data["t1"]["step_plugin_hashes"] == {"step1": "abc"}
-    assert s._runtime_meta_data["t1"]["step_external_executable_data"]["exe"]["version"] == "1.0"
+    assert s._runtime_meta_data[SOLUTION_NAME]["t1"]["step_plugin_hashes"] == {"step1": "abc"}
+    assert s._runtime_meta_data[SOLUTION_NAME]["t1"]["step_external_executable_data"]["exe"]["version"] == "1.0"
 
 
 def test_study_capture_environment_existing_trade_branch(monkeypatch):
     monkeypatch.setattr(study_module.subprocess, "check_output", lambda *args, **kwargs: b"/usr/bin/python3\n")
     s = Study()
-    s._runtime_meta_data["trade_existing"] = {"seed": 1}
-    s._capture_environment("trade_existing")
+    s._runtime_meta_data[SOLUTION_NAME] = {"trade_existing": {"seed": 1}}
+    s._capture_environment(SOLUTION_NAME, "trade_existing")
 
-    assert s._runtime_meta_data["trade_existing"]["seed"] == 1
-    assert "environment" in s._runtime_meta_data["trade_existing"]
-    assert "time_info" in s._runtime_meta_data["trade_existing"]
+    metadata = s._runtime_meta_data[SOLUTION_NAME]["trade_existing"]
+    assert metadata["seed"] == 1
+    assert "environment" in metadata
+    assert "time_info" in metadata
 
 
 def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkeypatch):
@@ -274,7 +312,9 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
     loaded = Study.load_model_from_json(str(out / "model.json"))
 
     data_with_results = loaded._to_dict()
-    data_with_results["results"] = {"trade_a": {"points": [{"x": 1.0, "y": 6.0}]}}
+    data_with_results["results"] = {
+        SOLUTION_NAME: {"trade_a": {"points": [{"x": 1.0, "y": 6.0}]}}
+    }
     monkeypatch.setattr(loaded, "_to_dict", lambda: data_with_results)
     monkeypatch.setattr(loaded, "_commit_json_to_branch", fake_commit)
 
@@ -295,7 +335,9 @@ def test_study_save_results_to_json_commit_uses_current_branch(tmp_path, demo_st
     loaded = Study.load_model_from_json(str(out / "model.json"))
 
     data_with_results = loaded._to_dict()
-    data_with_results["results"] = {"trade_a": {"points": [{"x": 1.0, "y": 6.0}]}}
+    data_with_results["results"] = {
+        SOLUTION_NAME: {"trade_a": {"points": [{"x": 1.0, "y": 6.0}]}}
+    }
     monkeypatch.setattr(loaded, "_to_dict", lambda: data_with_results)
     monkeypatch.setattr(
         loaded,

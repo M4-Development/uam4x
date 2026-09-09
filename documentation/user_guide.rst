@@ -174,19 +174,23 @@ Solution setup:
 
 .. code-block:: python
 
+   from uam4x.solution import Solution
+
    def setup_solution(study: Study):
-       study.solution.add_step(CalcArea, "calc_area")
-       study.solution.add_link(
+       solution = Solution("basic")
+       solution.add_step(CalcArea, "calc_area")
+       solution.add_link(
            "vehicles.multi_objective_vehicle.wing1.aspect_ratio",
            "calc_area.aspect_ratio",
        )
-       study.solution.add_link(
+       solution.add_link(
            "vehicles.multi_objective_vehicle.wing1.span",
            "calc_area.span",
        )
-       study.solution.add_step(CalcObjective, "calc_objective")
-       study.solution.add_link("calc_area.area", "calc_objective.area")
-       study.solution.add_tracked_output("calc_objective.objective")
+       solution.add_step(CalcObjective, "calc_objective")
+       solution.add_link("calc_area.area", "calc_objective.area")
+       solution.add_tracked_output("calc_objective.objective")
+       study.add_solution(solution)
 
 Trade-study setup:
 
@@ -239,9 +243,9 @@ This script loads the generated variant and runs both trade studies.
     study_dir=os.path.join(THIS_DIR, "variants", "demo")
     study = Study.from_json(study_dir)
     engine = Engine(study, os.path.join(study_dir,"work"))
-    engine.run_tradestudy("sweep",num_processors=10)
-    engine.run_solution()
-    engine.run_tradestudy("optimization_only")
+    engine.run_tradestudy("sweep", solution_name="basic",num_processors=10)
+    engine.run_solution("basic")
+    engine.run_tradestudy("optimization_only", solution_name="basic")
     study.save_results_to_json(study_dir)
 
 Generate an N² diagram
@@ -255,17 +259,19 @@ executing the solution:
     engine = Engine(study, os.path.join(study_dir, "work"))
 
     # Show the base uam4x solution structure.
-    engine.generate_N2()
+    engine.generate_N2("basic")
 
     # Highlight one analysis's design variables, constraints, and objective.
     engine.generate_N2(
-        "optimization_only",
+        "basic",
+        trade_name="optimization_only",
         outfile=os.path.join(study_dir, "optimization_n2.html"),
         show_browser=False,
     )
 
     # Open directly inside one large group or plugin.
     engine.generate_N2(
+        "basic",
         path="aerodynamics.rotor_analysis",
         max_visible_rows=100,
     )
@@ -317,9 +323,10 @@ Then read outputs from each trade study:
         # vsp.StartGUI()
         study_dir=os.path.join(THIS_DIR, "variants", "demo")
         study = Study.from_json(study_dir)
+        solution_results=study.results.get_solution_result("basic")
 
         #Sweep trade
-        sweep_ts=study.results.get_tradestudy('sweep')
+        sweep_ts=solution_results.get_tradestudy('sweep')
         ar=sweep_ts.get_variable("vehicles.multi_objective_vehicle.wing1.aspect_ratio")
         span=sweep_ts.get_variable("vehicles.multi_objective_vehicle.wing1.span")
         obj=sweep_ts.get_variable("calc_objective.objective")
@@ -330,14 +337,14 @@ Then read outputs from each trade study:
                      title="Pareto Front Plot of Drag Coefficient vs. Wing Weight", xlabel="Drag Coefficient", ylabel="Wing Weight",save_dir=THIS_DIR)
 
         #Optimization trade
-        opt_ts=study.results.get_tradestudy('optimization_only')
+        opt_ts=solution_results.get_tradestudy('optimization_only')
         ar_opt=opt_ts.get_variable("vehicles.multi_objective_vehicle.wing1.aspect_ratio")
         span_opt=opt_ts.get_variable("vehicles.multi_objective_vehicle.wing1.span")
         obj_opt=opt_ts.get_variable("calc_objective.objective")
         print(f'Aspect Ratio: {ar_opt}, Span: {span_opt}, Objective: {obj_opt} for optimization trade study.')
 
         # single point trade
-        sp_ts=study.results.get_tradestudy('Default State')
+        sp_ts=solution_results.get_tradestudy('Default State')
         ar_sp=sp_ts.get_variable("vehicles.multi_objective_vehicle.wing1.aspect_ratio")
         span_sp=sp_ts.get_variable("vehicles.multi_objective_vehicle.wing1.span")
         obj_sp=sp_ts.get_variable("calc_objective.objective")

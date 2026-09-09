@@ -2,6 +2,7 @@ from tabnanny import check
 
 import openmdao.api as om
 from uam4x.study import Study
+from uam4x.solution import Solution
 import os
 import shutil
 import numpy as np
@@ -54,7 +55,7 @@ class Optimization:
     log = get_log(log, object_name="optimization")
 
     def __init__(
-        self, study: Study, state, plugins, out_dir, check_partials=False
+        self, study: Study,solution:Solution, state, plugins, out_dir, check_partials=False
     ) -> None:
         """Initialize an OpenMDAO optimization wrapper.
 
@@ -75,6 +76,7 @@ class Optimization:
 
         """
         self.study = study
+        self.solution = solution
         self.state = state
         self.plugins = plugins
         self.out_dir = out_dir
@@ -103,7 +105,7 @@ class Optimization:
         self.log.debug("run problem")
 
         # make vehicle step
-        used_vehicle_param_names = self.study.solution.get_all_used_vehicle_params()
+        used_vehicle_param_names = self.solution.get_all_used_vehicle_params()
         vehicle_val_dict = {}
         vehicle_type_dict = {}
         for param_name in used_vehicle_param_names:
@@ -120,7 +122,7 @@ class Optimization:
         comp.options["vehicle_type_dict"] = vehicle_type_dict
 
         # make plugin steps
-        for step_name, data in self.study.solution._execution_steps.items():
+        for step_name, data in self.solution._execution_steps.items():
             work_dir = os.path.join(self.out_dir, step_name)
 
             if isinstance(data, dict):
@@ -172,10 +174,10 @@ class Optimization:
             #1.) when the output array has indices in a link, you need to
             #create a component, the values themselves link to a version of themselves
             #and then are transformed via the component into the entire array
-        links=self.study.solution.links
+        links=self.solution.links
         dependent_ind_names_to_sources, dependent_ind_names_to_data=organize_links(links=links,
                       vehicle_val_dict=vehicle_val_dict,
-                      uamgroup=self.study.solution,
+                      uamgroup=self.solution,
                       group_name='',
                       plugins=self.plugins,
                       mdao_group=problem.model
@@ -209,7 +211,7 @@ class Optimization:
         # add constraints
         for name, data in self.state["constraints"].items():
 
-            const_type = self.study.solution.get_var_type(name, self.plugins)
+            const_type = self.solution.get_var_type(name, self.plugins)
             lower, upper = data["lower"], data["upper"]
             indices = data["indices"]
 
@@ -230,7 +232,7 @@ class Optimization:
 
         result = Result(state=self.state)
         # add template hashes to results before template files are run in optimization
-        for plug_name, plug in self.study.solution.recurse_generated_plugins(
+        for plug_name, plug in self.solution.recurse_generated_plugins(
             self.plugins
         ).items():
             if plug._template_to_checksum:
@@ -260,7 +262,7 @@ class Optimization:
         else:
             result._add_convergence_status(True)
 
-        for tracked_output in self.study.solution.tracked_outputs + list(
+        for tracked_output in self.solution.tracked_outputs + list(
             self.state["des_vars"].keys()
         ):
             if "[" in tracked_output:
@@ -277,7 +279,7 @@ class Optimization:
                 if name_start == "vehicles":
                     var_type = self.study.get_param_type(tracked_output)
                 else:
-                    var_type = self.study.solution.get_var_type(
+                    var_type = self.solution.get_var_type(
                         tracked_output, self.plugins
                     )
                 value = problem.get_val(tracked_output.replace(".", "~"))

@@ -12,7 +12,7 @@ The study contains three high level components:
 
 1. Vehicles: Contains the vehicles used in a study, which themselves
    contain components and modes (e.g vertical and horizontal rotor configurations)
-2. Solution: Defines the steps that when followed sequentially make up the analysis
+2. Solutions: Named solution sequences that define the steps used to perform an analysis
 3. Control: Defines the overarching goals of the analysis (e.g parameter sweep, optimization, etc.)
 
 
@@ -76,9 +76,17 @@ can be described by its span, chord, twist, etc. Components are added to a Vehic
 that Vehicle. Components may have various modes (a rotor may have a veritical and horizontal configuration).
 
 
-How the Solution Works
-----------------------
-The Solution defines steps and groups (collections of steps) which are run sequentially.
+How Solutions Work
+------------------
+A Study owns one or more named ``Solution`` objects through its
+``SolutionManager``. Each Solution defines steps and groups (collections of
+steps) which are run sequentially. A solution is created and configured through
+a local reference, then added explicitly to the study::
+
+    solution = Solution("mission_analysis")
+    solution.add_step(MissionPlugin, "mission")
+    study.add_solution(solution)
+
 The smallest unit of work within the Solution is a step. A step contains inputs, outputs and
 some defined computation all of which is defined via a Plugin. Multiple steps may be connected with links
 which connect outputs of one plugin to inputs of another. Steps may also take in Vehicle parameters
@@ -113,7 +121,7 @@ A Note on Variants
 
 A key concept that the uam4x framework supports is Variants. Variants
 are essentially variations of a particular study. A study can be thought of
-as an object containing vehicles, a solution sequence, a control and associated results or
+as an object containing vehicles, named solution sequences, a control and associated results or
 it can be thought of as a collection of functions that go on to build that study.
 The variant interpretation is the second interpretation where the study can be thought
 of as a collection of functions that go on to build that study. Generally,
@@ -121,7 +129,7 @@ the intended way to create a study is via a set of functions that set up various
 aspects of the study e.g:
 
 * Function 1: Creates and adds vehicles to the study
-* Function 2: Creates and adds the solution to the study
+* Function 2: Creates and adds one or more named solutions to the study
 * Function 3: Creates and adds the various analyses to the study
 
 It is entirely reasonable then to have two or more studies that are similar in kind

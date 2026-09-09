@@ -15,7 +15,7 @@ from uam4x.utils import (
     split_dotted_path_and_indices,
     parse_variable_reference
 )
-from uam4x.results import Result, Tradestudy
+from uam4x.results import Result, Tradestudy, SolutionResults
 import concurrent.futures
 import time
 from datetime import datetime
@@ -61,21 +61,22 @@ class Engine:
 
         """
         self.study = study
-        self.study_results = {}  # change once there is a better way to store outputs
-        self.sweep_combos = {}
-        self.current_sweep_values = {}
         self.work_dir = work_dir
         os.makedirs(self.work_dir, exist_ok=True)
         self.log = get_log(log, object_name="engine")
         self.create_step_work_dirs = True
 
-    def check_partials(self, trade_name, form="forward", step=1.0e-6):
+    def check_partials(
+        self, trade_name, solution_name, form="forward", step=1.0e-6
+    ):
         """Check optimization partial derivatives for one analysis.
 
         Parameters
         ----------
         trade_name : str
             Name of the analysis to check.
+        solution_name : str
+            Name of the solution whose partial derivatives should be checked.
         form : {"forward", "backward", "central"}, optional
             Finite-difference form used for the partial check.
         step : float, optional
@@ -95,7 +96,8 @@ class Engine:
         self.log.debug("check partials")
 
         # Standard setup:
-        self.study.solution.sort_steps()
+        solution = self.study.get_solution(solution_name)
+        solution.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
 
         # Sample state, doesn't really matter here, special check
@@ -113,26 +115,37 @@ class Engine:
             print("Checking Partials Only Available For Optimization Based Analysis")
             return
 
-        out_dir = os.path.join(self.work_dir, f"check_partials")
+        out_dir = os.path.join(
+            self.work_dir, solution.name, trade_name, "check_partials"
+        )
         os.makedirs(out_dir, exist_ok=True)
 
-        plugins = self.study.solution.generate_plugins()
+        plugins = solution.generate_plugins()
 
         # May need to refactor this, but def want a check here.
-        self.check_model(plugins, sample_state)
+        self.check_model(solution, plugins, sample_state)
 
         cwd = os.getcwd()
-        os.chdir(out_dir)
-        opt = Optimization(
-            self.study, sample_state, plugins, out_dir, check_partials=True
-        )
-        problem = opt.run_problem()
-
-        problem.check_partials(step=step, form=form, compact_print=True)
-        os.chdir(cwd)
+        try:
+            os.chdir(out_dir)
+            opt = Optimization(
+                study=self.study,
+                solution=solution,
+                state=sample_state,
+                plugins=plugins,
+                out_dir=out_dir,
+                check_partials=True,
+            )
+            problem = opt.run_problem()
+            problem.check_partials(
+                step=step, form=form, compact_print=True
+            )
+        finally:
+            os.chdir(cwd)
 
     def generate_N2(
         self,
+        solution_name,
         trade_name=None,
         root_dir=None,
         outfile=None,
@@ -149,16 +162,20 @@ class Engine:
 
         Parameters
         ----------
+        solution_name : str
+            Name of the solution to display.
         trade_name : str, optional
             Analysis whose design variables, constraints, and objective should be
             highlighted. If omitted, the base solution structure is displayed.
         root_dir : str or path-like, optional
-            Directory in which to write the diagram. The filename is ``n2.html``
-            for the base model or ``<trade_name>N2.html`` for an analysis. Use
-            ``outfile`` when an explicit filename is required.
+            Root directory in which to write the diagram. The diagram is placed
+            beneath a solution-specific subdirectory. The filename is
+            ``n2.html`` for the base model or ``<trade_name>N2.html`` for an
+            analysis. Use ``outfile`` when an explicit path is required.
         outfile : str or path-like, optional
-            Output HTML path. Defaults to ``<work_dir>/<trade_name>_n2.html`` or
-            ``<work_dir>/n2.html`` when no analysis is selected.
+            Output HTML path. Defaults beneath
+            ``<work_dir>/<solution_name>/``. An explicit path is used exactly
+            as provided.
         show_browser : bool, optional
             If True, open the generated file in the default browser.
         check : bool, optional
@@ -200,7 +217,8 @@ class Engine:
             raise ValueError("max_visible_rows must be at least 10")
 
         self.log.debug("generate native N2")
-        self.study.solution.sort_steps()
+        solution = self.study.get_solution(solution_name)
+        solution.sort_steps()
 
         state = {}
         if trade_name is not None:
@@ -216,14 +234,18 @@ class Engine:
                     )
                 state = copy.deepcopy(states[0])
 
-        plugins = self.study.solution.generate_plugins()
+        plugins = solution.generate_plugins()
         if check:
-            self.check_model(plugins, state)
+            self.check_model(solution,plugins, state)
 
         if outfile is None:
+            output_root = (
+                Path(root_dir) if root_dir is not None else Path(self.work_dir)
+            )
+            output_root = output_root / solution.name
             if root_dir is not None:
                 filename = "n2.html" if trade_name is None else f"{trade_name}N2.html"
-                outfile = Path(root_dir) / filename
+                outfile = output_root / filename
             else:
                 if trade_name is None:
                     filename = "n2.html"
@@ -233,10 +255,11 @@ class Engine:
                         for character in trade_name
                     )
                     filename = f"{safe_trade_name}_n2.html"
-                outfile = Path(self.work_dir) / filename
+                outfile = output_root / filename
 
         model_data = build_n2_data(
             self.study,
+            solution,
             plugins,
             state=state,
             trade_name=trade_name,
@@ -254,7 +277,7 @@ class Engine:
             webbrowser.open(output_path.as_uri())
         return output_path
 
-    def _run_state(self, state, trade_work_dir,iteration=None, resort_steps=False,):
+    def _run_state(self,solution, state, trade_work_dir,iteration=None, resort_steps=False,):
         """Execute one analysis state.
 
         Parameters
@@ -291,22 +314,30 @@ class Engine:
 
         os.makedirs(out_dir, exist_ok=True)
 
-        plugins = self.study.solution.generate_plugins()
+        plugins = solution.generate_plugins()
 
         # since parallelism rebuilds the study, need to re sort
         if resort_steps:
-            self.study.solution.sort_steps()
+            solution.sort_steps()
 
         if state.get("optimization", False):
-            result = self._run_optimization(state, plugins, out_dir)
+            result = self._run_optimization(
+                solution=solution,
+                state=state,
+                plugins=plugins,
+                out_dir=out_dir)
         else:
-            result = self._run_single_point(state, plugins, out_dir)
+            result = self._run_single_point(
+                state=state,
+                solution=solution,
+                plugins=plugins,
+                out_dir= out_dir)
 
         return result
 
     @staticmethod
     def _run_state_parallel(
-        study_dict, state, iteration=None, trade_work_dir=None, create_step_work_dirs=True
+        study_dict,solution_name, state, iteration=None, trade_work_dir=None, create_step_work_dirs=True
     ):
         """Execute one analysis state in a worker process.
 
@@ -342,15 +373,17 @@ class Engine:
         study = Study._from_dict(study_dict, worker_log_dir)
         engine = Engine(study, trade_work_dir)
         engine.create_step_work_dirs = create_step_work_dirs
+        solution=study.get_solution(solution_name)
         result = engine._run_state(
-            state,
+            state=state,
+            solution=solution,
             trade_work_dir=trade_work_dir,
             iteration=iteration,
             resort_steps=True,
         )
         return result
 
-    def _run_optimization(self, state, plugins, out_dir):
+    def _run_optimization(self, state,solution, plugins, out_dir):
         """Execute an optimization analysis.
 
         Parameters
@@ -378,14 +411,19 @@ class Engine:
         temp_state = copy.deepcopy(state)
         cwd = os.getcwd()
         os.chdir(out_dir)
-        opt = Optimization(self.study, temp_state, plugins, out_dir)
+        opt = Optimization(
+                        study=self.study,
+                        solution=solution,
+                        state=temp_state,
+                        plugins=plugins,
+                        out_dir=out_dir)
         opt_result = opt.run_problem()
 
         os.chdir(cwd)
 
         return opt_result
 
-    def _run_single_point(self, state, plugins, out_dir):
+    def _run_single_point(self, solution,state, plugins, out_dir):
         """Execute a single-point analysis.
 
         Parameters
@@ -411,10 +449,10 @@ class Engine:
         """
         self.log.debug("run single point")
         temp_state = copy.deepcopy(state)
-        ordered_plugins = self.study.solution.get_global_execution_order_plugins(
+        ordered_plugins = solution.get_global_execution_order_plugins(
             plugins
         )
-        full_links = self.study.solution._build_global_links()
+        full_links = solution._build_global_links()
         for step_name, plugin in ordered_plugins.items():
             step_name_ind = len(step_name.split("."))
             self.log.debug(f"run single point: {step_name}")
@@ -477,7 +515,7 @@ class Engine:
 
         result = Result(state=state)
 
-        for tracked_output in self.study.solution.tracked_outputs:
+        for tracked_output in solution.tracked_outputs:
             temp_output_name = "solution." + tracked_output
             if "[" in tracked_output:
                 no_ind_tracked_output, inds = split_dotted_path_and_indices(
@@ -490,8 +528,13 @@ class Engine:
 
         return result
 
-    def run_solution(self):
+    def run_solution(self,solution_name):
         """Execute the default single-point analysis.
+
+        Parameters
+        ----------
+        solution_name : str
+            Name of the solution to execute.
 
         Returns
         -------
@@ -506,75 +549,45 @@ class Engine:
         start_time = time.perf_counter()
         trade_name = "Default State"
         self.log.debug("run solution")
-        self.capture_execution_data(trade_name)
-        self.study.solution.sort_steps()
-        plugins = self.study.solution.generate_plugins()
+        solution=self.study.get_solution(solution_name)
+        self.capture_execution_data(trade_name=trade_name,solution=solution)
+        solution.sort_steps()
+        plugins = solution.generate_plugins()
         state = {}
-        self.check_model(plugins, state)
-        out_dir = os.path.join(self.work_dir,'Default_State')
+        self.check_model(solution,plugins, state)
+        out_dir = os.path.join(self.work_dir,solution_name,'Default_State')
         if os.path.exists(out_dir):
             shutil.rmtree(out_dir)
         os.makedirs(out_dir)
-        result = self._run_single_point(state, plugins, out_dir=out_dir)
+        result = self._run_single_point(
+                                solution=solution,
+                                state=state,
+                                plugins=plugins,
+                                out_dir=out_dir)
+
         study_result = self.study.results
-        if trade_name in study_result.tradestudies:
+        if solution.name in study_result.solutions:
+            solution_results=study_result.get_solution_result(solution.name)
+        else:
+            solution_results=SolutionResults(solution.name,self.study)
+            study_result.add_solution_result(solution_results)
+
+
+        if trade_name in solution_results.tradestudies:
             self.log.warning(
                 f"Overwriting existing results for trade study {trade_name}"
             )
-        ts = Tradestudy(trade_name)
+        ts = Tradestudy(trade_name,solution_name=solution.name)
         ts._results.append(result)
         ts._hash_to_result[result.state_hash] = result
 
-        study_result.add_tradestudy(trade_name, ts)
+        solution_results.add_tradestudy(trade_name, ts)
         # add time to results metadata
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
-        self.add_end_time_meta_data(trade_name, elapsed_time)
+        self.study._add_time_metadata(solution_name=solution.name,trade_name=trade_name,start_or_end='Completion_Time', elapsed_time=elapsed_time)
 
-    def add_end_time_meta_data(self, trade_name, elapsed_time):
-        """Record completion-time metadata for an analysis.
-
-        Parameters
-        ----------
-        trade_name : str
-            Name of the completed analysis.
-        elapsed_time : float
-            Elapsed execution time in seconds.
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Completion metadata is written into ``study._runtime_meta_data`` using the
-        America/Los_Angeles time zone.
-
-        """
-        self.study._runtime_meta_data[trade_name]["time_info"][
-            "Elapsed_Time"
-        ] = f"Analysis took {elapsed_time} seconds"
-
-        dt = datetime.now(tz=ZoneInfo("America/Los_Angeles"))
-
-        message = f"Completed on"
-        keywords = ["A", "B", "d", "Y", "I", "M", "S", "p"]
-        for keyword in keywords:
-            if not keyword in ["M", "S"]:
-                message += f' {dt.strftime(f"%{keyword}")}'
-            else:
-                message += f':{dt.strftime(f"%{keyword}")}'
-            if keyword in ["A", "d"]:
-                message += ","
-            if keyword == "Y":
-                message += " at"
-
-        message += " Pacific Time"
-        self.study._runtime_meta_data[trade_name]["time_info"][
-            "Completion_Time"
-        ] = message
-
-    def capture_execution_data(self, trade_name):
+    def capture_execution_data(self, trade_name,solution):
         # populate environment at execution time
         """Capture runtime metadata for an analysis.
 
@@ -593,14 +606,16 @@ class Engine:
         checksums, and any external executable metadata declared by plugins.
 
         """
-        self.study._capture_environment(trade_name)
+        solution_name=solution.name
+        self.study._capture_environment(solution_name=solution_name,
+                                        trade_name=trade_name)
         # hash plugins at runtime
         plugin_name_to_hash = {}
         external_executable_to_versioning_data = {}
         for (
             plugin_name,
             data,
-        ) in self.study.solution.get_all_plugin_names_to_data().items():
+        ) in solution.get_all_plugin_names_to_data().items():
             # get the hash
             plugin_class = data["plugin"]
             reference_plugin_hash = data["plugin_hash"]
@@ -624,7 +639,6 @@ class Engine:
             plugin.setup_plugin(plugin_options)
             if (
                 plugin._executable_to_data
-                and not "step_external_executable_data" in self.study._runtime_meta_data
             ):
                 # copying here because i don't want to carry and accidentally modify state
                 external_executable_to_versioning_data[plugin_name] = copy.deepcopy(
@@ -633,13 +647,18 @@ class Engine:
 
         if external_executable_to_versioning_data:
             self.study._add_runtime_external_executable_data(
-                trade_name, external_executable_to_versioning_data
+                solution_name=solution_name,
+                trade_name=trade_name,
+                external_executable_to_data=external_executable_to_versioning_data
             )
 
-        self.study._add_runtime_plugin_checksums(trade_name, plugin_name_to_hash)
+        self.study._add_runtime_plugin_checksums(
+            solution_name=solution_name,
+            trade_name=trade_name,
+            plugin_to_checksum=plugin_name_to_hash)
 
     def run_tradestudy(
-        self, trade_name, num_processors=None, check=True, create_step_work_dirs=True
+        self, trade_name, solution_name, num_processors=None, check=True, create_step_work_dirs=True
     ):
         """Execute a named analysis.
 
@@ -647,6 +666,8 @@ class Engine:
         ----------
         trade_name : str
             Name of the analysis to run.
+        solution_name : str
+            Name of the solution to execute for the analysis.
         num_processors : int, optional
             Number of worker processes to use for state-based analyses. If omitted
             or set to 1, execution is serial.
@@ -669,9 +690,10 @@ class Engine:
         self.create_step_work_dirs = create_step_work_dirs
         start_time = time.perf_counter()
         self.log.debug(f"run tradestudy: {trade_name}")
-        self.study.solution.sort_steps()
+        solution=self.study.get_solution(solution_name=solution_name)
+        solution.sort_steps()
         tradestudy = self.study.control.trade_studies[trade_name]
-        trade_work_dir=os.path.join(self.work_dir,trade_name)
+        trade_work_dir=os.path.join(self.work_dir,solution.name,trade_name)
         if os.path.exists(trade_work_dir):
             shutil.rmtree(trade_work_dir)
         os.makedirs(trade_work_dir)
@@ -684,44 +706,59 @@ class Engine:
 
         os.environ["UAM4X_DISABLE_REGISTRY_WRITES"] = "1"
 
-        self.capture_execution_data(trade_name)
+        self.capture_execution_data(solution=solution,trade_name=trade_name)
         if isinstance(tradestudy, UAM4XOptimization) and num_processors is not None:
             log.warning("num_processors is ignored for single point optimizations")
         if isinstance(tradestudy, UAM4XOptimization):
             # run optimization as defined by the base state
             state = tradestudy._to_dict()
             state["optimization"] = True
-            plugins = self.study.solution.generate_plugins()
+            plugins = solution.generate_plugins()
             if check:
-                self.check_model(plugins, state)
-            result = self._run_optimization(state, plugins, trade_work_dir)
+                self.check_model(solution,plugins, state)
+            result = self._run_optimization(
+                                            solution=solution,
+                                            state=state,
+                                            plugins=plugins,
+                                            out_dir=trade_work_dir)
             study_result = self.study.results
-            if trade_name in study_result.tradestudies:
+            if solution.name in study_result.solutions:
+                solution_results=study_result.get_solution_result(solution.name)
+            else:
+                solution_results=SolutionResults(solution.name,self.study)
+                study_result.add_solution_result(solution_results)
+
+            if trade_name in solution_results.tradestudies:
                 self.log.warning(
                     f"Overwriting existing results for trade study {trade_name}"
                 )
 
-            ts = Tradestudy(trade_name)
+            ts = Tradestudy(trade_name,solution_name=solution.name)
             ts._results.append(result)
             ts._hash_to_result[result.state_hash] = result
-            study_result.add_tradestudy(trade_name, ts)
+            solution_results.add_tradestudy(trade_name, ts)
 
         else:
             # Note a parameter sweep can contain optimizations
             trade_states = tradestudy.get_states()
             if check:
-                plugins = self.study.solution.generate_plugins()
-                self.check_model(plugins, trade_states[0])
+                plugins = solution.generate_plugins()
+                self.check_model(solution,plugins, trade_states[0])
             self._run_parameter_sweep(
-                trade_name, trade_states, num_processors=num_processors
+                solution,
+                trade_name,
+                trade_states,
+                num_processors=num_processors,
+                trade_work_dir=trade_work_dir
             )
 
         # add time to results metadata
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
-        self.add_end_time_meta_data(trade_name, elapsed_time)
 
-    def _run_parameter_sweep(self, trade_name, trade_states, num_processors=None):
+        self.study._add_time_metadata(solution_name=solution_name,trade_name=trade_name,start_or_end='Completion_Time',elapsed_time=elapsed_time)
+
+    def _run_parameter_sweep(self,solution, trade_name, trade_states, trade_work_dir,num_processors=None):
         """Execute a state-based analysis over multiple states.
 
         Parameters
@@ -753,7 +790,6 @@ class Engine:
         successful_states = []
         states = trade_states
         num_states = len(states)
-        trade_work_dir=os.path.join(self.work_dir,trade_name)
         if num_processors and num_processors > 1:
             if num_processors > num_states:
                 log.warning(
@@ -774,8 +810,9 @@ class Engine:
                 futures = {
                     i: executor.submit(
                         Engine._run_state_parallel,
-                        study_dict,
-                        state,
+                        solution_name=solution.name,
+                        study_dict=study_dict,
+                        state=state,
                         iteration=i,
                         trade_work_dir=trade_work_dir,
                         create_step_work_dirs=self.create_step_work_dirs,
@@ -819,7 +856,11 @@ class Engine:
             for i, state in enumerate(states):
 
                 try:
-                    outputs.append(self._run_state(state, trade_work_dir=trade_work_dir,iteration=i))
+                    outputs.append(self._run_state(
+                        solution=solution,
+                        state=state,
+                        trade_work_dir=trade_work_dir,
+                        iteration=i))
                     self.log.info(f"state successful: {state}")
                     successful_states.append(state)
                 except PluginException as e:
@@ -856,19 +897,25 @@ class Engine:
             raise ValueError("num_processors must be None or an integer >=1")
         # Consolidate results
         study_result = self.study.results
-        if trade_name in study_result.tradestudies:
+        if solution.name in study_result.solutions:
+            solution_results=study_result.get_solution_result(solution.name)
+        else:
+            solution_results=SolutionResults(solution.name,self.study)
+            study_result.add_solution_result(solution_results)
+
+        if trade_name in solution_results.tradestudies:
             self.log.warning(
                 f"Overwriting existing results for trade study {trade_name}"
             )
-        ts = Tradestudy(trade_name)
+        ts = Tradestudy(trade_name,solution_name=solution.name)
         for i,result in enumerate(outputs):
             result._set_case_id(i)
             ts._results.append(result)
             ts._hash_to_result[result.state_hash] = result
 
-        study_result.add_tradestudy(trade_name, ts)
+        solution_results.add_tradestudy(trade_name, ts)
 
-    def check_model(self, plugins, state=None):
+    def check_model(self, solution, plugins, state=None):
         """Perform comprehensive model validation checks.
 
         Validates the model configuration by checking links, types,
@@ -897,16 +944,16 @@ class Engine:
         """
         self.log.debug("check model")
         state = state or {}
-        self.check_links_to_plugins(plugins)
-        self.check_link_types(plugins)
-        self.check_link_indices(plugins)
+        self.check_links_to_plugins(solution,plugins)
+        self.check_link_types(solution,plugins)
+        self.check_link_indices(solution,plugins)
         if state.get("optimization", False):
-            self.check_desvars(plugins, state)
-            self.check_constraints(plugins, state)
-            self.check_objective(plugins, state)
-            self.check_optimization_discrete(plugins)
+            self.check_desvars(solution,plugins, state)
+            self.check_constraints(solution,plugins, state)
+            self.check_objective(solution,plugins, state)
+            self.check_optimization_discrete(solution,plugins)
 
-    def check_links_to_plugins(self, plugins):
+    def check_links_to_plugins(self, solution,plugins):
         """
         Validate that links match declared plugin I/O.
 
@@ -924,9 +971,9 @@ class Engine:
             If input or output names are not declared in plugins.
         """
         self.log.debug(f"check links to plugins")
-        self.study.solution._check_links_to_plugins(plugins)
+        solution._check_links_to_plugins(plugins)
 
-    def check_link_types(self, plugins):
+    def check_link_types(self, solution,plugins):
         """
         Validate that linked parameters have compatible types.
 
@@ -944,9 +991,9 @@ class Engine:
             If linked parameters have incompatible types.
         """
         self.log.debug("check link types")
-        self.study.solution._check_link_types(plugins, self.study)
+        solution._check_link_types(plugins, self.study)
 
-    def check_link_indices(self, plugins):
+    def check_link_indices(self,solution, plugins):
         """Validate indexed solution links.
 
         Parameters
@@ -965,9 +1012,9 @@ class Engine:
             destination shapes.
 
         """
-        self.study.solution._check_link_indices(plugins, self.study)
+        solution._check_link_indices(plugins, self.study)
 
-    def _get_analysis_var_data(self, var_name, plugins):
+    def _get_analysis_var_data(self,solution, var_name, plugins):
         """Return type, value, and shape metadata for an analysis variable.
 
         Parameters
@@ -995,9 +1042,9 @@ class Engine:
                 "value": self.study.get_value(var_name),
                 "shape": None,
             }
-        return self.study.solution.get_var_data(var_name, plugins)
+        return solution.get_var_data(var_name, plugins)
 
-    def check_desvars(self, plugins, state):
+    def check_desvars(self, solution,plugins, state):
         """Validate optimization design variables.
 
         Parameters
@@ -1022,7 +1069,7 @@ class Engine:
         """
         # add desvars
         for name, data in state["des_vars"].items():
-            var_data = self._get_analysis_var_data(name, plugins)
+            var_data = self._get_analysis_var_data(solution,name, plugins)
             des_var_type = var_data["type"]
             if not is_continuous_type_or_value(des_var_type):
                 self.log.error(
@@ -1042,7 +1089,7 @@ class Engine:
                 var_data,
             )
 
-    def check_constraints(self, plugins, state):
+    def check_constraints(self, solution,plugins, state):
         """Validate optimization constraints.
 
         Parameters
@@ -1066,7 +1113,7 @@ class Engine:
 
         """
         for name, data in state["constraints"].items():
-            var_data = self._get_analysis_var_data(name, plugins)
+            var_data = self._get_analysis_var_data(solution,name, plugins)
             constraint_type = var_data["type"]
             if not is_continuous_type_or_value(constraint_type):
                 raise TypeError(
@@ -1215,7 +1262,7 @@ class Engine:
                         f"and {dv_or_const} lower is {data_lower}\n"
                     )
 
-    def check_objective(self, plugins, state):
+    def check_objective(self, solution,plugins, state):
         """Validate the optimization objective.
 
         Checks that the objective variable is of a continuous type as required
@@ -1238,7 +1285,7 @@ class Engine:
             If the objective is not of continuous type.
         """
         self.log.debug("check objective")
-        objective_data = self._get_analysis_var_data(state["objective_name"], plugins)
+        objective_data = self._get_analysis_var_data(solution,state["objective_name"], plugins)
         objective_type = objective_data["type"]
         is_continuous = is_continuous_type_or_value(objective_type)
         if not is_continuous:
@@ -1250,7 +1297,7 @@ class Engine:
                 f"Only continuous variables allowed as objectives"
             )
 
-    def check_optimization_discrete(self, plugins):
+    def check_optimization_discrete(self,solution, plugins):
         """Validate that optimization links are continuous.
 
         Checks that all links between optimization components use
@@ -1273,4 +1320,4 @@ class Engine:
         """
         self.log.debug("Check for discrete I/O passing")
         # Check for discrete I/O passing
-        self.study.solution._check_optimization_discrete(plugins)
+        solution._check_optimization_discrete(plugins)

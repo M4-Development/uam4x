@@ -156,19 +156,22 @@ The electric variant edits the NDARC step to use an electric NJOB file.
 .. code-block:: python
 
     def modify_to_electric(study: Study):
-        study.solution.edit_step("ndarc", {"njob_path": NJOB_ELECTRIC_PATH})
+        study.get_solution("basic").edit_step("ndarc", {"njob_path": NJOB_ELECTRIC_PATH})
 
 The solution setup starts with passenger payload, NDARC, and NDARC
 output aggregation.
 
 .. code-block:: python
 
-    def setup_solution(study: Study):
-        study.solution.add_step(CalcTotalPassWeight, "totalPassWeight", {})
-        study.solution.add_link("vehicles.mtr.aircraft.npass", "totalPassWeight.npass")
-        study.solution.add_link("vehicles.mtr.aircraft.wpass", "totalPassWeight.wpass")
+    from uam4x.solution import Solution
 
-        study.solution.add_step(NdarcPlugin, "ndarc", {
+    def setup_solution(study: Study):
+        solution = Solution("basic")
+        solution.add_step(CalcTotalPassWeight, "totalPassWeight", {})
+        solution.add_link("vehicles.mtr.aircraft.npass", "totalPassWeight.npass")
+        solution.add_link("vehicles.mtr.aircraft.wpass", "totalPassWeight.wpass")
+
+        solution.add_step(NdarcPlugin, "ndarc", {
             "njob_path": NJOB_PATH,
             "ndarc_exe": NDARC_EXE_PATH,
             "out_files": {
@@ -197,11 +200,11 @@ output aggregation.
             },
         })
 
-        study.solution.add_link("vehicles.mtr.tech.Tech1", "ndarc.TechFactors.TECH_body")
-        study.solution.add_link("vehicles.mtr.tech.Tech2", "ndarc.TechFactors.TECH_prim(1)")
-        study.solution.add_link("vehicles.mtr.wing.span", "ndarc.Wing(1).span")
-        study.solution.add_link("totalPassWeight.w_pass_tot", "ndarc.SIZEMISSION(1).Wpay")
-        study.solution.add_link("totalPassWeight.w_pass_tot", "ndarc.SIZEMISSION(2).Wpay")
+        solution.add_link("vehicles.mtr.tech.Tech1", "ndarc.TechFactors.TECH_body")
+        solution.add_link("vehicles.mtr.tech.Tech2", "ndarc.TechFactors.TECH_prim(1)")
+        solution.add_link("vehicles.mtr.wing.span", "ndarc.Wing(1).span")
+        solution.add_link("totalPassWeight.w_pass_tot", "ndarc.SIZEMISSION(1).Wpay")
+        solution.add_link("totalPassWeight.w_pass_tot", "ndarc.SIZEMISSION(2).Wpay")
 
 The full script then adds ``SumComponents`` steps, the
 ``FakeFastOpenvspM4ssPlugin`` step, residual calculations, and tracked
@@ -209,13 +212,13 @@ outputs.
 
 .. code-block:: python
 
-        study.solution.add_step(SumComponents, "nsm1", {"ncomponents": 3})
-        study.solution.add_link(
+        solution.add_step(SumComponents, "nsm1", {"ncomponents": 3})
+        solution.add_link(
             "ndarc.design.Aircraft_Weight_Detail.Rotor_1.WEIGHT_EMPTY.total.lb",
             "nsm1.W1",
         )
 
-        study.solution.add_step(FakeFastOpenvspM4ssPlugin, "openvsp_m4ss_vertical", {
+        solution.add_step(FakeFastOpenvspM4ssPlugin, "openvsp_m4ss_vertical", {
             "base_vsp3_path": VSP_FILE_PATH,
             "veh_path": VEH_PATH,
             "analysis_id": 1,
@@ -226,10 +229,11 @@ outputs.
             "input_dict": {},
             "output_request_dict": {},
         })
-        study.solution.add_link(
+        solution.add_link(
             "vehicles.mtr.wing.span",
             "openvsp_m4ss_vertical.openvsp.parm_id.HFZNSRXUBZN",
         )
+        study.add_solution(solution)
 
 The trade study drives the coupled solve.
 
@@ -258,5 +262,5 @@ results back to the variant directory.
             work_dir = os.path.join(VARIANTS_DIR, active_variant, "work")
             study = Study.from_json(variant_path)
             engine = Engine(study, work_dir)
-            engine.run_tradestudy("ndarc_m4ss_couple")
+            engine.run_tradestudy("ndarc_m4ss_couple", solution_name="basic")
             study.save_results_to_json(variant_path)

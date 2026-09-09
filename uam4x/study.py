@@ -1,4 +1,4 @@
-from uam4x.solution import Solution
+from uam4x.solution import Solution, SolutionManager
 from uam4x.control import Control
 from uam4x.vehicle import Vehicle, VehicleManager
 import json
@@ -72,7 +72,7 @@ class Study:
             log.set_filename_log(filename_log=filename_log)
         self.log = Study.log
         self.vehicles = VehicleManager()
-        self.solution = Solution()
+        self.solutions = SolutionManager()
         self.control = Control()
         self.results = Results(self)
         self._runtime_meta_data = defaultdict(dict)
@@ -80,7 +80,20 @@ class Study:
         self._results_dict_hash=''
         self._post_data={}
 
-    def _add_runtime_plugin_checksums(self, trade_name, plugin_to_checksum):
+    def _get_post_data(self,solution_name,trade_name):
+        solution_post_data=self._post_data.setdefault(solution_name,{})
+        return solution_post_data.setdefault(trade_name,{})
+
+    def _get_runtime_metadata(self,solution_name,trade_name):
+        #i assume this is something like: if its there leave it
+        #if its not, make a key dict pair in the base dict
+        solution_metadata=self._runtime_meta_data.setdefault(solution_name,{})
+        #then it says essentially, in that dictionary, if the trade is already there return that
+        #value associated with the key, otherwise assign that key to that value and return the value
+        return solution_metadata.setdefault(trade_name,{})
+
+
+    def _add_runtime_plugin_checksums(self, solution_name, trade_name, plugin_to_checksum):
         """Store plugin checksum metadata for a trade execution.
 
         Parameters
@@ -97,10 +110,11 @@ class Study:
         None
 
         """
-        self._runtime_meta_data[trade_name]["step_plugin_hashes"] = plugin_to_checksum
+        trade_meta_dict=self._get_runtime_metadata(solution_name,trade_name)
+        trade_meta_dict["step_plugin_hashes"] = plugin_to_checksum
 
     def _add_runtime_external_executable_data(
-        self, trade_name, external_executable_to_data
+        self, solution_name,trade_name, external_executable_to_data
     ):
         """Store external executable metadata for a trade execution.
 
@@ -118,11 +132,12 @@ class Study:
         None
 
         """
-        self._runtime_meta_data[trade_name][
+        trade_meta_dict=self._get_runtime_metadata(solution_name,trade_name)
+        trade_meta_dict[
             "step_external_executable_data"
         ] = external_executable_to_data
 
-    def _capture_environment(self, trade_name):
+    def _capture_environment(self, solution_name,trade_name):
         """Capture runtime environment metadata for a trade execution.
 
         Parameters
@@ -159,8 +174,31 @@ class Study:
 
         environ_dict = {dist.name: dist.version for dist in distributions()}
 
+        trade_meta_dict=self._get_runtime_metadata(solution_name=solution_name,trade_name=trade_name)
+        trade_meta_dict["environment"] = {
+            "Machine": machine_dict,
+            "Python": python_dict,
+            "Packages": environ_dict,
+        }
+        self._add_time_metadata(
+            solution_name=solution_name,
+            trade_name=trade_name,
+            start_or_end='Start_Time')
+
+    def _add_time_metadata(self,solution_name, trade_name,start_or_end:str,elapsed_time=None):
+        trade_dict=self._get_runtime_metadata(
+            solution_name=solution_name,
+            trade_name=trade_name)
+        if start_or_end=='Start_Time':
+            mess_start='Executed'
+            trade_dict['time_info']={}
+        elif start_or_end=='Completion_Time':
+            mess_start='Completed'
+            trade_dict['time_info']['Elapsed_Time']=f'Analysis took {elapsed_time} seconds'
+        else:
+            raise ValueError('Must be either start or end')
         dt = datetime.now(tz=ZoneInfo("America/Los_Angeles"))
-        message = f"Executed on"
+        message = f"{mess_start} on"
         keywords = ["A", "B", "d", "Y", "I", "M", "S", "p"]
         for keyword in keywords:
             if not keyword in ["M", "S"]:
@@ -174,23 +212,10 @@ class Study:
 
         message += " Pacific Time"
 
-        if trade_name in self._runtime_meta_data:
-            self._runtime_meta_data[trade_name]["environment"] = {
-                "Machine": machine_dict,
-                "Python": python_dict,
-                "Packages": environ_dict,
-            }
-            self._runtime_meta_data[trade_name]["time_info"] = {"Start_Time": message}
-        else:
-            execution_env = {
-                "environment": {
-                    "Machine": machine_dict,
-                    "Python": python_dict,
-                    "Packages": environ_dict,
-                }
-            }
-            self._runtime_meta_data[trade_name] = execution_env
-            self._runtime_meta_data[trade_name]["time_info"] = {"Start_Time": message}
+
+
+        trade_dict['time_info'][start_or_end]=message
+
 
     def add_trade(self, trade_name: str, trade) -> None:
         """Register a trade study with the study control object.
@@ -253,6 +278,12 @@ class Study:
         self.log.debug(f"get vehicle: {vehicle_name}")
         return self.vehicles.get_vehicle(vehicle_name)
 
+    def add_solution(self,solution:Solution):
+        self.solutions.add_solution(solution)
+
+    def get_solution(self,solution_name:str):
+        return self.solutions.get_solution(solution_name)
+
     def _to_dict(self) -> dict:
         """Serialize the study to a dictionary.
 
@@ -270,7 +301,7 @@ class Study:
             "vehicles": convert_numpy_to_python(
                 {v.name: convert_numpy_to_python(v._to_dict()) for v in self.vehicles}
             ),
-            "solution": convert_numpy_to_python(self.solution._to_dict()),
+            "solutions": {solution.name:convert_numpy_to_python(solution._to_dict()) for solution in self.solutions},
             "results": convert_numpy_to_python(self.results._to_dict()),
             "execution_meta_data": convert_numpy_to_python(self._runtime_meta_data),
         }
@@ -300,7 +331,15 @@ class Study:
         study = cls(log_dir=work_dir)
         for vname, vdata in data["vehicles"].items():
             study.add_vehicle(Vehicle._from_dict(vdata))
-        study.solution = Solution._from_dict(data["solution"])
+        for sname,sdata in data["solutions"].items():
+            solution=Solution._from_dict(sdata)
+            if solution.name != sname:
+                raise ValueError(
+                    f"Solution key {sname!r} does not match "
+                    f"serialized name {solution.name!r}"
+                )
+            study.solutions.add_solution(solution)
+
         study.control = Control._from_dict(data["control"])
         if "results" in data:
             study.results = Results._from_dict(data["results"], study)
@@ -362,7 +401,7 @@ class Study:
         model_dict={
             "control":study_dict["control"],
             "vehicles":study_dict["vehicles"],
-            "solution":study_dict["solution"],
+            "solutions":study_dict["solutions"],
         }
 
         model_hash=Study._generate_data_hash(model_dict)
@@ -454,7 +493,7 @@ class Study:
         model_dict={
             "control":study_dict["control"],
             "vehicles":study_dict["vehicles"],
-            "solution":study_dict["solution"],
+            "solutions":study_dict["solutions"],
         }
 
         model_hash=Study._generate_data_hash(model_dict)
@@ -538,7 +577,7 @@ class Study:
         model_dict={
             "control":study_dict["control"],
             "vehicles":study_dict["vehicles"],
-            "solution":study_dict["solution"],
+            "solutions":study_dict["solutions"],
         }
         model_hash= Study._generate_data_hash(model_dict)
 
@@ -609,7 +648,7 @@ class Study:
         model_dict={
             "control":study_dict["control"],
             "vehicles":study_dict["vehicles"],
-            "solution":study_dict["solution"],
+            "solutions":study_dict["solutions"],
         }
         model_hash= Study._generate_data_hash(model_dict)
 
@@ -786,7 +825,7 @@ class Study:
         total_dict={
             "control":model_data["control"],
             "vehicles":model_data["vehicles"],
-            "solution":model_data["solution"],
+            "solutions":model_data["solutions"],
         }
 
 
@@ -816,9 +855,6 @@ class Study:
         if results_hash:
             study._results_dict_hash=results_hash
 
-        for name in study.control.trade_studies.keys():
-            study._post_data[name]={}
-
         return study
 
     @classmethod
@@ -847,7 +883,7 @@ class Study:
         total_dict={
             "control":model_data["control"],
             "vehicles":model_data["vehicles"],
-            "solution":model_data["solution"],
+            "solutions":model_data["solutions"],
         }
 
 
@@ -860,9 +896,6 @@ class Study:
 
         study=cls._from_dict(total_dict,work_dir=variant_dir)
         study._model_dict_hash=model_hash
-
-        for name in study.control.trade_studies.keys():
-            study._post_data[name]={}
 
         return study
 
@@ -1326,7 +1359,7 @@ if __name__ == "__main__":
     v.add_component(right_wing)
 
     # Define a solution with at least 2 steps
-    solution = Solution()
+    solution = Solution("default")
 
     # Add some example links and tracked outputs for testing
     solution.add_link("vehicles.TestVehicle.left_wing.span", "step1.inputs.wing_span")
@@ -1360,12 +1393,12 @@ if __name__ == "__main__":
     # Add everything to a Study
     self = Study()
     self.add_vehicle(v)
-    self.solution = solution
+    self.add_solution(solution)
     self.control = control
 
     # Print summary
     print("Vehicles:", self.vehicles)
-    print("Solution steps:", self.solution.steps)
+    print("Solution steps:", self.get_solution("default").steps)
     print("Control trades:", list(self.control.trade_studies.keys()))
     print("Parameter sweep states:")
     for state in sweep.get_states():

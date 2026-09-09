@@ -82,12 +82,16 @@ The solution adds the beam-failure plugin and tracks ``calculate_failure.g_val``
 
 .. code-block:: python
 
+    from uam4x.solution import Solution
+
     def setup_solution(study: Study):
-        study.solution.add_step(CalculateBeamFailure, "calculate_failure")
-        study.solution.add_link(
+        solution = Solution("basic")
+        solution.add_step(CalculateBeamFailure, "calculate_failure")
+        solution.add_link(
             "vehicles.vehicle1.beam1.height", "calculate_failure.height"
         )
-        study.solution.add_tracked_output("calculate_failure.g_val")
+        solution.add_tracked_output("calculate_failure.g_val")
+        study.add_solution(solution)
 
 The trade-study setup defines three aleatory analyses: two regression-PCE
 studies and one Gauss quadrature PCE study.
@@ -120,9 +124,9 @@ studies before saving results back to the variant directory.
         save_path = os.path.join(THIS_DIR, "variants", "nipc_uq")
         study = Study.load_study_from_directory(save_path)
         engine = Engine(study, os.path.join(save_path, "work"))
-        engine.run_tradestudy("lhs_pce_analysis", num_processors=1)
-        engine.run_tradestudy("mc_pce_analysis", num_processors=1)
-        engine.run_tradestudy("quad_pce_analysis", num_processors=1)
+        engine.run_tradestudy("lhs_pce_analysis", solution_name="basic", num_processors=1)
+        engine.run_tradestudy("mc_pce_analysis", solution_name="basic", num_processors=1)
+        engine.run_tradestudy("quad_pce_analysis", solution_name="basic", num_processors=1)
         study.save_results_to_json(save_path)
 
 ``post_analysis.py``
@@ -138,13 +142,14 @@ analytical moments directly from those surrogate objects.
 
 .. code-block:: python
 
-    lhs_nipc_ts = study.results.get_tradestudy("lhs_pce_analysis")
+    solution_results = study.results.get_solution_result("basic")
+    lhs_nipc_ts = solution_results.get_tradestudy("lhs_pce_analysis")
     lhs_nipc_post = RegressionPCEPost(lhs_nipc_ts)
     lhs_nipc_surrogate = lhs_nipc_post.generate_surrogate("calculate_failure.g_val")
     lhs_mean = float(lhs_nipc_surrogate.analytical_mean)
     lhs_std = float(lhs_nipc_surrogate.analytical_std)
 
-    quad_ts = study.results.get_tradestudy("quad_pce_analysis")
+    quad_ts = solution_results.get_tradestudy("quad_pce_analysis")
     quad_nipc_post = GaussQuadtraturePCEPost(quad_ts)
     quad_nipc_surrogate = quad_nipc_post.generate_surrogate("calculate_failure.g_val")
     quad_mean = float(quad_nipc_surrogate.analytical_mean)
@@ -156,7 +161,7 @@ surrogate metric helpers.
 
 .. code-block:: python
 
-    mc_nipc_ts = study.results.get_tradestudy("mc_pce_analysis")
+    mc_nipc_ts = solution_results.get_tradestudy("mc_pce_analysis")
     x1 = np.array(mc_nipc_ts.get_variable(
         "vehicles.vehicle1.beam1.bending_moment"
     ))[:, None]

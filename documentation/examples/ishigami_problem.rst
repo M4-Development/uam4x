@@ -74,8 +74,8 @@ saves the results.
         study_dir = os.path.join(THIS_DIR, "variants", "ishigami")
         study = Study.load_study_from_directory(study_dir)
         engine = Engine(study, os.path.join(study_dir, "work"))
-        engine.run_tradestudy("pce_ishigami_problem", create_step_work_dirs=False)
-        engine.run_tradestudy("mc_ishigami_problem", create_step_work_dirs=False)
+        engine.run_tradestudy("pce_ishigami_problem", solution_name="basic", create_step_work_dirs=False)
+        engine.run_tradestudy("mc_ishigami_problem", solution_name="basic", create_step_work_dirs=False)
         study.save_results_to_json(study_dir)
 
 Post-processing
@@ -87,7 +87,8 @@ total-order Sobol terms against analytical Ishigami reference values.
 
 .. code-block:: python
 
-    ts = study.results.get_tradestudy("mc_ishigami_problem")
+    solution_results = study.results.get_solution_result("basic")
+    ts = solution_results.get_tradestudy("mc_ishigami_problem")
     uq_post = SobolSensitivityPost(ts)
     uq_post.plot_total_order_indices("ishigami_calc.g", save_dir=study_dir)
     first_order_terms = uq_post.get_first_order_indices("ishigami_calc.g")
@@ -99,7 +100,8 @@ surrogate, and compare them against the same analytical reference values.
 
 .. code-block:: python
 
-    uq_trade = study.results.get_tradestudy("pce_ishigami_problem")
+    solution_results = study.results.get_solution_result("basic")
+    uq_trade = solution_results.get_tradestudy("pce_ishigami_problem")
     uq_post = RegressionPCEPost(uq_trade)
     surrogate = uq_post.generate_surrogate("ishigami_calc.g")
     s1 = surrogate.get_first_order_sobol(

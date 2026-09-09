@@ -330,6 +330,7 @@ def _optimization_sets(state: dict | None) -> tuple[set[str], set[str], set[str]
 
 def build_n2_data(
     study,
+    solution,
     plugins: dict,
     *,
     state: dict | None = None,
@@ -361,7 +362,7 @@ def build_n2_data(
     components.append(vehicle_component)
 
     tree = _build_group_tree(
-        study.solution,
+        solution,
         plugins,
         "",
         components,
@@ -384,7 +385,7 @@ def build_n2_data(
         component["order"] = order
 
     used_vehicle_names = []
-    for name in study.solution.get_all_used_vehicle_params():
+    for name in solution.get_all_used_vehicle_params():
         clean_name, _ = _split_indices(name)
         if clean_name not in used_vehicle_names:
             used_vehicle_names.append(clean_name)
@@ -423,7 +424,7 @@ def build_n2_data(
         component["id"]: component["order"] for component in components
     }
     connections = []
-    for source, target in study.solution._build_global_links():
+    for source, target in solution._build_global_links():
         source = _without_solution_prefix(source)
         target = _without_solution_prefix(target)
         source, source_indices = _split_indices(source)
@@ -469,7 +470,7 @@ def build_n2_data(
 
     tracked = {
         _split_indices(_without_solution_prefix(name))[0]
-        for name in study.solution.tracked_outputs
+        for name in solution.tracked_outputs
     }
     design_vars, constraints, objectives = _optimization_sets(state)
     for variable in variables:
@@ -509,7 +510,8 @@ def build_n2_data(
 
     return {
         "schema_version": 1,
-        "title": title or "uam4x N² Diagram",
+        "title": title or f"uam4x N² Diagram — {solution.name}",
+        "solution_name": solution.name,
         "trade_name": trade_name,
         "tree": tree,
         "components": components,

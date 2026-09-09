@@ -7,12 +7,25 @@ import pytest
 
 from uam4x.local_sensitivity import LocalSensitivity
 from uam4x.post import LocalSensitivityPost
-from uam4x.results import Results, Tradestudy, Result
+from uam4x.results import Results, SolutionResults, Tradestudy, Result
+
+
+SOLUTION_NAME = "test_solution"
 
 
 class _DummySolution:
     def __init__(self):
         self.tracked_outputs = ["out.y"]
+
+
+class _DummySolutions:
+    def __init__(self):
+        self._solution = _DummySolution()
+
+    def get_solution(self, name):
+        if name != SOLUTION_NAME:
+            raise KeyError(name)
+        return self._solution
 
 
 class _DummyControl:
@@ -22,11 +35,16 @@ class _DummyControl:
 
 class _DummyStudy:
     def __init__(self):
-        self.solution = _DummySolution()
+        self.solutions = _DummySolutions()
         self.control = _DummyControl()
+        self._post_data = {}
 
     def get_value(self, _):
         raise KeyError
+
+    def _get_post_data(self, solution_name, trade_name):
+        solution_data = self._post_data.setdefault(solution_name, {})
+        return solution_data.setdefault(trade_name, {})
 
 
 def _build_sensitivity_tradestudy(method_states):
@@ -35,9 +53,11 @@ def _build_sensitivity_tradestudy(method_states):
     ls.add_perturbation_var("x", evaluation_point=1.0)
     study.control.trade_studies["sens"] = ls
 
-    ts = Tradestudy("sens")
+    ts = Tradestudy("sens", SOLUTION_NAME)
     res = Results(study=study)
-    res.add_tradestudy("sens", ts)
+    solution_results = SolutionResults(SOLUTION_NAME)
+    res.add_solution_result(solution_results)
+    solution_results.add_tradestudy("sens", ts)
 
     for state, out in method_states:
         r = Result(state=state)

@@ -85,7 +85,7 @@ and writes results back to disk.
         study_dir = os.path.join(THIS_DIR, "variants", "borehole")
         study = Study.load_study_from_directory(study_dir)
         engine = Engine(study, os.path.join(study_dir, "work"))
-        engine.run_tradestudy("borehole_problem", create_step_work_dirs=False)
+        engine.run_tradestudy("borehole_problem", solution_name="basic", create_step_work_dirs=False)
         study.save_results_to_json(study_dir)
 
 ``run_post.py``
@@ -102,7 +102,8 @@ for ``borehole_calc.flow_rate`` and compares:
 
 .. code-block:: python
 
-    ts = study.results.get_tradestudy("borehole_problem")
+    solution_results = study.results.get_solution_result("basic")
+    ts = solution_results.get_tradestudy("borehole_problem")
     uq_post = RegressionPCEPost(ts)
     surrogate_model = uq_post.generate_surrogate("borehole_calc.flow_rate")
     analytical_mean = float(surrogate_model.analytical_mean)

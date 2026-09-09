@@ -177,8 +177,11 @@ IXGEN.
 
 .. code-block:: python
 
+    from uam4x.solution import Solution
+
     def setup_solution(study: Study):
-        study.solution.add_step(NdarcPlugin, "ndarc", {
+        solution = Solution("basic")
+        solution.add_step(NdarcPlugin, "ndarc", {
             "njob_path": NJOB_PATH,
             "ndarc_exe": NDARC_EXE_PATH,
             "step_size": 0.1,
@@ -198,25 +201,25 @@ IXGEN.
                 "soln.Rotor(1).NBLADE": {"type": "float", "default_value": 2.0},
             },
         })
-        study.solution.add_link("vehicles.quad.tech.Tech1", "ndarc.Rotor(1).TECH_blade")
-        study.solution.add_link("vehicles.quad.rotor.vtip", "ndarc.Rotor(1).Vtip_ref")
+        solution.add_link("vehicles.quad.tech.Tech1", "ndarc.Rotor(1).TECH_blade")
+        solution.add_link("vehicles.quad.rotor.vtip", "ndarc.Rotor(1).Vtip_ref")
 
-        study.solution.add_step(Ft2Meters, "lengthMETERS", {"input_dict": {}})
-        study.solution.add_link("ndarc.soln.Rotor(1).RADIUS", "lengthMETERS.Rotor(1).radius")
-        study.solution.add_link("ndarc.soln.Rotor(1).CHORD", "lengthMETERS.Rotor(1).chord")
+        solution.add_step(Ft2Meters, "lengthMETERS", {"input_dict": {}})
+        solution.add_link("ndarc.soln.Rotor(1).RADIUS", "lengthMETERS.Rotor(1).radius")
+        solution.add_link("ndarc.soln.Rotor(1).CHORD", "lengthMETERS.Rotor(1).chord")
 
-        study.solution.add_step(CalcBladeChord, "CrossSectionChord", {})
-        study.solution.add_link("lengthMETERS.Rotor(1).chord.meters", "CrossSectionChord.chord")
-        study.solution.add_link("ndarc.soln.Rotor(1).TAPER", "CrossSectionChord.taper")
+        solution.add_step(CalcBladeChord, "CrossSectionChord", {})
+        solution.add_link("lengthMETERS.Rotor(1).chord.meters", "CrossSectionChord.chord")
+        solution.add_link("ndarc.soln.Rotor(1).TAPER", "CrossSectionChord.taper")
 
-        study.solution.add_step(CalcCrossSectionTwist, "CrossSectionTwist", {})
-        study.solution.add_link("ndarc.soln.Rotor(1).TWISTL", "CrossSectionTwist.twist")
+        solution.add_step(CalcCrossSectionTwist, "CrossSectionTwist", {})
+        solution.add_link("ndarc.soln.Rotor(1).TWISTL", "CrossSectionTwist.twist")
 
 The IXGEN step receives region geometry and returns sectional masses.
 
 .. code-block:: python
 
-        study.solution.add_step(IxgenPlugin, "ixgen", {
+        solution.add_step(IxgenPlugin, "ixgen", {
             "ixgen_path": IXGEN_INPUT_PATH,
             "ixgen_exe": IXGEN_EXE_PATH,
             "step_size": 0.1,
@@ -237,31 +240,32 @@ The IXGEN step receives region geometry and returns sectional masses.
                 "vabs.region.2.outboard.mass": {"type": "float", "default_value": 0.0},
             },
         })
-        study.solution.add_link("vehicles.quad.region1.spanwise_start", "ixgen.region.1.spanwise.start")
-        study.solution.add_link("lengthMETERS.Rotor(1).radius.meters", "ixgen.span")
-        study.solution.add_link("CrossSectionChord.root_chord", "ixgen.region.1.chord.start")
-        study.solution.add_link("CrossSectionTwist.tip_twist", "ixgen.region.2.twist.stop")
+        solution.add_link("vehicles.quad.region1.spanwise_start", "ixgen.region.1.spanwise.start")
+        solution.add_link("lengthMETERS.Rotor(1).radius.meters", "ixgen.span")
+        solution.add_link("CrossSectionChord.root_chord", "ixgen.region.1.chord.start")
+        solution.add_link("CrossSectionTwist.tip_twist", "ixgen.region.2.twist.stop")
 
 The remaining steps convert IXGEN masses, sum them, compute NDARC
 single-blade weight, and track the residual.
 
 .. code-block:: python
 
-        study.solution.add_step(kg_m2lbs_ft, "massLBS", {"input_dict": {}})
-        study.solution.add_link("ixgen.vabs.region.1.inboard.mass", "massLBS.region.1.inboard.mass")
+        solution.add_step(kg_m2lbs_ft, "massLBS", {"input_dict": {}})
+        solution.add_link("ixgen.vabs.region.1.inboard.mass", "massLBS.region.1.inboard.mass")
 
-        study.solution.add_step(CalcTotalMassFromCrossSection, "BladeMass", {})
-        study.solution.add_step(CalcSingleBladeWeightNdarc, "Rotor1BladeWeight", {})
-        study.solution.add_link(
+        solution.add_step(CalcTotalMassFromCrossSection, "BladeMass", {})
+        solution.add_step(CalcSingleBladeWeightNdarc, "Rotor1BladeWeight", {})
+        solution.add_link(
             "ndarc.soln.Rotor(1).WEIGHT.W_ROTOR_BLADE",
             "Rotor1BladeWeight.rotors_weight",
         )
-        study.solution.add_link("ndarc.soln.Rotor(1).NBLADE", "Rotor1BladeWeight.nblade")
+        solution.add_link("ndarc.soln.Rotor(1).NBLADE", "Rotor1BladeWeight.nblade")
 
-        study.solution.add_step(ResidualIxgenDemo, "residual", {})
-        study.solution.add_link("BladeMass.total_mass", "residual.ixgen_weight")
-        study.solution.add_link("Rotor1BladeWeight.single_blade_weight", "residual.ndarc_weight")
-        study.solution.add_tracked_output("residual.residual")
+        solution.add_step(ResidualIxgenDemo, "residual", {})
+        solution.add_link("BladeMass.total_mass", "residual.ixgen_weight")
+        solution.add_link("Rotor1BladeWeight.single_blade_weight", "residual.ndarc_weight")
+        solution.add_tracked_output("residual.residual")
+        study.add_solution(solution)
 
 The trade study varies rotor velocity.
 
@@ -285,5 +289,5 @@ loads the ``quad`` variant, runs ``vel_trade``, and saves results.
         variant_path = os.path.join(VARIANTS_DIR, "quad")
         study = Study.from_json(variant_path)
         engine = Engine(study, os.path.join(VARIANTS_DIR, "quad", "work"))
-        engine.run_tradestudy("vel_trade")
+        engine.run_tradestudy("vel_trade", solution_name="basic")
         study.save_results_to_json(variant_path)

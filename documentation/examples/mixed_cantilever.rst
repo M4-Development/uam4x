@@ -54,12 +54,16 @@ The model builds one vehicle with a single cantilever subsystem and tracks the
 
 .. code-block:: python
 
+    from uam4x.solution import Solution
+
     def setup_solution(study: Study):
-        study.solution.add_step(CantiliverDeflection, "cantilever_deflection")
-        study.solution.add_link("vehicles.base.cantilever_base.M", "cantilever_deflection.M")
-        study.solution.add_link("vehicles.base.cantilever_base.Y", "cantilever_deflection.Y")
-        study.solution.add_link("vehicles.base.cantilever_base.T", "cantilever_deflection.T")
-        study.solution.add_tracked_output("cantilever_deflection.g")
+        solution = Solution("basic")
+        solution.add_step(CantiliverDeflection, "cantilever_deflection")
+        solution.add_link("vehicles.base.cantilever_base.M", "cantilever_deflection.M")
+        solution.add_link("vehicles.base.cantilever_base.Y", "cantilever_deflection.Y")
+        solution.add_link("vehicles.base.cantilever_base.T", "cantilever_deflection.T")
+        solution.add_tracked_output("cantilever_deflection.g")
+        study.add_solution(solution)
 
 The trade-study setup adds:
 
@@ -81,9 +85,9 @@ The analysis script runs the three mixed-UQ trade studies and saves results.
         study_dir = os.path.join(THIS_DIR, "variants", "mixed_cantilever")
         study = Study.load_study_from_directory(study_dir)
         engine = Engine(study, os.path.join(study_dir, "work"))
-        engine.run_tradestudy("mc_cantilever_problem", create_step_work_dirs=False)
-        engine.run_tradestudy("pce_cantilever_problem", create_step_work_dirs=False)
-        engine.run_tradestudy("m4_samples", create_step_work_dirs=False)
+        engine.run_tradestudy("mc_cantilever_problem", solution_name="basic", create_step_work_dirs=False)
+        engine.run_tradestudy("pce_cantilever_problem", solution_name="basic", create_step_work_dirs=False)
+        engine.run_tradestudy("m4_samples", solution_name="basic", create_step_work_dirs=False)
         study.save_results_to_json(study_dir)
 
 Post-processing
@@ -94,7 +98,8 @@ p-box and horsetail plots for the direct mixed-sampling workflow.
 
 .. code-block:: python
 
-    trade = study.results.get_tradestudy("mc_cantilever_problem")
+    solution_results = study.results.get_solution_result("basic")
+    trade = solution_results.get_tradestudy("mc_cantilever_problem")
     post = BasicMixedPost(trade)
     low, high = post.get_plevel_bounds("cantilever_deflection.g", 0.0265)
     post.plot_pbox("cantilever_deflection.g", save_dir=study_dir)
@@ -106,7 +111,8 @@ predictions against the ``m4_ref`` reference files.
 
 .. code-block:: python
 
-    trade = study.results.get_tradestudy("pce_cantilever_problem")
+    solution_results = study.results.get_solution_result("basic")
+    trade = solution_results.get_tradestudy("pce_cantilever_problem")
     post = MixedRegressionPCEPost(trade)
     surrogate = post.generate_surrogate("cantilever_deflection.g")
     surrogate.sample(50, 1000)
@@ -119,7 +125,8 @@ predictions against the ``m4_ref`` reference files.
 
 .. code-block:: python
 
-    trade = study.results.get_tradestudy("m4_samples")
+    solution_results = study.results.get_solution_result("basic")
+    trade = solution_results.get_tradestudy("m4_samples")
     post = MixedRegressionPCEPost(trade)
     surrogate = post.generate_surrogate("cantilever_deflection.g")
     prediction = surrogate.predict({

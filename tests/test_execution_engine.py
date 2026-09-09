@@ -12,12 +12,13 @@ import pytest
 pytest.importorskip("openmdao.api")
 
 import uam4x.study as study_module
+import uam4x.execution_engine as execution_engine_module
 from uam4x.execution_engine import Engine
 from uam4x.results import Result
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Subsystem, register_subsystem
-from uam4x.solution import Plugin, register_plugin, Group
+from uam4x.solution import Plugin, register_plugin, Group, Solution
 from uam4x.control import Optimization as ControlOptimization, ParameterSweep
 
 
@@ -131,24 +132,25 @@ class ScalarDefaultArraySinkPlugin(Plugin):
 def engine_setup(tmp_path):
     study = Study()
 
+    study.add_solution(Solution("test_solution"))
     vehicle = Vehicle("exec_vehicle")
     vehicle.add_component(ExecSubsystem("core"))
     study.add_vehicle(vehicle)
 
-    study.solution.add_step(Stage1Plugin, "stage1")
-    study.solution.add_step(Stage2Plugin, "stage2")
+    study.get_solution("test_solution").add_step(Stage1Plugin, "stage1")
+    study.get_solution("test_solution").add_step(Stage2Plugin, "stage2")
 
-    study.solution.add_link("vehicles.exec_vehicle.core.x", "stage1.x")
-    study.solution.add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
-    study.solution.add_link("vehicles.exec_vehicle.core.n", "stage1.n")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.x", "stage1.x")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.n", "stage1.n")
 
-    study.solution.add_link("stage1.y", "stage2.y")
-    study.solution.add_link("stage1.arr_scalar", "stage2.arr_scalar")
+    study.get_solution("test_solution").add_link("stage1.y", "stage2.y")
+    study.get_solution("test_solution").add_link("stage1.arr_scalar", "stage2.arr_scalar")
 
-    study.solution.add_tracked_output("stage2.objective")
+    study.get_solution("test_solution").add_tracked_output("stage2.objective")
 
-    study.solution.sort_steps()
-    plugins = study.solution.generate_plugins()
+    study.get_solution("test_solution").sort_steps()
+    plugins = study.get_solution("test_solution").generate_plugins()
 
     engine = Engine(study, work_dir=str(tmp_path / "work"))
     return study, engine, plugins
@@ -165,41 +167,41 @@ def _mock_python_cmd(monkeypatch):
 def test_check_links_to_plugins_and_link_types_and_indices_positive(engine_setup):
     study, engine, plugins = engine_setup
 
-    engine.check_links_to_plugins(plugins)
-    engine.check_link_types(plugins)
-    engine.check_link_indices(plugins)
+    engine.check_links_to_plugins(engine.study.get_solution("test_solution"), plugins)
+    engine.check_link_types(engine.study.get_solution("test_solution"), plugins)
+    engine.check_link_indices(engine.study.get_solution("test_solution"), plugins)
 
 
 def test_check_links_to_plugins_missing_input_raises(engine_setup):
     study, engine, plugins = engine_setup
-    study.solution.add_link("stage1.y", "stage2.missing_input")
+    study.get_solution("test_solution").add_link("stage1.y", "stage2.missing_input")
 
     with pytest.raises(ValueError, match="was not declared in the plugin"):
-        engine.check_links_to_plugins(plugins)
+        engine.check_links_to_plugins(engine.study.get_solution("test_solution"), plugins)
 
 
 def test_check_links_to_plugins_missing_output_raises(engine_setup):
     study, engine, plugins = engine_setup
-    study.solution.add_link("stage1.missing_output", "stage2.y")
+    study.get_solution("test_solution").add_link("stage1.missing_output", "stage2.y")
 
     with pytest.raises(ValueError, match="was not declared in the plugin"):
-        engine.check_links_to_plugins(plugins)
+        engine.check_links_to_plugins(engine.study.get_solution("test_solution"), plugins)
 
 
 def test_check_link_types_mismatch_raises(engine_setup):
     study, engine, plugins = engine_setup
-    study.solution.add_link("vehicles.exec_vehicle.core.arr", "stage2.arr_scalar")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.arr", "stage2.arr_scalar")
 
     with pytest.raises(TypeError, match="Link types must match"):
-        engine.check_link_types(plugins)
+        engine.check_link_types(engine.study.get_solution("test_solution"), plugins)
 
 
 def test_check_link_types_index_on_scalar_raises(engine_setup):
     study, engine, plugins = engine_setup
-    study.solution.add_link("stage1.y[0]", "stage2.y")
+    study.get_solution("test_solution").add_link("stage1.y[0]", "stage2.y")
 
     with pytest.raises(ValueError, match="Indexes may only be specified for arrays"):
-        engine.check_link_types(plugins)
+        engine.check_link_types(engine.study.get_solution("test_solution"), plugins)
 
 
 def test_check_link_types_nested_group_allows_nested_array_index(engine_setup):
@@ -208,13 +210,13 @@ def test_check_link_types_nested_group_allows_nested_array_index(engine_setup):
     nested = Group()
     nested.add_step(NestedMatrixPlugin, "matrix")
 
-    study.solution.add_step(nested, "nested")
-    study.solution.add_step(NestedVectorSinkPlugin, "vector_sink")
-    study.solution.add_link("nested.matrix.matrix[0,:]", "vector_sink.in_vec")
-    study.solution.sort_steps()
+    study.get_solution("test_solution").add_step(nested, "nested")
+    study.get_solution("test_solution").add_step(NestedVectorSinkPlugin, "vector_sink")
+    study.get_solution("test_solution").add_link("nested.matrix.matrix[0,:]", "vector_sink.in_vec")
+    study.get_solution("test_solution").sort_steps()
 
-    plugins = study.solution.generate_plugins()
-    engine.check_link_types(plugins)
+    plugins = study.get_solution("test_solution").generate_plugins()
+    engine.check_link_types(engine.study.get_solution("test_solution"), plugins)
 
 
 def test_check_link_indices_nested_group_shape_mismatch_raises(engine_setup):
@@ -231,23 +233,23 @@ def test_check_link_indices_nested_group_shape_mismatch_raises(engine_setup):
     nested = Group()
     nested.add_step(NestedMatrixPlugin, "matrix")
 
-    study.solution.add_step(nested, "nested")
-    study.solution.add_step(BadVectorSinkPlugin, "vector_sink_bad")
-    study.solution.add_link("nested.matrix.matrix[0,:]", "vector_sink_bad.in_vec")
-    study.solution.sort_steps()
+    study.get_solution("test_solution").add_step(nested, "nested")
+    study.get_solution("test_solution").add_step(BadVectorSinkPlugin, "vector_sink_bad")
+    study.get_solution("test_solution").add_link("nested.matrix.matrix[0,:]", "vector_sink_bad.in_vec")
+    study.get_solution("test_solution").sort_steps()
 
-    plugins = study.solution.generate_plugins()
+    plugins = study.get_solution("test_solution").generate_plugins()
 
     with pytest.raises(ValueError, match="source indices must match the target shape"):
-        engine.check_link_indices(plugins)
+        engine.check_link_indices(engine.study.get_solution("test_solution"), plugins)
 
 
 def test_check_link_indices_bad_vehicle_index_raises(engine_setup):
     study, engine, plugins = engine_setup
-    study.solution.add_link("vehicles.exec_vehicle.core.arr[5,:]", "stage1.arr_row")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.arr[5,:]", "stage1.arr_row")
 
     with pytest.raises(ValueError, match="not a valid means to index"):
-        engine.check_link_indices(plugins)
+        engine.check_link_indices(engine.study.get_solution("test_solution"), plugins)
 
 
 def test_check_model_full_optimization_positive(engine_setup):
@@ -264,7 +266,7 @@ def test_check_model_full_optimization_positive(engine_setup):
         "objective_name": "stage2.objective",
     }
 
-    engine.check_model(plugins, state)
+    engine.check_model(engine.study.get_solution("test_solution"), plugins, state)
 
 
 def test_check_desvars_non_continuous_raises(engine_setup):
@@ -277,7 +279,7 @@ def test_check_desvars_non_continuous_raises(engine_setup):
     }
 
     with pytest.raises(TypeError, match="Only floats allowed as design variables"):
-        engine.check_desvars(plugins, state)
+        engine.check_desvars(engine.study.get_solution("test_solution"), plugins, state)
 
 
 def test_check_constraints_non_continuous_raises(engine_setup):
@@ -290,7 +292,7 @@ def test_check_constraints_non_continuous_raises(engine_setup):
     }
 
     with pytest.raises(TypeError, match="Only floats allowed as constraints"):
-        engine.check_constraints(plugins, state)
+        engine.check_constraints(engine.study.get_solution("test_solution"), plugins, state)
 
 
 def test_check_objective_non_continuous_raises(engine_setup):
@@ -299,12 +301,14 @@ def test_check_objective_non_continuous_raises(engine_setup):
     state = {"objective_name": "stage1.disc"}
 
     with pytest.raises(TypeError, match="Only continuous variables allowed as objectives"):
-        engine.check_objective(plugins, state)
+        engine.check_objective(engine.study.get_solution("test_solution"), plugins, state)
 
 
 def test_check_upper_lower_array_bounds_positive_and_negative(engine_setup):
     study, engine, plugins = engine_setup
-    var_data = engine._get_analysis_var_data("stage1.arr_out", plugins)
+    var_data = engine._get_analysis_var_data(
+        study.get_solution("test_solution"), "stage1.arr_out", plugins
+    )
 
     engine.check_upper_lower(
         np.ndarray,
@@ -329,29 +333,31 @@ def test_check_upper_lower_array_bounds_positive_and_negative(engine_setup):
 def test_run_single_point_returns_tracked_output(engine_setup, tmp_path):
     _, engine, plugins = engine_setup
 
-    result = engine._run_single_point(state={}, plugins=plugins, out_dir=str(tmp_path / "single"))
+    result = engine._run_single_point(solution=engine.study.get_solution("test_solution"), state={}, plugins=plugins, out_dir=str(tmp_path / "single"))
 
     assert result.outputs["stage2.objective"] == pytest.approx(40.0)
 
 
 def test_run_single_point_applies_slice_to_runtime_plugin_output(tmp_path):
     study = Study()
+    study.add_solution(Solution("test_solution"))
     vehicle = Vehicle("exec_vehicle")
     vehicle.add_component(ExecSubsystem("core"))
     study.add_vehicle(vehicle)
 
-    study.solution.add_step(Stage1Plugin, "stage1")
-    study.solution.add_step(NestedVectorSinkPlugin, "vector_sink")
-    study.solution.add_link("vehicles.exec_vehicle.core.x", "stage1.x")
-    study.solution.add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
-    study.solution.add_link("vehicles.exec_vehicle.core.n", "stage1.n")
-    study.solution.add_link("stage1.arr_out[1,:]", "vector_sink.in_vec")
-    study.solution.add_tracked_output("vector_sink.scalar")
-    study.solution.sort_steps()
+    study.get_solution("test_solution").add_step(Stage1Plugin, "stage1")
+    study.get_solution("test_solution").add_step(NestedVectorSinkPlugin, "vector_sink")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.x", "stage1.x")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.n", "stage1.n")
+    study.get_solution("test_solution").add_link("stage1.arr_out[1,:]", "vector_sink.in_vec")
+    study.get_solution("test_solution").add_tracked_output("vector_sink.scalar")
+    study.get_solution("test_solution").sort_steps()
 
     engine = Engine(study, work_dir=str(tmp_path / "work"))
-    plugins = study.solution.generate_plugins()
+    plugins = study.get_solution("test_solution").generate_plugins()
     result = engine._run_single_point(
+        solution=engine.study.get_solution("test_solution"),
         state={}, plugins=plugins, out_dir=str(tmp_path / "single")
     )
 
@@ -361,23 +367,25 @@ def test_run_single_point_applies_slice_to_runtime_plugin_output(tmp_path):
 
 def test_run_single_point_applies_element_index_to_runtime_plugin_output(tmp_path):
     study = Study()
+    study.add_solution(Solution("test_solution"))
     vehicle = Vehicle("exec_vehicle")
     vehicle.add_component(ExecSubsystem("core"))
     study.add_vehicle(vehicle)
 
-    study.solution.add_step(Stage1Plugin, "stage1")
-    study.solution.add_step(Stage2Plugin, "stage2")
-    study.solution.add_link("vehicles.exec_vehicle.core.x", "stage1.x")
-    study.solution.add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
-    study.solution.add_link("vehicles.exec_vehicle.core.n", "stage1.n")
-    study.solution.add_link("stage1.arr_out[0,0]", "stage2.y")
-    study.solution.add_link("stage1.arr_out[0,1]", "stage2.arr_scalar")
-    study.solution.add_tracked_output("stage2.objective")
-    study.solution.sort_steps()
+    study.get_solution("test_solution").add_step(Stage1Plugin, "stage1")
+    study.get_solution("test_solution").add_step(Stage2Plugin, "stage2")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.x", "stage1.x")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.n", "stage1.n")
+    study.get_solution("test_solution").add_link("stage1.arr_out[0,0]", "stage2.y")
+    study.get_solution("test_solution").add_link("stage1.arr_out[0,1]", "stage2.arr_scalar")
+    study.get_solution("test_solution").add_tracked_output("stage2.objective")
+    study.get_solution("test_solution").sort_steps()
 
     engine = Engine(study, work_dir=str(tmp_path / "work"))
-    plugins = study.solution.generate_plugins()
+    plugins = study.get_solution("test_solution").generate_plugins()
     result = engine._run_single_point(
+        solution=engine.study.get_solution("test_solution"),
         state={}, plugins=plugins, out_dir=str(tmp_path / "single")
     )
 
@@ -387,19 +395,21 @@ def test_run_single_point_applies_element_index_to_runtime_plugin_output(tmp_pat
 
 def test_run_single_point_assembles_scalar_links_into_array_input(tmp_path):
     study = Study()
+    study.add_solution(Solution("test_solution"))
     vehicle = Vehicle("exec_vehicle")
     vehicle.add_component(ExecSubsystem("core"))
     study.add_vehicle(vehicle)
 
-    study.solution.add_step(ArrayAssemblySinkPlugin, "sink")
-    study.solution.add_link("vehicles.exec_vehicle.core.x", "sink.values[0]")
-    study.solution.add_link("vehicles.exec_vehicle.core.x", "sink.values[2]")
-    study.solution.add_tracked_output("sink.total")
-    study.solution.sort_steps()
+    study.get_solution("test_solution").add_step(ArrayAssemblySinkPlugin, "sink")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.x", "sink.values[0]")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.x", "sink.values[2]")
+    study.get_solution("test_solution").add_tracked_output("sink.total")
+    study.get_solution("test_solution").sort_steps()
 
     engine = Engine(study, work_dir=str(tmp_path / "work"))
-    plugins = study.solution.generate_plugins()
+    plugins = study.get_solution("test_solution").generate_plugins()
     result = engine._run_single_point(
+        solution=engine.study.get_solution("test_solution"),
         state={}, plugins=plugins, out_dir=str(tmp_path / "single")
     )
 
@@ -418,18 +428,20 @@ def test_run_single_point_initializes_partially_linked_array_input(
     tmp_path, plugin_class, expected
 ):
     study = Study()
+    study.add_solution(Solution("test_solution"))
     vehicle = Vehicle("exec_vehicle")
     vehicle.add_component(ExecSubsystem("core"))
     study.add_vehicle(vehicle)
 
-    study.solution.add_step(plugin_class, "sink")
-    study.solution.add_link("vehicles.exec_vehicle.core.x", "sink.values[1]")
-    study.solution.add_tracked_output("sink.values_out")
-    study.solution.sort_steps()
+    study.get_solution("test_solution").add_step(plugin_class, "sink")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.x", "sink.values[1]")
+    study.get_solution("test_solution").add_tracked_output("sink.values_out")
+    study.get_solution("test_solution").sort_steps()
 
     engine = Engine(study, work_dir=str(tmp_path / "work"))
-    plugins = study.solution.generate_plugins()
+    plugins = study.get_solution("test_solution").generate_plugins()
     result = engine._run_single_point(
+        solution=engine.study.get_solution("test_solution"),
         state={}, plugins=plugins, out_dir=str(tmp_path / "single")
     )
 
@@ -438,21 +450,23 @@ def test_run_single_point_initializes_partially_linked_array_input(
 
 def test_run_state_parallel_rebuilds_study_and_runs(tmp_path):
     study = Study()
+    study.add_solution(Solution("test_solution"))
     vehicle = Vehicle("exec_vehicle")
     vehicle.add_component(ExecSubsystem("core"))
     study.add_vehicle(vehicle)
 
-    study.solution.add_step(Stage1Plugin, "stage1")
-    study.solution.add_step(Stage2Plugin, "stage2")
-    study.solution.add_link("vehicles.exec_vehicle.core.x", "stage1.x")
-    study.solution.add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
-    study.solution.add_link("vehicles.exec_vehicle.core.n", "stage1.n")
-    study.solution.add_link("stage1.y", "stage2.y")
-    study.solution.add_link("stage1.arr_scalar", "stage2.arr_scalar")
-    study.solution.add_tracked_output("stage2.objective")
+    study.get_solution("test_solution").add_step(Stage1Plugin, "stage1")
+    study.get_solution("test_solution").add_step(Stage2Plugin, "stage2")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.x", "stage1.x")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
+    study.get_solution("test_solution").add_link("vehicles.exec_vehicle.core.n", "stage1.n")
+    study.get_solution("test_solution").add_link("stage1.y", "stage2.y")
+    study.get_solution("test_solution").add_link("stage1.arr_scalar", "stage2.arr_scalar")
+    study.get_solution("test_solution").add_tracked_output("stage2.objective")
 
     result = Engine._run_state_parallel(
         study._to_dict(),
+        solution_name="test_solution",
         state={},
         iteration=None,
         trade_work_dir=str(tmp_path / "parallel"),
@@ -467,25 +481,53 @@ def test_run_solution_populates_results_and_runtime_metadata(engine_setup, monke
     checked_states = []
     original_check_model = engine.check_model
 
-    def record_check_model(plugins, state=None):
+    def record_check_model(solution, plugins, state=None):
         checked_states.append(state)
-        return original_check_model(plugins, state)
+        return original_check_model(solution, plugins, state)
 
     monkeypatch.setattr(engine, "check_model", record_check_model)
 
-    engine.run_solution()
+    engine.run_solution("test_solution")
 
     assert checked_states == [{}]
-    ts = study.results.tradestudies["Default State"]
+    ts = study.results.get_tradestudy("test_solution", "Default State")
     assert len(ts._results) == 1
     assert ts._results[0].case_id == 0
     assert ts.get_case(0) is ts._results[0]
     assert ts._results[0].outputs["stage2.objective"] == pytest.approx(40.0)
 
-    md = study._runtime_meta_data["Default State"]
+    md = study._runtime_meta_data["test_solution"]["Default State"]
     assert "environment" in md
     assert "step_plugin_hashes" in md
     assert "Completion_Time" in md["time_info"]
+
+
+def test_run_solution_keeps_results_separate_by_solution(engine_setup, monkeypatch):
+    study, engine, _ = engine_setup
+    _mock_python_cmd(monkeypatch)
+
+    alternate = Solution("alternate")
+    alternate.add_step(Stage1Plugin, "stage1")
+    alternate.add_link("vehicles.exec_vehicle.core.x", "stage1.x")
+    alternate.add_link("vehicles.exec_vehicle.core.arr[0,:]", "stage1.arr_row")
+    alternate.add_link("vehicles.exec_vehicle.core.n", "stage1.n")
+    alternate.add_tracked_output("stage1.y")
+    study.add_solution(alternate)
+
+    engine.run_solution("test_solution")
+    engine.run_solution("alternate")
+
+    primary = study.results.get_tradestudy("test_solution", "Default State")
+    secondary = study.results.get_tradestudy("alternate", "Default State")
+
+    assert primary._results[0].outputs["stage2.objective"] == pytest.approx(40.0)
+    assert secondary._results[0].outputs["stage1.y"] == pytest.approx(35.0)
+    assert set(study.results.get_all_solution_results()) == {
+        "test_solution",
+        "alternate",
+    }
+    assert "Default State" in study._runtime_meta_data["test_solution"]
+    assert "Default State" in study._runtime_meta_data["alternate"]
 
 
 def test_run_tradestudy_parameter_sweep(engine_setup, monkeypatch):
@@ -495,9 +537,9 @@ def test_run_tradestudy_parameter_sweep(engine_setup, monkeypatch):
     sweep = ParameterSweep({"vehicles.exec_vehicle.core.x": [1.0, 2.0]})
     study.add_trade("sweep", sweep)
 
-    engine.run_tradestudy("sweep", num_processors=1)
+    engine.run_tradestudy("sweep", solution_name="test_solution", num_processors=1)
 
-    ts = study.results.tradestudies["sweep"]
+    ts = study.results.get_tradestudy("test_solution", "sweep")
     assert len(ts._results) == 2
     assert [result.case_id for result in ts._results] == [0, 1]
     assert ts.get_case(0) is ts._results[0]
@@ -515,12 +557,12 @@ def test_run_tradestudy_optimization_uses_case_zero(engine_setup, monkeypatch):
     monkeypatch.setattr(
         engine,
         "_run_optimization",
-        lambda state, plugins, out_dir: optimization_result,
+        lambda solution, state, plugins, out_dir: optimization_result,
     )
 
-    engine.run_tradestudy("optimization", check=False)
+    engine.run_tradestudy("optimization", solution_name="test_solution", check=False)
 
-    ts = study.results.tradestudies["optimization"]
+    ts = study.results.get_tradestudy("test_solution", "optimization")
     assert len(ts._results) == 1
     assert ts.get_case(0) is optimization_result
 
@@ -530,7 +572,55 @@ def test_run_parameter_sweep_invalid_num_processors_raises(engine_setup):
     study.add_trade("invalid_np", ParameterSweep({"vehicles.exec_vehicle.core.x": [1.0]}))
 
     with pytest.raises(ValueError, match="num_processors must be None or an integer >=1"):
-        engine._run_parameter_sweep("invalid_np", trade_states=[{}], num_processors=-1)
+        engine._run_parameter_sweep(
+            study.get_solution("test_solution"),
+            "invalid_np",
+            trade_states=[{}],
+            trade_work_dir=str(Path(engine.work_dir) / "test_solution" / "invalid_np"),
+            num_processors=-1,
+        )
+
+
+def test_check_partials_uses_named_solution_and_scoped_work_dir(
+    engine_setup, monkeypatch
+):
+    study, engine, _ = engine_setup
+    study.add_trade("optimization", ControlOptimization())
+    captured = {}
+
+    class FakeProblem:
+        def check_partials(self, **kwargs):
+            captured["partials"] = kwargs
+
+    class FakeOptimization:
+        def __init__(self, **kwargs):
+            captured["optimization"] = kwargs
+
+        def run_problem(self):
+            return FakeProblem()
+
+    monkeypatch.setattr(execution_engine_module, "Optimization", FakeOptimization)
+    monkeypatch.setattr(engine, "check_model", lambda solution, plugins, state: None)
+    original_cwd = os.getcwd()
+
+    engine.check_partials(
+        "optimization", "test_solution", form="central", step=1.0e-5
+    )
+
+    expected_dir = os.path.join(
+        engine.work_dir, "test_solution", "optimization", "check_partials"
+    )
+    assert captured["optimization"]["solution"] is study.get_solution(
+        "test_solution"
+    )
+    assert captured["optimization"]["out_dir"] == expected_dir
+    assert captured["optimization"]["check_partials"] is True
+    assert captured["partials"] == {
+        "step": 1.0e-5,
+        "form": "central",
+        "compact_print": True,
+    }
+    assert os.getcwd() == original_cwd
 
 
 def _read_n2_model(path):
@@ -545,7 +635,7 @@ def test_generate_N2_creates_native_standalone_html(engine_setup, tmp_path):
     _, engine, _ = engine_setup
     outfile = tmp_path / "native_n2.html"
 
-    path = engine.generate_N2(
+    path = engine.generate_N2("test_solution",
         outfile=outfile,
         show_browser=False,
         title="Execution engine model",
@@ -593,6 +683,7 @@ def test_generate_N2_creates_native_standalone_html(engine_setup, tmp_path):
     assert "OpenMDAO" not in model["title"]
     assert model["title"] == "Execution engine model"
     assert model["schema_version"] == 1
+    assert model["solution_name"] == "test_solution"
     assert model["viewer"] == {
         "initial_path": "solution",
         "auto_collapse": True,
@@ -629,7 +720,7 @@ def test_generate_N2_does_not_execute_plugins(engine_setup, monkeypatch, tmp_pat
     for plugin in plugins.values():
         monkeypatch.setattr(plugin.__class__, "run_plugin", fail_if_executed)
 
-    path = engine.generate_N2(
+    path = engine.generate_N2("test_solution",
         outfile=tmp_path / "no_execution.html",
         show_browser=False,
     )
@@ -649,7 +740,7 @@ def test_generate_N2_includes_optimization_roles(engine_setup, tmp_path):
     optimization.add_objective("stage2.objective")
     study.add_trade("optimization", optimization)
 
-    path = engine.generate_N2(
+    path = engine.generate_N2("test_solution",
         "optimization",
         outfile=tmp_path / "optimization_n2.html",
         show_browser=False,
@@ -671,9 +762,11 @@ def test_generate_N2_includes_optimization_roles(engine_setup, tmp_path):
 def test_generate_N2_is_the_only_n2_generation_method(engine_setup):
     _, engine, _ = engine_setup
 
-    path = engine.generate_N2(show_browser=False)
+    path = engine.generate_N2("test_solution", show_browser=False)
 
-    assert path == (Path(engine.work_dir) / "n2.html").resolve()
+    assert path == (
+        Path(engine.work_dir) / "test_solution" / "n2.html"
+    ).resolve()
     assert path.exists()
     assert not hasattr(engine, "generate_n2")
 
@@ -681,16 +774,16 @@ def test_generate_N2_is_the_only_n2_generation_method(engine_setup):
 def test_generate_N2_supports_root_directory(engine_setup, tmp_path):
     _, engine, _ = engine_setup
 
-    path = engine.generate_N2(root_dir=tmp_path, show_browser=False)
+    path = engine.generate_N2("test_solution", root_dir=tmp_path, show_browser=False)
 
-    assert path == (tmp_path / "n2.html").resolve()
+    assert path == (tmp_path / "test_solution" / "n2.html").resolve()
 
 
 def test_generate_N2_rejects_root_directory_and_outfile(engine_setup, tmp_path):
     _, engine, _ = engine_setup
 
     with pytest.raises(ValueError, match="either root_dir or outfile"):
-        engine.generate_N2(
+        engine.generate_N2("test_solution",
             root_dir=tmp_path,
             outfile=tmp_path / "explicit.html",
             show_browser=False,
@@ -700,7 +793,7 @@ def test_generate_N2_rejects_root_directory_and_outfile(engine_setup, tmp_path):
 def test_generate_N2_supports_initial_component_path(engine_setup, tmp_path):
     _, engine, _ = engine_setup
 
-    path = engine.generate_N2(
+    path = engine.generate_N2("test_solution",
         outfile=tmp_path / "focused.html",
         path="solution.stage1",
         max_visible_rows=40,
@@ -720,7 +813,7 @@ def test_generate_N2_rejects_unknown_path(engine_setup, tmp_path):
     _, engine, _ = engine_setup
 
     with pytest.raises(ValueError, match="not a unique uam4x group or component path"):
-        engine.generate_N2(
+        engine.generate_N2("test_solution",
             outfile=tmp_path / "unknown.html",
             path="missing.system",
             show_browser=False,
@@ -733,7 +826,7 @@ def test_generate_N2_validates_visible_row_limit(engine_setup, tmp_path, row_lim
 
     expected = TypeError if isinstance(row_limit, (bool, float)) else ValueError
     with pytest.raises(expected):
-        engine.generate_N2(
+        engine.generate_N2("test_solution",
             outfile=tmp_path / "bad_limit.html",
             max_visible_rows=row_limit,
             show_browser=False,
@@ -744,9 +837,11 @@ def test_capture_execution_data_stores_plugin_hashes(engine_setup, monkeypatch):
     study, engine, _ = engine_setup
     _mock_python_cmd(monkeypatch)
 
-    engine.capture_execution_data("meta_trade")
+    engine.capture_execution_data(
+        "meta_trade", study.get_solution("test_solution")
+    )
 
-    hashes = study._runtime_meta_data["meta_trade"]["step_plugin_hashes"]
+    hashes = study._runtime_meta_data["test_solution"]["meta_trade"]["step_plugin_hashes"]
     assert "stage1" in hashes
     assert "stage2" in hashes
     assert all(len(v) == 64 for v in hashes.values())

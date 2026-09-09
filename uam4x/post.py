@@ -34,8 +34,10 @@ class BasicPost:
 
         """
         self.tradestudy = tradestudy
-        trade_name=self.tradestudy.trade_name
-        self.post_storage=tradestudy.study._post_data[trade_name]
+        self.post_storage=tradestudy.study._get_post_data(
+            solution_name=tradestudy.solution_name,
+            trade_name=tradestudy.trade_name
+        )
 
     def scatter(
         self, var1, var2, xlabel=None, ylabel=None, title="default_title", save_dir=None
@@ -143,8 +145,10 @@ class BasicAleatoryPost:
 
         """
         self.tradestudy = tradestudy
-        trade_name=self.tradestudy.trade_name
-        self.post_storage=tradestudy.study._post_data[trade_name]
+        self.post_storage=tradestudy.study._get_post_data(
+            solution_name=tradestudy.solution_name,
+            trade_name=tradestudy.trade_name
+        )
 
     def compute_mean(self, var_name):
         """Compute the sample mean for a variable across trade-study results.
@@ -1902,9 +1906,10 @@ class BasicEpistemicPost:
 
         """
         self.tradestudy=tradestudy
-        trade_name=self.tradestudy.trade_name
-        self.post_storage=tradestudy.study._post_data[trade_name]
-
+        self.post_storage=tradestudy.study._get_post_data(
+            solution_name=tradestudy.solution_name,
+            trade_name=tradestudy.trade_name
+        )
     def compute_bounds(self,var_name):
         """Compute minimum and maximum observed values for a variable.
 
@@ -1964,9 +1969,10 @@ class BasicMixedPost:
 
         """
         self.tradestudy = tradestudy
-        trade_name=self.tradestudy.trade_name
-        self.post_storage=tradestudy.study._post_data[trade_name]
-
+        self.post_storage=tradestudy.study._get_post_data(
+            solution_name=tradestudy.solution_name,
+            trade_name=tradestudy.trade_name
+        )
     def _generate_output_var_data(self,var_name):
         """Group output values by epistemic state and compute empirical CDFs.
 

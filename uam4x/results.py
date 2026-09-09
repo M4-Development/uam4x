@@ -7,7 +7,7 @@ from uam4x.utils import split_dotted_path_and_indices
 class Results:
     """Store analysis result sets for a study.
 
-    A ``Results`` object maps analysis names to :class:`Tradestudy` result
+    A ``Results`` object maps solution names to :class:`SolutionResults`
     containers and provides access to all stored study results.
 
     Parameters
@@ -26,36 +26,174 @@ class Results:
             Parent study associated with these results.
 
         """
-        self.tradestudies = {}
+        self.solutions = {}
         self.study = study
 
-    def get_tradestudy(self, name):
-        """Return one stored analysis result container by name.
+    def get_solution_result(self, name):
+        """Return one stored solution result container by name.
 
         Parameters
         ----------
         name : str
-            Analysis name.
+            Solution name.
+
+        Returns
+        -------
+        SolutionResults or None
+            Stored result container for ``name``, or ``None`` if it is not
+            present.
+
+        """
+        if name in self.solutions:
+            return self.solutions[name]
+        else:
+            return None
+
+    def get_tradestudy(self, solution_name, trade_name):
+        """Return a trade-study result from a named solution.
+
+        Parameters
+        ----------
+        solution_name : str
+            Name of the solution that owns the result.
+        trade_name : str
+            Name of the trade study within that solution's results.
 
         Returns
         -------
         Tradestudy or None
-            Stored result container for ``name``, or None if it is not present.
+            Stored trade-study result, or ``None`` if either the solution or
+            trade-study result is not present.
 
         """
-        if name in self.tradestudies:
-            return self.tradestudies[name]
-        else:
+        solution_result = self.get_solution_result(solution_name)
+        if solution_result is None:
             return None
+        return solution_result.get_tradestudy(trade_name)
 
-    def add_tradestudy(self, name, Trade):
+    def add_solution_result(self, solution_result):
+        """Attach an analysis result container to this results object.
+
+        Parameters
+        ----------
+        solution_result : SolutionResults
+            Per-solution result container to attach.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The attached :class:`SolutionResults` receives the same parent study
+        reference as this :class:`Results` object.
+
+        """
+        solution_result.study = self.study
+        self.solutions[solution_result.name] = solution_result
+
+    def has_solution_result(self):
+        """Return whether any analysis results are stored.
+
+        Returns
+        -------
+        bool
+            True if at least one analysis result container is stored, otherwise
+            False.
+
+        """
+        if self.solutions:
+            return True
+        else:
+            return False
+
+    def get_all_solution_results(self):
+        """Return names of all stored solution result containers.
+
+        Returns
+        -------
+        list of str
+            Solution names with stored results.
+
+        """
+        solution_results = list(self.solutions.keys())
+        return solution_results
+
+    def _to_dict(self):
+        """Serialize the results object to a dictionary.
+
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary mapping solution names to serialized
+            :class:`SolutionResults` data.
+
+        """
+        solution_name_to_solution_results = {}
+        for name, solution_results in self.solutions.items():
+            solution_name_to_solution_results[name] = solution_results._to_dict()
+        return solution_name_to_solution_results
+
+    @classmethod
+    def _from_dict(cls, solution_name_to_solution_results, study):
+        """Reconstruct a results object from a dictionary.
+
+        Parameters
+        ----------
+        solution_name_to_solution_results : dict
+            Mapping from solution names to serialized
+            :class:`SolutionResults` data.
+        study : Study
+            Parent study associated with the reconstructed results.
+
+        Returns
+        -------
+        Results
+            Reconstructed results object with attached study reference.
+
+        """
+        res = cls(study)
+        for solution_name, trade_name_to_trade_data in solution_name_to_solution_results.items():
+            solution_result = SolutionResults._from_dict(
+                                solution_name=solution_name,
+                                study=study,
+                                tradename_to_results=trade_name_to_trade_data)
+            res.add_solution_result(solution_result)
+        return res
+
+class SolutionResults:
+    def __init__(self,name='',study=None):
+        self.name=name
+        self.study=study
+        self.tradestudies={}
+
+    def get_tradestudy(self, name):
+            """Return one stored analysis result container by name.
+
+            Parameters
+            ----------
+            name : str
+                Analysis name.
+
+            Returns
+            -------
+            Tradestudy or None
+                Stored result container for ``name``, or None if it is not present.
+
+            """
+            if name in self.tradestudies:
+                return self.tradestudies[name]
+            else:
+                return None
+
+    def add_tradestudy(self, name, trade):
         """Attach an analysis result container to this results object.
 
         Parameters
         ----------
         name : str
             Analysis name.
-        Trade : Tradestudy
+        trade : Tradestudy
             Result container to attach.
 
         Returns
@@ -68,8 +206,19 @@ class Results:
         :class:`Results` object.
 
         """
-        Trade._results_owner = self
-        self.tradestudies[name] = Trade
+        if name != trade.trade_name:
+            raise ValueError(
+                f"Trade-study key {name!r} does not match "
+                f"trade name {trade.trade_name!r}"
+            )
+        if trade.solution_name != self.name:
+            raise ValueError(
+                f"Trade study belongs to solution {trade.solution_name!r}, "
+                f"not {self.name!r}"
+            )
+
+        trade._results_owner = self
+        self.tradestudies[name] = trade
 
     def has_results(self):
         """Return whether any analysis results are stored.
@@ -114,7 +263,7 @@ class Results:
         return tradename_to_tradestudy
 
     @classmethod
-    def _from_dict(cls, tradename_to_results, study):
+    def _from_dict(cls, solution_name,tradename_to_results, study):
         """Reconstruct a results object from a dictionary.
 
         Parameters
@@ -130,9 +279,10 @@ class Results:
             Reconstructed results object with attached study reference.
 
         """
-        res = cls(study)
+
+        res = cls(name=solution_name,study=study)
         for trade_name, results in tradename_to_results.items():
-            ts = Tradestudy._from_dict(trade_name, results)
+            ts = Tradestudy._from_dict(trade_name, results,solution_name)
             res.add_tradestudy(trade_name, ts)
         return res
 
@@ -147,7 +297,7 @@ class Tradestudy:
 
     """
 
-    def __init__(self, trade_name):
+    def __init__(self, trade_name,solution_name):
         """Initialize storage for one analysis result set.
 
         Parameters
@@ -160,6 +310,7 @@ class Tradestudy:
         self._hash_to_result = {}
         self.trade_name = trade_name
         self._results_owner = None
+        self.solution_name=solution_name
 
     def get_case(self,case_id):
         for result in self._results:
@@ -218,10 +369,11 @@ class Tradestudy:
         get_param_names = getattr(trade, "get_all_param_names", None)
         param_names = get_param_names() if callable(get_param_names) else []
 
+        solution=self.study.solutions.get_solution(self.solution_name)
         tracked = (
             []
-            if self.study.solution.tracked_outputs is None
-            else self.study.solution.tracked_outputs
+            if solution.tracked_outputs is None
+            else solution.tracked_outputs
         )
 
         return des_vars + tracked + list(param_names)
@@ -293,7 +445,8 @@ class Tradestudy:
             getattr(trade, "variable_to_sensitivity_data", None) or {}
         )
         # first check if variable name is in tracked outputs
-        if variable_name in self.study.solution.tracked_outputs:
+        solution=self.study.solutions.get_solution(self.solution_name)
+        if variable_name in solution.tracked_outputs:
             for result in self._results:
                 if variable_name in result.outputs:
                     values.append(result.outputs[variable_name])
@@ -366,7 +519,7 @@ class Tradestudy:
             }
 
     @classmethod
-    def _from_dict(cls, trade_name, results_dict):
+    def _from_dict(cls, trade_name, results_dict,solution_name):
         """Reconstruct an analysis result set from a dictionary.
 
         Parameters
@@ -382,7 +535,7 @@ class Tradestudy:
             Reconstructed result set with restored :class:`Result` points.
 
         """
-        results = cls(trade_name=trade_name)
+        results = cls(trade_name=trade_name,solution_name=solution_name)
         for result in results_dict["points"]:
             r = Result._from_dict(result)
             results._results.append(r)

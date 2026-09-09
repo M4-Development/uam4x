@@ -2,7 +2,7 @@ from uam4x.UQ import MonteCarloSampler, UniformDistribution,BasicAleatory
 from uam4x.vehicle import Vehicle
 from uam4x.study import Study,Variants
 from custom import Point,PointAnalysis
-from uam4x.solution import Group
+from uam4x.solution import Group, Solution
 import numpy as np
 import os
 from math import comb
@@ -14,12 +14,14 @@ def setup_model(study:Study):
     study.add_vehicle(vehicle)
 
 def setup_solution(study:Study):
+    solution = Solution("basic")
 
-    study.solution.add_step(PointAnalysis,"point_calc")
+    solution.add_step(PointAnalysis,"point_calc")
 
-    study.solution.add_link('vehicles.point_vehicle.point_base.x','point_calc.x')
+    solution.add_link('vehicles.point_vehicle.point_base.x','point_calc.x')
 
-    study.solution.add_tracked_output('point_calc.x_out')
+    solution.add_tracked_output('point_calc.x_out')
+    study.add_solution(solution)
 
 
 def setup_tradestudy(study:Study):

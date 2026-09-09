@@ -54,8 +54,11 @@ inputs, then connects the NDARC radius output into OpenVSP.
 
 .. code-block:: python
 
+    from uam4x.solution import Solution
+
     def setup_solution(study: Study):
-        study.solution.add_step(NdarcPlugin, "ndarc", {
+        solution = Solution("basic")
+        solution.add_step(NdarcPlugin, "ndarc", {
             "njob_path": NJOB_PATH,
             "ndarc_exe": NDARC_EXE_PATH,
             "input_dict": {
@@ -69,7 +72,7 @@ inputs, then connects the NDARC radius output into OpenVSP.
             },
         })
 
-        study.solution.add_step(OpenvspPlugin, "openvsp", {
+        solution.add_step(OpenvspPlugin, "openvsp", {
             "base_vsp3_path": VSP_FILE_PATH,
             "input_dict": {
                 "UserParm.Default_Group.rotor_radius": {
@@ -83,22 +86,23 @@ inputs, then connects the NDARC radius output into OpenVSP.
             },
         })
 
-        study.solution.add_link("vehicles.mtr.rotor.vtip", "ndarc.ROTOR(1).Vtip_ref")
-        study.solution.add_link("vehicles.mtr.rotor.vtip", "ndarc.ROTOR(2).Vtip_ref")
-        study.solution.add_link("vehicles.mtr.rotor.vtip", "ndarc.ROTOR(3).Vtip_ref")
-        study.solution.add_link("vehicles.mtr.rotor.vtip", "ndarc.ROTOR(4).Vtip_ref")
-        study.solution.add_link(
+        solution.add_link("vehicles.mtr.rotor.vtip", "ndarc.ROTOR(1).Vtip_ref")
+        solution.add_link("vehicles.mtr.rotor.vtip", "ndarc.ROTOR(2).Vtip_ref")
+        solution.add_link("vehicles.mtr.rotor.vtip", "ndarc.ROTOR(3).Vtip_ref")
+        solution.add_link("vehicles.mtr.rotor.vtip", "ndarc.ROTOR(4).Vtip_ref")
+        solution.add_link(
             "ndarc.soln.Rotor(1).RADIUS",
             "openvsp.UserParm.Default_Group.rotor_radius",
         )
-        study.solution.add_tracked_output("ndarc.soln.Rotor(1).RADIUS")
+        solution.add_tracked_output("ndarc.soln.Rotor(1).RADIUS")
+        study.add_solution(solution)
 
 Variant modifiers replace one step while preserving the workflow shape.
 
 .. code-block:: python
 
     def setup_electric_model(study: Study):
-        study.solution.add_step(NdarcPlugin, "ndarc", {
+        study.get_solution("basic").add_step(NdarcPlugin, "ndarc", {
             "njob_path": ELECTRIC_NJOB_PATH,
             "ndarc_exe": NDARC_EXE_PATH,
             "input_dict": {
@@ -113,7 +117,7 @@ Variant modifiers replace one step while preserving the workflow shape.
         })
 
     def setup_at_sea_model(study: Study):
-        study.solution.add_step(OpenvspPlugin, "openvsp", {
+        study.get_solution("basic").add_step(OpenvspPlugin, "openvsp", {
             "base_vsp3_path": VSP_AT_SEA_FILE_PATH,
             "input_dict": {
                 "UserParm.Default_Group.rotor_radius": {
@@ -195,5 +199,5 @@ which iterates active variants, runs the trade study, and saves results.
             variant_path = os.path.join(VARIANTS_DIR, active_variant)
             study = Study.from_json(variant_path)
             engine = Engine(study, work_dir)
-            engine.run_tradestudy("vtip_trade")
+            engine.run_tradestudy("vtip_trade", solution_name="basic")
             study.save_results_to_json(variant_path)

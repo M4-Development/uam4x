@@ -8,7 +8,7 @@ import pytest
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Wing
-from uam4x.solution import Plugin, Group, register_plugin
+from uam4x.solution import Plugin, Group, Solution, register_plugin
 
 
 @register_plugin
@@ -27,6 +27,7 @@ class TypeProbePlugin(Plugin):
 def typed_study():
     study = Study()
 
+    study.add_solution(Solution("test_solution"))
     wing = Wing("wing")
     wing.set_parameter("span", 12.5)
     mode = wing.add_mode("cruise")
@@ -36,8 +37,8 @@ def typed_study():
     vehicle.add_component(wing)
     study.add_vehicle(vehicle)
 
-    study.solution.add_step(TypeProbePlugin, "probe")
-    study.solution.sort_steps()
+    study.get_solution("test_solution").add_step(TypeProbePlugin, "probe")
+    study.get_solution("test_solution").sort_steps()
 
     return study
 
@@ -56,12 +57,12 @@ def test_study_get_param_type_invalid_path_raises(typed_study):
 
 def test_solution_get_var_type_for_plugin_io(typed_study):
     s = typed_study
-    plugins = s.solution.generate_plugins()
+    plugins = s.get_solution("test_solution").generate_plugins()
 
-    assert s.solution.get_var_type("probe.x_float", plugins) is float
-    assert s.solution.get_var_type("probe.x_int", plugins) is int
-    assert s.solution.get_var_type("probe.y_float", plugins) is float
-    assert s.solution.get_var_type("probe.y_arr", plugins) is np.ndarray
+    assert s.get_solution("test_solution").get_var_type("probe.x_float", plugins) is float
+    assert s.get_solution("test_solution").get_var_type("probe.x_int", plugins) is int
+    assert s.get_solution("test_solution").get_var_type("probe.y_float", plugins) is float
+    assert s.get_solution("test_solution").get_var_type("probe.y_arr", plugins) is np.ndarray
 
 
 def test_solution_get_var_type_nested_group(typed_study):
@@ -69,17 +70,17 @@ def test_solution_get_var_type_nested_group(typed_study):
 
     nested = Group()
     nested.add_step(TypeProbePlugin, "inner_probe")
-    s.solution.add_step(nested, "nested")
-    s.solution.sort_steps()
+    s.get_solution("test_solution").add_step(nested, "nested")
+    s.get_solution("test_solution").sort_steps()
 
-    plugins = s.solution.generate_plugins()
+    plugins = s.get_solution("test_solution").generate_plugins()
 
-    assert s.solution.get_var_type("nested.inner_probe.x_float", plugins) is float
-    assert s.solution.get_var_type("nested.inner_probe.y_arr", plugins) is np.ndarray
+    assert s.get_solution("test_solution").get_var_type("nested.inner_probe.x_float", plugins) is float
+    assert s.get_solution("test_solution").get_var_type("nested.inner_probe.y_arr", plugins) is np.ndarray
 
 
 def test_solution_get_var_type_missing_name_raises(typed_study):
-    plugins = typed_study.solution.generate_plugins()
+    plugins = typed_study.get_solution("test_solution").generate_plugins()
 
     with pytest.raises(KeyError, match="not an input/output"):
-        typed_study.solution.get_var_type("probe.not_declared", plugins)
+        typed_study.get_solution("test_solution").get_var_type("probe.not_declared", plugins)

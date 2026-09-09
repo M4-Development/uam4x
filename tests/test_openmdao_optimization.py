@@ -11,7 +11,7 @@ import uam4x.openmdao_optimization as omo
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Subsystem, register_subsystem
-from uam4x.solution import Group, Plugin, register_plugin
+from uam4x.solution import Group, Plugin, Solution, register_plugin
 
 
 @register_subsystem
@@ -112,17 +112,18 @@ class _FakeProblem:
 
 def _build_study_and_state(tmp_path, tracked_outputs):
     study = Study()
+    study.add_solution(Solution("test_solution"))
     vehicle = Vehicle("v")
     vehicle.add_component(OMOSubsystem("core"))
     study.add_vehicle(vehicle)
 
-    study.solution.add_step(OMOPlugin, "analysis")
-    study.solution.add_link("vehicles.v.core.x", "analysis.x")
+    study.get_solution("test_solution").add_step(OMOPlugin, "analysis")
+    study.get_solution("test_solution").add_link("vehicles.v.core.x", "analysis.x")
     for out in tracked_outputs:
-        study.solution.add_tracked_output(out)
+        study.get_solution("test_solution").add_tracked_output(out)
 
-    study.solution.sort_steps()
-    plugins = study.solution.generate_plugins()
+    study.get_solution("test_solution").sort_steps()
+    plugins = study.get_solution("test_solution").generate_plugins()
 
     state = {
         "optimization": True,
@@ -158,7 +159,7 @@ def test_run_problem_builds_model_and_collects_outputs(monkeypatch, tmp_path):
     monkeypatch.setattr(omo, "UniversalOpenmdaoComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenMDAOGroup", _FakeComp)
 
-    opt = omo.Optimization(study, state, plugins, out_dir)
+    opt = omo.Optimization(study, study.get_solution("test_solution"), state, plugins, out_dir)
     result = opt.run_problem()
 
     assert result.convergence_status is True
@@ -182,7 +183,7 @@ def test_run_problem_handles_indexed_tracked_output_and_failed_driver(monkeypatc
     monkeypatch.setattr(omo, "UniversalOpenmdaoComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenMDAOGroup", _FakeComp)
 
-    opt = omo.Optimization(study, state, plugins, out_dir)
+    opt = omo.Optimization(study, study.get_solution("test_solution"), state, plugins, out_dir)
     result = opt.run_problem()
 
     assert result.convergence_status is False
@@ -198,7 +199,7 @@ def test_run_problem_returns_openmdao_problem_for_partial_checks(monkeypatch, tm
     monkeypatch.setattr(omo, "UniversalOpenmdaoComp", _FakeComp)
     monkeypatch.setattr(omo, "UniversalOpenMDAOGroup", _FakeComp)
 
-    opt = omo.Optimization(study, state, plugins, out_dir, check_partials=True)
+    opt = omo.Optimization(study, study.get_solution("test_solution"), state, plugins, out_dir, check_partials=True)
     problem = opt.run_problem()
 
     assert isinstance(problem, _FakeProblem)

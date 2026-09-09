@@ -126,34 +126,38 @@ The solution creates the cycle group and connects both disciplines.
 
 .. code-block:: python
 
+    from uam4x.solution import Group, Solution
+
     def setup_solution(study: Study):
+        sellar_basic = Solution("sellar_basic")
         sellar_cycle = Group()
         sellar_cycle.add_step(SellarDis1, "sellardis1")
         sellar_cycle.add_step(SellarDis2, "sellardis2")
         sellar_cycle.declare_cycle_step_order(["sellardis1", "sellardis2"])
         sellar_cycle.set_cycle_solver("NonlinearBlockGS")
 
-        study.solution.add_step(sellar_cycle, "sellar_cycle")
+        sellar_basic.add_step(sellar_cycle, "sellar_cycle")
         sellar_cycle.add_link("sellardis1.y1", "sellardis2.y1")
         sellar_cycle.add_link("sellardis2.y2", "sellardis1.y2")
 
-        study.solution.add_link(
+        sellar_basic.add_link(
             "vehicles.sellar_vehicle.sellar_base.x",
             "sellar_cycle.sellardis1.x",
         )
-        study.solution.add_link(
+        sellar_basic.add_link(
             "vehicles.sellar_vehicle.sellar_base.z",
             "sellar_cycle.sellardis1.z",
         )
-        study.solution.add_link(
+        sellar_basic.add_link(
             "vehicles.sellar_vehicle.sellar_base.z",
             "sellar_cycle.sellardis2.z",
         )
 
-        study.solution.add_step(SellarObjective, "sellar_objective")
-        study.solution.add_link("sellar_cycle.sellardis1.y1", "sellar_objective.y1")
-        study.solution.add_link("sellar_cycle.sellardis2.y2", "sellar_objective.y2")
-        study.solution.add_tracked_output("sellar_objective.obj")
+        sellar_basic.add_step(SellarObjective, "sellar_objective")
+        sellar_basic.add_link("sellar_cycle.sellardis1.y1", "sellar_objective.y1")
+        sellar_basic.add_link("sellar_cycle.sellardis2.y2", "sellar_objective.y2")
+        sellar_basic.add_tracked_output("sellar_objective.obj")
+        study.add_solution(sellar_basic)
 
 The optimizer uses ``x`` and ``z`` as design variables.
 
@@ -187,7 +191,7 @@ The optimizer uses ``x`` and ``z`` as design variables.
         study_dir = os.path.join(THIS_DIR, "variants", "sellar")
         study = Study.from_json(study_dir)
         engine = Engine(study, os.path.join(study_dir, "work"))
-        engine.run_tradestudy("sellar_problem")
+        engine.run_tradestudy("sellar_problem", solution_name="sellar_basic")
         study.save_to_json(study_dir)
 
 ``run_post.py``
@@ -197,7 +201,8 @@ for index based requests for vector variables or the full array if desired.
 
 .. code-block:: python
 
-    trade = study.results.get_tradestudy("sellar_problem")
+    solution_results = study.results.get_solution_result("sellar_basic")
+    trade = solution_results.get_tradestudy("sellar_problem")
     out_z = trade.get_variable("vehicles.sellar_vehicle.sellar_base.z")
     out_z0 = trade.get_variable('vehicles.sellar_vehicle.sellar_base.z[0]')
     out_x = trade.get_variable("vehicles.sellar_vehicle.sellar_base.x")

@@ -1018,13 +1018,14 @@ class Solution(Group):
 
     log = get_log(log, object_name="solution")
 
-    def __init__(self) -> None:
+    def __init__(self,name) -> None:
         """Initialize an empty top-level solution workflow."""
         super().__init__()
         self.tracked_outputs = []
         self.log = Solution.log
         self.log.debug(f"initialize")
         self.step_name = "solution"
+        self.name=name
 
     def add_tracked_output(self, output: str):
         """Add a tracked output to the solution.
@@ -1100,6 +1101,7 @@ class Solution(Group):
                 steps_serialized[step_name]["specification"] = "group"
 
         return {
+            "name":self.name,
             "steps": steps_serialized,
             "links": self.links,
             "tracked_outputs": self.tracked_outputs,
@@ -1122,7 +1124,8 @@ class Solution(Group):
             outputs.
 
         """
-        sol = cls()
+        name=data['name']
+        sol = cls(name)
         cls.log.debug("solution from dict")
         # Reconstruct steps, mapping plugin name to class if possible
         for step_name, step_data in data["steps"].items():
@@ -1720,6 +1723,29 @@ class Solution(Group):
             )
 
         return indexed_val,array_shape
+
+class SolutionManager:
+    def __init__(self):
+        self._solutions={}
+
+    def add_solution(self,solution):
+        if solution.name in self._solutions:
+            raise ValueError(f'Repeated Solution names are not allowed, the name {solution.name} has already been declared.')
+        self._solutions[solution.name]=solution
+
+    def __getattr__(self, name):
+        if name in self._solutions:
+            return self._solutions[name]
+        raise ValueError(f'No solution of name {name} in solutions')
+
+    def get_solution(self,name):
+        return self._solutions[name]
+
+    def __iter__(self):
+        return iter(self._solutions.values())
+
+    def __len__(self):
+        return len(self._solutions)
 class Plugin:
     """Represent the base class for executable solution plugins.
 

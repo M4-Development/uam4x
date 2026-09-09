@@ -5,7 +5,7 @@ import pytest
 import os
 import json
 from uam4x.study import Study
-from uam4x.solution import Plugin, register_plugin
+from uam4x.solution import Plugin, Solution, register_plugin
 from uam4x.subsystems import Subsystem, Wing, register_subsystem, Rotor, RotorBladeRegion, Aircraft
 from uam4x.vehicle import Vehicle
 
@@ -707,6 +707,8 @@ def test_get_param_type():
             )
 
     study = Study()
+    solution = Solution("test_solution")
+    study.add_solution(solution)
 
     # -------- Vehicle 1: mtr --------
     mtr = Vehicle("mtr")
@@ -741,13 +743,13 @@ def test_get_param_type():
     study.add_vehicle(V2)
 
     # Define and add test plugin
-    study.solution.add_step(TestPlug, "test_plug", {})
+    solution.add_step(TestPlug, "test_plug", {})
 
     # Add links for test plugin
-    study.solution.add_link("vehicles.mtr.wing.span", "test_plug.testin_cont")
-    study.solution.add_link("vehicles.mtr.aircraft.Npass", "test_plug.testin_discrete")
+    solution.add_link("vehicles.mtr.wing.span", "test_plug.testin_cont")
+    solution.add_link("vehicles.mtr.aircraft.Npass", "test_plug.testin_discrete")
 
-    plugins = study.solution.generate_plugins()
+    plugins = solution.generate_plugins()
 
     # -------- Vehicle 1 checks --------
     actual = study.get_param_type("vehicles.mtr.wing.span")
@@ -775,16 +777,16 @@ def test_get_param_type():
     assert actual == float, f"expected float, got {actual}"
 
     # -------- Plugin I/O checks --------
-    actual = study.solution.get_var_type("test_plug.testin_cont", plugins)
+    actual = solution.get_var_type("test_plug.testin_cont", plugins)
     assert actual == float, f"expected float, got {actual}"
 
-    actual = study.solution.get_var_type("test_plug.testin_discrete", plugins)
+    actual = solution.get_var_type("test_plug.testin_discrete", plugins)
     assert actual == int, f"expected int, got {actual}"
 
-    actual = study.solution.get_var_type("test_plug.testout_cont", plugins)
+    actual = solution.get_var_type("test_plug.testout_cont", plugins)
     assert actual == float, f"expected float, got {actual}"
 
-    actual = study.solution.get_var_type("test_plug.testout_discrete", plugins)
+    actual = solution.get_var_type("test_plug.testout_discrete", plugins)
     assert actual == int, f"expected int, got {actual}"
 
     # -------- Vehicle 2 checks (including array param) --------
@@ -936,6 +938,8 @@ def test_get_param_type_raises():
 
     # ----- build the SAME minimal study as in your example -----
     study = Study()
+    solution = Solution("test_solution")
+    study.add_solution(solution)
 
     mtr = Vehicle("mtr")
 
@@ -954,9 +958,9 @@ def test_get_param_type_raises():
     study.add_vehicle(mtr)
 
     # Add plugin step
-    study.solution.add_step(TestPlug, "test_plug", {})
+    solution.add_step(TestPlug, "test_plug", {})
 
-    plugins = study.solution.generate_plugins()
+    plugins = solution.generate_plugins()
 
     with pytest.raises(AttributeError):
         study.get_param_type("vehicles.mtr.wing.NotARealParam")
@@ -971,10 +975,10 @@ def test_get_param_type_raises():
         study.get_param_type("vehicles.mtr.wing")
 
     with pytest.raises(KeyError):
-        study.solution.get_var_type("test_plug.NotARealIO", plugins)
+        solution.get_var_type("test_plug.NotARealIO", plugins)
 
     with pytest.raises(KeyError):
-        study.solution.get_var_type("NotAPlugin.testin_cont", plugins)
+        solution.get_var_type("NotAPlugin.testin_cont", plugins)
 
 if __name__ == '__main__':
     test_check_and_get_config_good()
