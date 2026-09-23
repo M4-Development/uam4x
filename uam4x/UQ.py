@@ -55,7 +55,7 @@ class AleatoryBaseClass:
             Name of the UAM4X state variable to sample.
         PDFObject : object
             Distribution object associated with ``name``. The object must
-            provide ``_OT_Dist`` and ``_to_dict`` methods.
+            provide ``_OT_Dist``, ``_to_dict``, and ``cast_sample`` methods.
 
         Returns
         -------
@@ -120,7 +120,9 @@ class BasicAleatory(AleatoryBaseClass):
         for row in range(sample_points.shape[0]):
             local_state = {}
             for name, col in var_name_to_col.items():
-                local_state[name] = sample_points[row, col]
+                local_state[name] = self.aleatory_var_to_dist[name].cast_sample(
+                    sample_points[row, col]
+                )
             states.append(local_state)
         return states
 
@@ -414,7 +416,9 @@ class GaussQuadraturePCE(AleatoryBaseClass):
         for row in range(nodes.shape[0]):
             local_state = {"weight": weights[row]}
             for name, col in var_name_to_col.items():
-                local_state[name] = nodes[row, col]
+                local_state[name] = self.aleatory_var_to_dist[name].cast_sample(
+                    nodes[row, col]
+                )
             states.append(local_state)
 
         return states
@@ -571,7 +575,9 @@ class SobolSensitivity(BasicAleatory):
         for row in range(results.shape[0]):
             local_state = {}
             for name, col in var_name_to_col.items():
-                local_state[name] = results[row, col]
+                local_state[name] = self.aleatory_var_to_dist[name].cast_sample(
+                    results[row, col]
+                )
             states.append(local_state)
 
         return states
@@ -727,7 +733,11 @@ class BasicEpistemic(EpistemicBaseClass):
         for name,interval in epistemic_to_vals.items():
             low=interval[0]
             high=interval[1]
-            epistemic_to_distribution[name]=UniformDistribution(low,high)
+            if is_integer(low) and is_integer(high):
+                epistemic_to_distribution[name]=DiscreteUniformDistribution(low,high)
+            else:
+                #this should probably be more robust
+                epistemic_to_distribution[name]=UniformDistribution(low,high)
 
         epistemic_samples, epistemic_var_name_to_col =self.SamplingClass.sample(
             epistemic_to_distribution,self.num_samples
@@ -737,7 +747,9 @@ class BasicEpistemic(EpistemicBaseClass):
         for row in epistemic_samples:
             local_state={}
             for name,col in epistemic_var_name_to_col.items():
-                local_state[name]=row[col]
+                local_state[name] = epistemic_to_distribution[name].cast_sample(
+                    row[col]
+                )
             all_states.append(local_state)
 
         return all_states
@@ -816,7 +828,7 @@ class MixedBaseClass:
             can be referenced with dotted paths.
         PDFObject : object
             Distribution object associated with ``name``. The object must
-            provide ``_OT_Dist`` and ``_to_dict`` methods.
+            provide ``_OT_Dist``, ``_to_dict``, and ``cast_sample`` methods.
 
         """
         self.aleatory_var_to_dist[name]=PDFObject
@@ -933,7 +945,11 @@ class BasicSOP(MixedBaseClass):
         for name,interval in epistemic_to_vals.items():
             low=interval[0]
             high=interval[1]
-            epistemic_to_distribution[name]=UniformDistribution(low,high)
+            if is_integer(low) and is_integer(high):
+                epistemic_to_distribution[name]=DiscreteUniformDistribution(low,high)
+            else:
+                #this should probably be more robust
+                epistemic_to_distribution[name]=UniformDistribution(low,high)
 
         epistemic_samples, epistemic_var_name_to_col =self.EpistemicSamplingClass.sample(
             epistemic_to_distribution,self.num_epistemic_samples
@@ -942,6 +958,7 @@ class BasicSOP(MixedBaseClass):
         #then generate aleatory inner loop
         all_aleatory_states=np.zeros((self.num_aleatory_samples*epistemic_samples.shape[0],
                                       len(aleatory_to_distribution)))
+        aleatory_distributions_by_row = []
         row=0
         var_to_used_param={}
         for epistemic_var,col in epistemic_var_name_to_col.items():
@@ -961,7 +978,14 @@ class BasicSOP(MixedBaseClass):
                 base_class=base_dist.__class__
                 dist_dict=base_dist._to_dict()
                 for param_name,param_data in interval.items():
-                    dist_dict[param_name]=epistemic_samples[i,param_data]
+                    epistemic_name = next(
+                        variable_name
+                        for variable_name, variable_col in epistemic_var_name_to_col.items()
+                        if variable_col == param_data
+                    )
+                    dist_dict[param_name] = epistemic_to_distribution[
+                        epistemic_name
+                    ].cast_sample(epistemic_samples[i, param_data])
                 aleatory_instance=base_class._from_dict(dist_dict)
                 temp_aleatory[name]=aleatory_instance
 
@@ -970,6 +994,9 @@ class BasicSOP(MixedBaseClass):
                temp_aleatory,self.num_aleatory_samples
             )
             all_aleatory_states[row:row+self.num_aleatory_samples,:]=aleatory_samples
+            aleatory_distributions_by_row.extend(
+                [temp_aleatory] * self.num_aleatory_samples
+            )
             row+=self.num_aleatory_samples
 
         all_vars_to_col={}
@@ -985,10 +1012,14 @@ class BasicSOP(MixedBaseClass):
         full_states_arr=np.hstack((epistemic_states,all_aleatory_states))
         #then aggregate states
         all_states=[]
-        for row in full_states_arr:
+        for row_index, row in enumerate(full_states_arr):
             state_dict={}
             for name,col in all_vars_to_col.items():
-                state_dict[name]=row[col]
+                if name in epistemic_to_distribution:
+                    distribution = epistemic_to_distribution[name]
+                else:
+                    distribution = aleatory_distributions_by_row[row_index][name]
+                state_dict[name] = distribution.cast_sample(row[col])
             all_states.append(state_dict)
 
         return all_states
@@ -1134,8 +1165,11 @@ class BasicMixedIVP(MixedBaseClass):
         for name,interval in epistemic_to_vals.items():
             low=interval[0]
             high=interval[1]
-            epistemic_to_distribution[name]=UniformDistribution(low,high)
-
+            if is_integer(low) and is_integer(high):
+                epistemic_to_distribution[name]=DiscreteUniformDistribution(low,high)
+            else:
+                #this should probably be more robust
+                epistemic_to_distribution[name]=UniformDistribution(low,high)
         epistemic_samples, epistemic_var_name_to_col =self.EpistemicSamplingClass.sample(
             epistemic_to_distribution,self.num_epistemic_samples
             )
@@ -1162,12 +1196,16 @@ class BasicMixedIVP(MixedBaseClass):
                                    self.num_aleatory_samples,
                                    axis=0)
         full_states_arr=np.hstack((epistemic_states,all_aleatory_states))
+        all_vars_to_distribution = {
+            **epistemic_to_distribution,
+            **aleatory_to_distribution,
+        }
         #then aggregate states
         all_states=[]
         for row in full_states_arr:
             state_dict={}
             for name,col in all_vars_to_col.items():
-                state_dict[name]=row[col]
+                state_dict[name] = all_vars_to_distribution[name].cast_sample(row[col])
             all_states.append(state_dict)
 
         return all_states
@@ -1330,7 +1368,11 @@ class MixedRegressionPCE(MixedBaseClass):
         for name,interval in epistemic_to_vals.items():
             low=interval[0]
             high=interval[1]
-            all_vars_to_dist[name]=UniformDistribution(low,high)
+            if is_integer(low) and is_integer(high):
+                all_vars_to_dist[name]=DiscreteUniformDistribution(low,high)
+            else:
+                #this should probably be more robust
+                all_vars_to_dist[name]=UniformDistribution(low,high)
 
         for name,dist in aleatory_to_distribution.items():
             all_vars_to_dist[name]=dist
@@ -1344,7 +1386,7 @@ class MixedRegressionPCE(MixedBaseClass):
         for row in all_samples:
             state_dict={}
             for name,col in all_vars_to_col.items():
-                state_dict[name]=row[col]
+                state_dict[name] = all_vars_to_dist[name].cast_sample(row[col])
             all_states.append(state_dict)
 
         return all_states
@@ -1872,6 +1914,22 @@ class NormalDistribution:
         """
         return ot.Normal(self.mean, self.std)
 
+    def cast_sample(self, value):
+        """Convert an OpenTURNS sample value to its physical Python type.
+
+        Parameters
+        ----------
+        value : real
+            Sample value produced by OpenTURNS.
+
+        Returns
+        -------
+        float
+            Native Python floating-point value.
+
+        """
+        return float(value)
+
     def _to_dict(self):
         """Serialize the distribution to a dictionary.
 
@@ -1941,6 +1999,22 @@ class UniformDistribution:
         """
         return ot.Uniform(self.low, self.high)
 
+    def cast_sample(self, value):
+        """Convert an OpenTURNS sample value to its physical Python type.
+
+        Parameters
+        ----------
+        value : real
+            Sample value produced by OpenTURNS.
+
+        Returns
+        -------
+        float
+            Native Python floating-point value.
+
+        """
+        return float(value)
+
     def _to_dict(self):
         """Serialize the distribution to a dictionary.
 
@@ -1971,7 +2045,91 @@ class UniformDistribution:
         """
         return cls(data["low"], data["high"])
 
+class DiscreteUniformDistribution:
+    def __init__(self, low, high):
+            """Initialize a uniform distribution.
 
+            Parameters
+            ----------
+            low : float
+                Lower bound of the uniform distribution.
+            high : float
+                Upper bound of the uniform distribution.
+
+            """
+            self.low = low
+            self.high = high
+            if not is_integer(self.low) or not is_integer(self.high):
+                raise ValueError(f'High and low terms for discrete uniform must be ints')
+            if self.low > self.high:
+                raise ValueError("low must be less than or equal to high")
+
+    def _OT_Dist(self):
+        """Create the equivalent OpenTURNS distribution.
+        Returns
+        -------
+        openturns discrete uniform
+        """
+        arr=range(self.low, self.high + 1)
+        return ot.UserDefined([[i] for i in arr])
+
+    def cast_sample(self, value):
+        """Convert an OpenTURNS sample value to a supported Python integer.
+
+        Parameters
+        ----------
+        value : real
+            Sample value produced by OpenTURNS.
+
+        Returns
+        -------
+        int
+            Native Python integer corresponding to the sampled support point.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is not an integer-valued point in this distribution's
+            support.
+
+        """
+        numeric_value = float(value)
+        rounded_value = round(numeric_value)
+        if not np.isclose(numeric_value, rounded_value, rtol=0.0, atol=1.0e-12):
+            raise ValueError(
+                f"Cannot cast non-integral value {value!r} sampled for "
+                f"DiscreteUniformDistribution({self.low}, {self.high})."
+            )
+        if rounded_value < self.low or rounded_value > self.high:
+            raise ValueError(
+                f"Sample value {value!r} is outside the discrete uniform "
+                f"support [{self.low}, {self.high}]."
+            )
+        return int(rounded_value)
+
+    def _to_dict(self):
+        """Serialize the distribution to a dictionary.
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary containing the distribution name and
+            bounds.
+        """
+        return {"name": self.__class__.__name__, "low": self.low, "high": self.high}
+    @classmethod
+    def _from_dict(cls, data):
+        """Reconstruct a uniform distribution from a dictionary.
+        Parameters
+        ----------
+        data : dict
+            Serialized uniform distribution dictionary, typically produced by
+            :meth:`_to_dict`.
+        Returns
+        -------
+        UniformDistribution
+            Reconstructed uniform distribution.
+        """
+        return cls(data["low"], data["high"])
 class LogNormalDistribution:
     """Represent a shifted log-normal probability distribution.
 
@@ -2016,6 +2174,22 @@ class LogNormalDistribution:
 
         """
         return ot.LogNormal(self.mu_log, self.sigma_log, self.gamma)
+
+    def cast_sample(self, value):
+        """Convert an OpenTURNS sample value to its physical Python type.
+
+        Parameters
+        ----------
+        value : real
+            Sample value produced by OpenTURNS.
+
+        Returns
+        -------
+        float
+            Native Python floating-point value.
+
+        """
+        return float(value)
 
     def _to_dict(self):
         """Serialize the distribution to a dictionary.
@@ -2071,7 +2245,8 @@ sampler_name_to_class_registry = {LatinHypercubeSampler.__name__: LatinHypercube
                                   MonteCarloSampler.__name__: MonteCarloSampler}
 distribution_name_to_class_registry = {NormalDistribution.__name__: NormalDistribution,
                                       UniformDistribution.__name__: UniformDistribution,
-                                      LogNormalDistribution.__name__: LogNormalDistribution}
+                                      LogNormalDistribution.__name__: LogNormalDistribution,
+                                      DiscreteUniformDistribution.__name__:DiscreteUniformDistribution}
 
 if __name__ == "__main__":
 

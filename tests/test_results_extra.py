@@ -165,12 +165,12 @@ def test_tradestudy_get_variable_all_branches():
     _, ts = _attach_tradestudy(study, "trade")
     _add_results(ts)
 
-    assert ts.get_variable("tracked.y") == [5.0, 6.0]
-    assert ts.get_variable("dv_x") == [2.0, np.nan]
-    assert ts.get_variable("sweep_x") == [10.0, 20.0]
-    assert ts.get_variable("uq_x") == [0.1, 0.2]
-    assert ts.get_variable("sens_x") == [1.0, 1.1]
-    assert ts.get_variable("vehicles.v.c.p") == [777.0]
+    np.testing.assert_allclose(ts.get_variable("tracked.y"), [5.0, 6.0])
+    np.testing.assert_allclose(ts.get_variable("dv_x"), [2.0, np.nan], equal_nan=True)
+    np.testing.assert_allclose(ts.get_variable("sweep_x"), [10.0, 20.0])
+    np.testing.assert_allclose(ts.get_variable("uq_x"), [0.1, 0.2])
+    np.testing.assert_allclose(ts.get_variable("sens_x"), [1.0, 1.1])
+    np.testing.assert_allclose(ts.get_variable("vehicles.v.c.p"), [777.0])
 
     with pytest.raises(ValueError, match="not found"):
         ts.get_variable("does.not.exist")
@@ -182,7 +182,7 @@ def test_tradestudy_default_state_branch():
     _, ts = _attach_tradestudy(study, "Default State")
     _add_results(ts)
 
-    assert ts.get_variable("tracked.y") == [5.0, 6.0]
+    np.testing.assert_allclose(ts.get_variable("tracked.y"), [5.0, 6.0])
 
 
 def test_tradestudy_to_dict_and_from_dict_roundtrip():

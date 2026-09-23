@@ -135,7 +135,7 @@ def test_vehicle_component_attribute_values(
     # everything else left at defaults
 
     demo_aircraft.Npass = 15
-    # Upass left at default
+    # Wpass left at default
 
     # -------------------------
     # Attach components to vehicle
@@ -269,7 +269,7 @@ def test_vehicle_component_attribute_values(
     assert demo_vehicle.aircraft_demo.Npass == demo_aircraft.Npass == 15
 
     # default
-    assert demo_vehicle.aircraft_demo.Upass == demo_aircraft.Upass == 0.0
+    assert demo_vehicle.aircraft_demo.Wpass == demo_aircraft.Wpass == 0.0
 
 
 def test_vehicle_component_attribute_identity(
@@ -296,7 +296,7 @@ def test_vehicle_component_attribute_identity(
     # everything else left at defaults
 
     demo_aircraft.Npass = 15
-    # Upass left at default
+    # Wpass left at default
 
     # -------------------------
     # Attach components to vehicle
@@ -418,7 +418,7 @@ def test_vehicle_component_attribute_identity(
     assert demo_vehicle.aircraft_demo.Npass is demo_aircraft.Npass
 
     # default
-    assert demo_vehicle.aircraft_demo.Upass is demo_aircraft.Upass
+    assert demo_vehicle.aircraft_demo.Wpass is demo_aircraft.Wpass
 
 
 #Check adding component then querying

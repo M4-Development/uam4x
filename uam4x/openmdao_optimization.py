@@ -567,7 +567,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         if not self.plugin._declare_partials:
             return
         else:
-            results = self.plugin.compute_partials_plugin(self.plugin_dict)
+            results = self.plugin.compute_partials(self.plugin_dict)
             for name, value in results.items():
                 output_name = self.step_name + "." + name[0]
                 input_name = self.step_name + "." + name[1]

@@ -107,13 +107,13 @@ The first plugin computes area and exposes exact derivatives:
            self.declare_input("aspect_ratio", float, 1.0)
            self.declare_input("span", float, 1.0)
            self.declare_output("area", float, 1.0)
-           self.declare_partials_plugin(["area"], ["span", "aspect_ratio"], method="exact")
+           self.declare_partials(["area"], ["span", "aspect_ratio"], method="exact")
 
        def run_plugin(self, links, work_dir):
            area = (links["span"] ** 2) / links["aspect_ratio"]
            return {"area": area}
 
-       def compute_partials_plugin(self, links):
+       def compute_partials(self, links):
            return {
                ("area", "span"): 2 * links["span"] / links["aspect_ratio"],
                ("area", "aspect_ratio"): -links["span"] ** 2 / links["aspect_ratio"] ** 2,
@@ -134,7 +134,7 @@ The second plugin computes chord, drag, wing weight, and objective:
            self.declare_output("CD", float, 1.0)
            self.declare_output("wing_weight", float, 1.0)
            self.declare_output("objective", float, 1.0)
-           self.declare_partials_plugin("*", "*", method="exact")
+           self.declare_partials("*", "*", method="exact")
 
        def run_plugin(self, links, work_dir):
            if links["weighting_factor"] < 0:
@@ -147,7 +147,7 @@ The second plugin computes chord, drag, wing weight, and objective:
                "objective": objective,
            }
 
-       def compute_partials_plugin(self, links):
+       def compute_partials(self, links):
            # ... return analytical derivative dictionary
            return partial_to_val
 

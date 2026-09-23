@@ -1,3 +1,4 @@
+from __future__ import annotations
 import copy
 from uam4x.utils import hash_state, convert_numpy_to_python
 import numpy as np
@@ -49,7 +50,7 @@ class Results:
         else:
             return None
 
-    def get_tradestudy(self, solution_name, trade_name):
+    def get_tradestudy(self, solution_name, trade_name)->Tradestudy:
         """Return a trade-study result from a named solution.
 
         Parameters
@@ -379,7 +380,7 @@ class Tradestudy:
         return des_vars + tracked + list(param_names)
 
 
-    def get_variable(self, variable_name):
+    def get_variable(self, variable_name,*,as_column=False):
         """Return one variable across all stored result points.
 
         Parameters
@@ -389,12 +390,20 @@ class Tradestudy:
             variable, sweep variable, uncertainty variable, sensitivity variable,
             or a fixed vehicle parameter. Indexed access using bracket notation is
             supported for array-valued variables.
+        as_column : bool, optional
+            If True, insert a singleton axis after the result-point axis. For a
+            scalar-valued variable this changes the returned shape from ``(n,)``
+            to ``(n, 1)``. The default is False.
 
         Returns
         -------
-        list
-            Values of ``variable_name`` across stored result points. For fixed
-            vehicle parameters, the returned list contains one value.
+        numpy.ndarray
+            Values of ``variable_name`` across stored result points. By default,
+            scalar-valued variables have shape ``(n,)`` and array-valued
+            variables preserve their trailing dimensions. If ``as_column`` is
+            True, a singleton axis is inserted after the first axis. For fixed
+            vehicle parameters, the returned array contains one value along its
+            first axis.
 
         Raises
         ------
@@ -453,6 +462,9 @@ class Tradestudy:
                 else:
                     values.append(np.nan)
                     # log as missing.
+            values = np.asarray(values)
+            if as_column:
+                values=values[:,None]
             return values
 
         inds = None
@@ -473,6 +485,9 @@ class Tradestudy:
                 else:
                     values.append(np.nan)
                     # log as missing.
+            values = np.asarray(values)
+            if as_column:
+                values=values[:,None]
             return values
         # check if the variable is a value in a parameter sweep
         # check if the variable was part of the UQ analysis:
@@ -489,6 +504,9 @@ class Tradestudy:
                 else:
                     values.append(result.state[variable_name])
                     # log as missing.
+            values = np.asarray(values)
+            if as_column:
+                values=values[:,None]
             return values
         # then check if the variable name is in the vehicle parameters
         else:
@@ -499,6 +517,9 @@ class Tradestudy:
                 else:
                     value = self.study.get_value(variable_name)
                     values.append(value)
+                values = np.asarray(values)
+                if as_column:
+                    values=values[:,None]
                 return values
             except:
                 raise ValueError(

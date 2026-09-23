@@ -1308,7 +1308,7 @@ class Aircraft(Subsystem):
         None
 
         """
-        self.add_parameter('Upass',0.0,float,description='Weight per passenger')
+        self.add_parameter('Wpass',0.0,float,description='Weight per passenger')
 
         self.add_parameter('Wenviron',75.,float,description='Environmental Control Lumped Weight')
 

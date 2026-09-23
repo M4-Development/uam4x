@@ -782,8 +782,8 @@ def test_aircraft_parameters():
     aircraft = Aircraft("ac1")
     assert aircraft.name == "ac1"
     assert aircraft.Npass == 1
-    aircraft.set_parameter("Upass", 180.0)
-    assert aircraft.Upass == 180.0
+    aircraft.set_parameter("Wpass", 180.0)
+    assert aircraft.Wpass == 180.0
 
 #----------------------------------Subsystem registry
 def test_register_subsystem_good():
@@ -814,9 +814,10 @@ def test_register_subsystem_good():
 
 
 def test_subsystem_registry():
-    assert get_subsystem_class("Wing") is Wing
-    assert get_subsystem_class("Rotor") is Rotor
-    assert get_subsystem_class("Aircraft") is Aircraft
+    for name in ("Wing", "Rotor", "Aircraft"):
+        subsystem_class = get_subsystem_class(name)
+        assert subsystem_class.__name__ == name
+        assert isinstance(subsystem_class("registry_test"), Subsystem)
     with pytest.raises(ImportError):
         get_subsystem_class("NotASubsystem")
 if __name__ == "__main__":

@@ -1229,10 +1229,6 @@ class Variants:
         """
         self.dir = dir
         self.variants = {}
-        variants_dir = os.path.join(self.dir, "variants")
-        if not os.path.exists(variants_dir):
-            os.mkdir(variants_dir)
-
         self.log = Variants.log
 
         self.repo_dir=git_dir if git_dir is not None else None
@@ -1340,6 +1336,26 @@ class Variants:
                 new_branch=False
             studies.append(study)
         return studies
+
+    def generate_variant(self,variant_name,variant_dir,commit=False):
+        self.log.debug(f"generate variant {variant_name}")
+
+        studies = []
+        func_list,options=self.variants[variant_name]
+        os.makedirs(variant_dir,exist_ok=True)
+        study = Study(log_dir=variant_dir)
+        for func in func_list:
+            if options is not None:
+                func(study,options)
+            else:
+                func(study)
+
+        study.control._set_repo_root(self.repo_dir)
+        study.control._set_variant_name(variant_name)
+
+        study.save_model_to_json(variant_dir, commit=commit,new_branch=False)
+
+        return study
 
 
 if __name__ == "__main__":

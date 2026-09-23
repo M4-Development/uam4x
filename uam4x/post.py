@@ -3,8 +3,15 @@ import matplotlib.pyplot as plt
 import openturns as ot
 import numpy as np
 import warnings
-from uam4x.UQ import LatinHypercubeSampler, SobolSampler,MonteCarloSampler,\
-    HaltonSampler,NormalDistribution,UniformDistribution,LogNormalDistribution
+from uam4x.UQ import (
+    LatinHypercubeSampler,
+    SobolSampler,
+    MonteCarloSampler,
+    HaltonSampler,
+    NormalDistribution,
+    UniformDistribution,
+    LogNormalDistribution,
+    DiscreteUniformDistribution)
 import scipy.stats as stats
 from math import comb
 import sympy as sp
@@ -746,11 +753,15 @@ class RegressionPCEPost(BasicAleatoryPost):
         # Joint distribution based on independent input aleatory dists
         joint = ot.JointDistribution(joint_list)
 
-        # Enumeration function
-        enum = ot.LinearEnumerateFunction(len(aleatory_var_to_dist))
+        # q=1.0 preserves total-degree ordering and, unlike
+        # LinearEnumerateFunction, supports the upper bounds required by
+        # finite polynomial families (for example DiscreteUniformDistribution).
+        enum = ot.HyperbolicAnisotropicEnumerateFunction(
+            len(aleatory_var_to_dist), 1.0
+        )
 
         # Basis built from distributions (Normal-->Hermite, Uniform-->Legendre)
-        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
+        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories, enum)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
         poly_order = ts.poly_order
@@ -881,11 +892,14 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
         # Joint distribution based on independent input aleatory dists
         joint = ot.JointDistribution(joint_list)
 
-        # Enumeration function
-        enum = ot.LinearEnumerateFunction(len(aleatory_var_to_dist))
+        # q=1.0 preserves total-degree ordering and supports finite polynomial
+        # families such as the one generated for a discrete uniform input.
+        enum = ot.HyperbolicAnisotropicEnumerateFunction(
+            len(aleatory_var_to_dist), 1.0
+        )
 
         # Basis built from distributions (Normal-->Hermite, Uniform-->Legendre)
-        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
+        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories, enum)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
         poly_order = ts.poly_order
@@ -1061,6 +1075,8 @@ class AleatorySurrogate:
                 #mapping from X~Lognormal(mu,sigma)-->Z~Norm(0,1)
                 #Map X~Lognormal(mu,sigma)-->Y~Norm(mu,sigma)
                 transformed_symbol=(sp.ln(physical_symbol-distribution.gamma)-distribution.mu_log)/distribution.sigma_log
+            elif isinstance(distribution,DiscreteUniformDistribution):
+                transformed_symbol=physical_symbol
             else:
                 raise ValueError(f'Invalid distribution')
 
@@ -1532,6 +1548,61 @@ class RegressionSurrogate(AleatorySurrogate):
             evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
             mse=mean_squared_error(y_new, evaluated_vals)
         return mse
+
+    def get_surrogate_rmse(self, X=None, y=None):
+        """Return the root-mean-squared error for the surrogate.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical variable space. When omitted,
+            the stored internal holdout split is used.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            Root-mean-squared error in the same units as the output.
+
+        """
+        return np.sqrt(self.get_surrogate_mse(X, y))
+
+    def get_surrogate_nrmse(self, X=None, y=None):
+        """Return RMSE normalized by the validation-output standard deviation.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical variable space. When omitted,
+            the stored internal holdout split is used.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            Dimensionless RMSE-to-standard-deviation ratio. Multiply by 100 to
+            express the result as a percentage.
+
+        Raises
+        ------
+        ValueError
+            If no holdout outputs are available, only one of ``X`` and ``y``
+            was provided, or the validation outputs have zero standard
+            deviation.
+
+        """
+        rmse = self.get_surrogate_rmse(X, y)
+        validation_outputs = self.y_test if X is None and y is None else np.asarray(y)
+        std = np.std(validation_outputs)
+        if std == 0:
+            raise ValueError(
+                "Standard deviation of validation outputs is zero, cannot compute NRMSE."
+            )
+        return rmse / std
 
     def get_surrogate_r2(self,X=None,y=None):
         """Return the coefficient of determination for the surrogate.
@@ -2322,11 +2393,14 @@ class MixedRegressionPCEPost(BasicMixedPost):
         # Joint distribution based on independent input aleatory dists
         joint = ot.JointDistribution(joint_list)
 
-        # Enumeration function
-        enum = ot.LinearEnumerateFunction(len(all_var_to_dist))
+        # q=1.0 preserves total-degree ordering and supports finite polynomial
+        # families such as the one generated for a discrete uniform input.
+        enum = ot.HyperbolicAnisotropicEnumerateFunction(
+            len(all_var_to_dist), 1.0
+        )
 
         # Basis built from distributions (Normal-->Hermite, Uniform-->Legendre)
-        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories)
+        product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories, enum)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
         poly_order = ts.poly_order
@@ -2480,6 +2554,61 @@ class MixedSurrogate:
             evaluated_vals=np.array(self._ot_res.getMetaModel()(inputs))
             mse=mean_squared_error(y_new, evaluated_vals)
         return mse
+
+    def get_surrogate_rmse(self, X=None, y=None):
+        """Return the root-mean-squared error for the mixed surrogate.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical mixed-variable space. When
+            omitted, the stored internal holdout split is used.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            Root-mean-squared error in the same units as the output.
+
+        """
+        return np.sqrt(self.get_surrogate_mse(X, y))
+
+    def get_surrogate_nrmse(self, X=None, y=None):
+        """Return RMSE normalized by the validation-output standard deviation.
+
+        Parameters
+        ----------
+        X : array-like or None, optional
+            Validation input points in physical mixed-variable space. When
+            omitted, the stored internal holdout split is used.
+        y : array-like or None, optional
+            Validation outputs corresponding to ``X``. Must be provided
+            together with ``X``.
+
+        Returns
+        -------
+        float
+            Dimensionless RMSE-to-standard-deviation ratio. Multiply by 100 to
+            express the result as a percentage.
+
+        Raises
+        ------
+        ValueError
+            If no holdout outputs are available, only one of ``X`` and ``y``
+            was provided, or the validation outputs have zero standard
+            deviation.
+
+        """
+        rmse = self.get_surrogate_rmse(X, y)
+        validation_outputs = self.y_test if X is None and y is None else np.asarray(y)
+        std = np.std(validation_outputs)
+        if std == 0:
+            raise ValueError(
+                "Standard deviation of validation outputs is zero, cannot compute NRMSE."
+            )
+        return rmse / std
 
     def get_surrogate_r2(self,X=None,y=None):
         """Return the coefficient of determination for the surrogate.
@@ -2721,6 +2850,8 @@ class MixedSurrogate:
                 #mapping from X~Lognormal(mu,sigma)-->Z~Norm(0,1)
                 #Map X~Lognormal(mu,sigma)-->Y~Norm(mu,sigma)
                 transformed_symbol=(sp.ln(physical_symbol-distribution.gamma)-distribution.mu_log)/distribution.sigma_log
+            elif isinstance(distribution,DiscreteUniformDistribution):
+                transformed_symbol=physical_symbol
             else:
                 raise ValueError(f'Invalid distribution')
 

@@ -58,7 +58,7 @@ for each plugin via the finite difference method.
             self.declare_input("y2", float, 1.0)
             self.declare_output("y1", float, 1.0)
 
-            self.declare_partials_plugin('*','*',method='fd')
+            self.declare_partials('*','*',method='fd')
 
 
         def run_plugin(self, links, work_dir):
@@ -74,7 +74,7 @@ for each plugin via the finite difference method.
             self.declare_input("y1", float, 1.0)
             self.declare_output("y2", float, 1.0)
 
-            self.declare_partials_plugin('*','*',method='fd')
+            self.declare_partials('*','*',method='fd')
 
 
         def run_plugin(self, links, work_dir):
@@ -98,7 +98,7 @@ The objective plugin computes the objective and constraint values.
             self.declare_output("con1", float, 1.0)
             self.declare_output("con2", float, 1.0)
 
-            self.declare_partials_plugin('*','*',method='fd')
+            self.declare_partials('*','*',method='fd')
 
 
         def run_plugin(self, links, work_dir):

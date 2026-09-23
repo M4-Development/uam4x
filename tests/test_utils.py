@@ -720,7 +720,7 @@ def test_get_param_type():
 
     aircraft = Aircraft("aircraft")
     aircraft.set_parameter("Npass", 6)
-    aircraft.set_parameter("Upass", 200.0)
+    aircraft.set_parameter("Wpass", 200.0)
 
     rotor = Rotor("rotor")
     rotor.set_parameter("nblade", 8)
@@ -761,7 +761,7 @@ def test_get_param_type():
     actual = study.get_param_type("vehicles.mtr.wing.sweep")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = study.get_param_type("vehicles.mtr.aircraft.Upass")
+    actual = study.get_param_type("vehicles.mtr.aircraft.Wpass")
     assert actual == float, f"expected float, got {actual}"
 
     actual = study.get_param_type("vehicles.mtr.aircraft.Npass")

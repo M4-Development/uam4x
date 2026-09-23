@@ -1134,15 +1134,15 @@ class Solution(Group):
                 step = get_plugin_class(plugin_name)
                 plugin_options = step_data["plugin_options"]
                 if 'input_dict' in plugin_options:
-                                    input_dict=plugin_options['input_dict']
-                                    for name,input_data in input_dict.items():
-                                        if input_data['type']=='ndarray':
-                                            input_data['default_value']=np.array(input_data['default_value'])
+                    input_dict=plugin_options['input_dict']
+                    for name,input_data in input_dict.items():
+                        if input_data['type']=='ndarray':
+                            input_data['default_value']=np.array(input_data['default_value'])
                 if 'output_dict' in plugin_options:
-                       input_dict=plugin_options['output_dict']
-                       for name,input_data in input_dict.items():
-                           if input_data['type']=='ndarray':
-                               input_data['default_value']=np.array(input_data['default_value'])
+                    input_dict=plugin_options['output_dict']
+                    for name,input_data in input_dict.items():
+                        if input_data['type']=='ndarray':
+                            input_data['default_value']=np.array(input_data['default_value'])
                 plugin_hash = step_data["plugin_hash"]
             elif step_data["specification"] == "group":
 
@@ -2145,7 +2145,7 @@ class Plugin:
 
         return self.method_to_partial
 
-    def compute_partials_plugin(self, links: dict):
+    def compute_partials(self, links: dict):
         """Compute analytic partial derivatives for the plugin.
 
         Parameters

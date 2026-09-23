@@ -226,7 +226,7 @@ def convert_numpy_to_python(value):
         return {k: convert_numpy_to_python(x) for k, x in value.items()}
 
     return value
-    
+
 def convert_numpy_to_python(value):
     """Convert NumPy scalar and array values to Python-serializable objects.
 
@@ -1001,3 +1001,30 @@ def canonicalize_path(path):
 
     """
     return os.path.normcase(os.path.normpath(os.path.realpath(os.path.abspath(path))))
+
+
+def declare_standard_io(plugin, plugin_options):
+    continuous_inputs=[]
+    for name, metadata in plugin_options.get("input_dict", {}).items():
+        var_type=type_string_to_type(metadata["type"])
+        plugin.declare_input(
+            name,
+            var_type=var_type,
+            value=metadata.get("default_value"),
+        )
+        if is_continuous_type_or_value(var_type):
+            continuous_inputs.append(name)
+
+
+    continuous_outputs=[]
+    for name, metadata in plugin_options.get("output_dict", {}).items():
+        var_type=type_string_to_type(metadata["type"])
+        plugin.declare_output(
+            name,
+            var_type=var_type,
+            value=metadata.get("default_value"),
+        )
+        if is_continuous_type_or_value(var_type):
+            continuous_outputs.append(name)
+
+    return continuous_inputs,continuous_outputs
