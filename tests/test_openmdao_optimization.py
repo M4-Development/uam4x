@@ -128,7 +128,7 @@ def _build_study_and_state(tmp_path, tracked_outputs):
     state = {
         "optimization": True,
         "des_vars": {
-            "vehicles.v.core.x": {"lower": 0.0, "upper": 5.0, "indices": None}
+            "vehicles.v.core.x": {"lower": 0.0, "upper": 5.0, "initial_value": None, "indices": None}
         },
         "constraints": {
             "analysis.y": {"lower": 0.0, "upper": 10.0, "indices": None}

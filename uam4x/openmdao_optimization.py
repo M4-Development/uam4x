@@ -252,6 +252,16 @@ class Optimization:
 
         problem.model.options["auto_order"]=True
         problem.setup()
+        for name, data in self.state["des_vars"].items():
+            if data['initial_value'] is not None:
+                value=vehicle_val_dict[name]
+                initial_value=data['initial_value']
+                if data["indices"] is not None:
+                    value = np.array(vehicle_val_dict[name], copy=True)
+                    value[data["indices"]] = data["initial_value"]
+                else:
+                    value=initial_value
+                problem.set_val(name.replace(".", "~"),value)
         problem.run_driver()
 
         if self.check_partials:

@@ -71,6 +71,7 @@ class Parameter:
         unit_type: UnitType = None,
         unit: Enum = None,
         description: str = "",
+        comment: str = "",
     ):
         """Initialize a parameter.
 
@@ -88,6 +89,8 @@ class Parameter:
             Unit label associated with the parameter value.
         description : str, optional
             Human-readable parameter description.
+        comment : str, optional
+            Source, reference, or rationale associated with the current value.
 
         Raises
         ------
@@ -112,6 +115,7 @@ class Parameter:
         self.unit_type = unit_type if unit_type is not None else UnitType.NONE
         self.unit = unit if unit is not None else ""
         self.description = description
+        self.comment = comment
 
     def __str__(self):
         """Return a human-readable string representation of the parameter.
@@ -204,6 +208,7 @@ class Parameter:
             "unit_type": unit_type,
             "unit": unit,
             "description": self.description,
+            "comment": self.comment,
         }
 
     @classmethod
@@ -235,6 +240,7 @@ class Parameter:
             unit_type=data["unit_type"],
             unit=data["unit"],
             description=data["description"],
+            comment=data.get("comment", ""),
         )
 
 
@@ -269,10 +275,11 @@ class _Mode:
         """
         self.name = name
         self._overrides = {}
+        self._override_comments = {}
         self.component = component  # Reference to parent component for inheritance
         self.log = _Mode.log
 
-    def set_parameter(self, name: str, value):
+    def set_parameter(self, name: str, value, comment: str = ""):
         """Set a parameter override for this mode.
 
         Parameters
@@ -281,6 +288,8 @@ class _Mode:
             Parameter name.
         value : object
             Override value to assign.
+        comment : str, optional
+            Source, reference, or rationale associated with the override value.
 
         Returns
         -------
@@ -312,6 +321,7 @@ class _Mode:
                 f"Override for parameter '{name}' in mode '{self.name}' must be of type {dtype.__name__}, got {type(value).__name__}"
             )
         self._overrides[name] = value
+        self._override_comments[name] = comment
 
     def get_parameter(self, name: str):
         """Return a mode override or inherited subsystem parameter value.
@@ -344,6 +354,37 @@ class _Mode:
         raise AttributeError(
             f"Parameter '{name}' does not exist in component '{self.component.name}' for mode '{self.name}'"
         )
+
+    def get_parameter_comment(self, name: str):
+        """Return the comment for a mode override or inherited parameter.
+
+        Parameters
+        ----------
+        name : str
+            Parameter name.
+
+        Returns
+        -------
+        str
+            Override comment if present, otherwise the baseline comment.
+
+        Raises
+        ------
+        AttributeError
+            If the parent subsystem has no parameter named name.
+
+        """
+        self.log.debug("get parameter comment")
+        if name in self._overrides:
+            return self._override_comments.get(name, "")
+        if name in self.component._parameters:
+            return self.component.get_parameter_comment(name)
+        message = (
+            f"Cannot get comment for parameter '{name}': parameter does not "
+            f"exist in component '{self.component.name}' for mode '{self.name}'."
+        )
+        self.log.error(message)
+        raise AttributeError(message)
 
     def __getattr__(self, item):
         """Return an override, inherited parameter, or parent attribute.
@@ -401,17 +442,10 @@ class _Mode:
         directly and unknown names raise :class:`AttributeError`.
 
         """
-        if key in ("name", "_overrides", "component"):
+        if key in ("name", "_overrides", "_override_comments", "component"):
             object.__setattr__(self, key, value)
         elif key in self.component._parameters:
-            if not isinstance(value, self.component._parameters[key].dtype):
-                self.log.error(
-                    f"Parameter '{key}' in mode '{self.name}' must be of type {self.component._parameters[key].dtype.__name__}, got {type(value).__name__}"
-                )
-                raise TypeError(
-                    f"Parameter '{key}' in mode '{self.name}' must be of type {self.component._parameters[key].dtype.__name__}, got {type(value).__name__}"
-                )
-            self._overrides[key] = value
+            self.set_parameter(key, value)
         elif key == "log":
             pass
         else:
@@ -440,6 +474,7 @@ class _Mode:
             if pname in self._overrides:
                 override_value = self._overrides[pname]
                 dtype = param.dtype
+                override_comment = self._override_comments.get(pname, "")
                 if dtype is not None and not isinstance(override_value, dtype):
                     self.log.error(
                         f"Override for parameter '{pname}' in mode '{self.name}' must be of type {dtype.__name__}, got {type(override_value).__name__}"
@@ -454,6 +489,7 @@ class _Mode:
                     unit_type=param.unit_type,
                     unit=param.unit,
                     description=param.description,
+                    comment=override_comment,
                 )
                 params[pname] = overridden_param
             else:
@@ -578,6 +614,8 @@ class Subsystem:
             Unit label associated with the parameter value.
         description : str, optional
             Human-readable parameter description.
+        comment : str, optional
+            Source, reference, or rationale associated with the current value.
 
         Returns
         -------
@@ -646,7 +684,7 @@ class Subsystem:
         prop = property(getter, setter)
         setattr(self.__class__, name, prop)
 
-    def set_parameter(self, name: str, value: float, unit=None):
+    def set_parameter(self, name: str, value, unit=None, comment: str = ""):
         """Set the value of a baseline parameter.
 
         Parameters
@@ -657,6 +695,8 @@ class Subsystem:
             New parameter value.
         unit : Enum or str, optional
             Unit label to assign to the parameter.
+        comment : str, optional
+            Source, reference, or rationale associated with the new value.
 
         Returns
         -------
@@ -679,7 +719,7 @@ class Subsystem:
         if name in self._parameters:
             param = self._parameters[name]
             param.value = value
-
+            param.comment = comment
             unit_type = param.unit_type
             if unit is not None and unit_type in UNIT_TYPE_TO_UNIT_CLASS:
                 unit_class = UNIT_TYPE_TO_UNIT_CLASS[unit_type]
@@ -768,6 +808,35 @@ class Subsystem:
                 f"Parameter '{param_name}' not defined for {self.__class__.__name__}."
             )
         return self._parameters[param_name].value
+
+    def get_parameter_comment(self, param_name: str):
+        """Return the comment associated with a baseline parameter value.
+
+        Parameters
+        ----------
+        param_name : str
+            Parameter name.
+
+        Returns
+        -------
+        str
+            Source, reference, or rationale for the current value.
+
+        Raises
+        ------
+        AttributeError
+            If param_name is not a defined parameter on the component.
+
+        """
+        self.log.debug(f"get parameter comment: {param_name}")
+        if param_name not in self._parameters:
+            message = (
+                f"Cannot get comment for parameter '{param_name}': parameter "
+                f"is not defined for {self.__class__.__name__}."
+            )
+            self.log.error(message)
+            raise AttributeError(message)
+        return self._parameters[param_name].comment
 
     def get_parameter_type(self, param_name: str):
         """Return the declared type of a baseline parameter.
@@ -870,7 +939,10 @@ class Subsystem:
             "subsystem_type": type(self).__name__,
             "parameters": {k: v._to_dict() for k, v in self._parameters.items()},
             "modes": {
-                k: {"overrides": dict(mode._overrides)}
+                k: {
+                    "overrides": dict(mode._overrides),
+                    "comments": dict(mode._override_comments),
+                }
                 for k, mode in self._modes.items()
             },
         }
@@ -903,8 +975,10 @@ class Subsystem:
         # Modes
         for mode_name, mode_data in data["modes"].items():
             mode = comp.add_mode(mode_name)
+            comments = mode_data.get("comments", {})
             for pname, value in mode_data["overrides"].items():
                 mode._overrides[pname] = value
+                mode._override_comments[pname] = comments.get(pname, "")
         return comp
 
     def get_param_dict(self) -> dict:

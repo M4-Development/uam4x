@@ -367,6 +367,47 @@ def test_Subsystem_set_parameter():
     assert W._parameters['chord'].unit_type is UnitType.LENGTH
 
 
+def test_Subsystem_parameter_comments():
+    W = Wing("sample_wing")
+
+    W.set_parameter("span", 15.0, comment="NASA reference")
+    assert W.get_parameter_comment("span") == "NASA reference"
+
+    W.span = 16.0
+    assert W.get_parameter_comment("span") == ""
+
+    with pytest.raises(AttributeError, match="Cannot get comment"):
+        W.get_parameter_comment("missing")
+
+
+def test_Mode_parameter_comments_and_serialization():
+    W = Wing("sample_wing")
+    W.set_parameter("span", 15.0, comment="Baseline reference")
+    mode = W.add_mode("cruise")
+
+    assert mode.get_parameter_comment("span") == "Baseline reference"
+
+    mode.set_parameter("span", 20.0, comment="Cruise reference")
+    assert mode.get_parameter_comment("span") == "Cruise reference"
+    assert mode.parameters["span"].comment == "Cruise reference"
+
+    data = W._to_dict()
+    assert data["modes"]["cruise"]["comments"]["span"] == "Cruise reference"
+
+    rebuilt = Subsystem._from_dict(data)
+    assert rebuilt.get_parameter_comment("span") == "Baseline reference"
+    assert rebuilt.cruise.get_parameter_comment("span") == "Cruise reference"
+
+    data["parameters"]["span"].pop("comment")
+    data["modes"]["cruise"].pop("comments")
+    rebuilt_legacy = Subsystem._from_dict(data)
+    assert rebuilt_legacy.get_parameter_comment("span") == ""
+    assert rebuilt_legacy.cruise.get_parameter_comment("span") == ""
+
+    with pytest.raises(AttributeError, match="Cannot get comment"):
+        mode.get_parameter_comment("missing")
+
+
 def test_Subsystem_add_mode():
     R = Rotor('sample_rotor')
 

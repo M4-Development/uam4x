@@ -1,4 +1,5 @@
 import os
+import subprocess
 from types import SimpleNamespace
 
 os.environ.setdefault("UAM4X_DISABLE_REGISTRY_WRITES", "1")
@@ -302,10 +303,9 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
     out.mkdir()
     calls = {}
 
-    def fake_commit(json_paths, commit_message, new_branch):
+    def fake_commit(json_paths, commit_message):
         calls["paths"] = json_paths
         calls["msg"] = commit_message
-        calls["new_branch"] = new_branch
 
     # save+reload to initialize model hash for results-only save path
     demo_study.save_model_to_json(str(out), commit=False)
@@ -317,13 +317,17 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
     }
     monkeypatch.setattr(loaded, "_to_dict", lambda: data_with_results)
     monkeypatch.setattr(loaded, "_commit_json_to_branch", fake_commit)
+    monkeypatch.setattr(
+        loaded, "_prepare_repository_for_autocommit",
+        lambda new_branch, commit_code: calls.update({"prepare": (new_branch, commit_code)}),
+    )
 
-    loaded.save_results_to_json(str(out), commit=True)
+    loaded.save_results_to_json(str(out), commit=True, commit_code=True)
 
     assert (out / "results.json").exists()
     assert calls["paths"] == [str(out / "results.json")]
     assert "Writing results for variant" in calls["msg"]
-    assert calls["new_branch"] is False
+    assert calls["prepare"] == (False, True)
 
 
 def test_study_save_results_to_json_commit_uses_current_branch(tmp_path, demo_study, monkeypatch):
@@ -342,22 +346,25 @@ def test_study_save_results_to_json_commit_uses_current_branch(tmp_path, demo_st
     monkeypatch.setattr(
         loaded,
         "_commit_json_to_branch",
-        lambda json_paths, commit_message, new_branch: calls.update(
-            {"paths": json_paths, "msg": commit_message, "new_branch": new_branch}
-        ),
+        lambda json_paths, commit_message: calls.update(
+            {"paths": json_paths, "msg": commit_message}),
+    )
+    monkeypatch.setattr(
+        loaded, "_prepare_repository_for_autocommit",
+        lambda new_branch, commit_code: calls.update({"prepare": (new_branch, commit_code)}),
     )
 
     loaded.save_results_to_json(str(out), commit=True)
 
     assert calls["paths"] == [str(out / "results.json")]
     assert "Writing results for variant" in calls["msg"]
-    assert calls["new_branch"] is False
+    assert calls["prepare"] == (False, False)
 
 
 def test_study_commit_json_to_branch_errors_no_dir(demo_study):
     demo_study.control.repo_root = "/definitely/not/a/repo"
     with pytest.raises(NotADirectoryError):
-        demo_study._commit_json_to_branch(["dummy.json"], "msg", new_branch=False)
+        demo_study._commit_json_to_branch(["dummy.json"], "msg")
 
 
 def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, monkeypatch):
@@ -368,7 +375,7 @@ def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, m
 
     monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: None)
     with pytest.raises(ValueError, match="No repository found"):
-        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg", new_branch=False)
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
 
 
 def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_study, monkeypatch):
@@ -379,7 +386,7 @@ def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_st
 
     monkeypatch.setattr(study_module.pygit2, "discover_repository", lambda *_: str(tmp_path / "other" / ".git"))
     with pytest.raises(ValueError, match="does not have a repo"):
-        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg", new_branch=False)
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
 
 
 def test_study_commit_json_to_branch_detached_head(tmp_path, demo_study, monkeypatch):
@@ -393,9 +400,110 @@ def test_study_commit_json_to_branch_detached_head(tmp_path, demo_study, monkeyp
     monkeypatch.setattr(study_module.pygit2, "Repository", lambda *_: fake_repo)
 
     with pytest.raises(RuntimeError, match="detached HEAD"):
-        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg", new_branch=False)
+        demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
 
 
 def test_study_get_plugin_link_inputs_current_behavior_raises(demo_study):
     with pytest.raises(AttributeError):
         demo_study.get_plugin_link_inputs("step1", state={})
+
+
+def _run_git(repo_root, *args):
+    return subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+@pytest.fixture
+def initialized_git_repo(tmp_path):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _run_git(repo_root, "init")
+    tracked_code = repo_root / "code.py"
+    tracked_code.write_text("value = 1\n")
+    _run_git(repo_root, "add", "code.py")
+    _run_git(
+        repo_root,
+        "-c", "user.name=Test Author",
+        "-c", "user.email=test@example.com",
+        "commit", "-m", "Initial commit",
+    )
+    variant_dir = repo_root / "variants" / "demo"
+    variant_dir.mkdir(parents=True)
+    return repo_root, tracked_code, variant_dir
+
+
+def _configure_study_repository(study, repo_root):
+    study.control._set_repo_root(str(repo_root))
+    study.control._set_variant_name("demo")
+    study.control.author = "Test Author"
+
+
+def test_autocommit_rejects_unstaged_tracked_changes_before_writing_model(
+    initialized_git_repo, demo_study
+):
+    repo_root, tracked_code, variant_dir = initialized_git_repo
+    _configure_study_repository(demo_study, repo_root)
+    original_branch = _run_git(repo_root, "branch", "--show-current")
+    tracked_code.write_text("value = 2\n")
+
+    with pytest.raises(RuntimeError, match="unstaged changes to tracked files"):
+        demo_study.save_model_to_json(
+            str(variant_dir), commit=True, new_branch=True, commit_code=False
+        )
+
+    assert not (variant_dir / "model.json").exists()
+    assert _run_git(repo_root, "branch", "--show-current") == original_branch
+    assert _run_git(repo_root, "rev-list", "--count", "HEAD") == "1"
+
+
+def test_commit_code_commits_code_before_model_on_new_branch(
+    initialized_git_repo, demo_study
+):
+    repo_root, tracked_code, variant_dir = initialized_git_repo
+    _configure_study_repository(demo_study, repo_root)
+    tracked_code.write_text("value = 2\n")
+    (repo_root / "untracked.txt").write_text("leave me untracked\n")
+
+    demo_study.save_model_to_json(
+        str(variant_dir), commit=True, new_branch=True, commit_code=True
+    )
+
+    assert _run_git(repo_root, "branch", "--show-current") == "AutoCommit1"
+    subjects = _run_git(repo_root, "log", "-2", "--format=%s").splitlines()
+    assert subjects == [
+        "AutoCommit: Created data for variant demo",
+        "AutoCommit: Committed code",
+    ]
+    assert _run_git(repo_root, "show", "--format=", "--name-only", "HEAD~1") == "code.py"
+    assert _run_git(repo_root, "show", "--format=", "--name-only", "HEAD") == (
+        "variants/demo/model.json"
+    )
+    assert _run_git(repo_root, "status", "--short") == "?? untracked.txt"
+
+
+def test_untracked_files_do_not_block_json_autocommit(
+    initialized_git_repo, demo_study
+):
+    repo_root, _, variant_dir = initialized_git_repo
+    _configure_study_repository(demo_study, repo_root)
+    (repo_root / "untracked.txt").write_text("leave me untracked\n")
+
+    demo_study.save_model_to_json(
+        str(variant_dir), commit=True, new_branch=False, commit_code=False
+    )
+
+    assert _run_git(repo_root, "log", "-1", "--format=%s") == (
+        "AutoCommit: Created data for variant demo"
+    )
+    assert _run_git(repo_root, "status", "--short") == "?? untracked.txt"
+
+
+def test_commit_code_requires_json_commit(demo_study, tmp_path):
+    with pytest.raises(ValueError, match="Cannot commit code"):
+        demo_study.save_model_to_json(
+            str(tmp_path), commit=False, commit_code=True
+        )

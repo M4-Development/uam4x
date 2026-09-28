@@ -90,7 +90,7 @@ def test_to_dict_good():
 
     assert opt_dict == {
         'type': 'Optimization',
-        'des_vars': {DESIGN_VAR_NAME: {'lower': 1.0,'upper': 10.0,'indices': None}},
+        'des_vars': {DESIGN_VAR_NAME: {'lower': 1.0,'upper': 10.0,'initial_value': None,'indices': None}},
         'constraints':{CONSTRAINT_NAME: {'lower': lower,'upper': upper,'indices': None}},
         'objective_name': 'random_objective',
         'driver_options': {
@@ -106,9 +106,9 @@ def test_Optimization_from_dict_array_and_scalar_bounds():
         "type": "optimization",
         "des_vars": {
             # scalar bounds
-            "x": {"lower": 0.0, "upper": 10.0, 'indices': None},
+            "x": {"lower": 0.0, "upper": 10.0, "initial_value": None, 'indices': None},
             # vector bounds (as lists)
-            "y": {"lower": [0.0, 1.0], "upper": [2.0, 3.0], 'indices': None},
+            "y": {"lower": [0.0, 1.0], "upper": [2.0, 3.0], "initial_value": None, 'indices': None},
         },
         "constraints": {
             # vector bounds (as lists)
@@ -543,7 +543,7 @@ def test_Control_from_dict_mixed_trades():
     opt_dict_for_sweep = {
         "type": "Optimization",
         "des_vars": {
-            "x": {"lower": 0.0, "upper": 10.0, "indices": None},
+            "x": {"lower": 0.0, "upper": 10.0, "initial_value": None, "indices": None},
         },
         "constraints": {
             "c1": {"lower": -1.0, "upper": 1.0, "indices": None},
@@ -558,7 +558,7 @@ def test_Control_from_dict_mixed_trades():
     opt_dict_alone = {
         "type": "Optimization",
         "des_vars": {
-            "y": {"lower": [0.0, 1.0], "upper": [2.0, 3.0], "indices": None},
+            "y": {"lower": [0.0, 1.0], "upper": [2.0, 3.0], "initial_value": None, "indices": None},
         },
         "constraints": {},
         "objective_name": "obj_opt_only",

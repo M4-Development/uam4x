@@ -369,7 +369,7 @@ class Study:
         with open(json_path, "w") as f:
             json.dump(data, f, indent=4)
 
-    def save_to_json(self,variant_dir:str,commit=False):
+    def save_to_json(self,variant_dir:str,commit=False,commit_code=False):
         """Write study model data and, when available, results data to JSON files.
 
         Parameters
@@ -380,6 +380,9 @@ class Study:
         commit : bool, optional
             If True, commit the written JSON file or files to the current git
             branch.
+        commit_code : bool, optional
+            If True, commit existing tracked code changes before committing the
+            generated JSON artifacts. Requires ``commit=True``.
 
         Returns
         -------
@@ -391,6 +394,9 @@ class Study:
         ``model.json`` is rewritten and existing results are discarded rather
         than saved.
         """
+
+        if commit_code and not commit:
+            raise ValueError("Cannot commit code without committing generated JSON.")
 
         #Paths
         model_path=os.path.join(variant_dir,'model.json')
@@ -411,12 +417,22 @@ class Study:
         msg = f"AutoCommit: Writing study to json for variant {self.control.variant_name}"
         if self._model_dict_hash:
             if self._model_dict_hash!=model_hash:
+                if commit:
+                    self._prepare_repository_for_autocommit(
+                        new_branch=True, commit_code=commit_code
+                    )
                 self._save_to_json(model_dict,model_path)
                 print(f'New model does not match loaded model, discarding results and saving')
                 if commit:
-                    self._commit_json_to_branch(json_paths=[model_path],commit_message=msg,new_branch=True)
+                    self._commit_json_to_branch(
+                        json_paths=[model_path], commit_message=msg
+                    )
                 return
 
+        if commit:
+            self._prepare_repository_for_autocommit(
+                new_branch=False, commit_code=commit_code
+            )
         self._save_to_json(model_dict,model_path)
         written=[model_path]
         #save the results
@@ -436,7 +452,7 @@ class Study:
             self._save_to_json(result_dict,result_path)
             written.append(result_path)
         if commit:
-            self._commit_json_to_branch(written,commit_message=msg,new_branch=False)
+            self._commit_json_to_branch(written,commit_message=msg)
 
     @staticmethod
     def _update_control(model_dict,model_hash):
@@ -467,7 +483,8 @@ class Study:
                 new_control_dict["model_hash"]=model_hash
         return new_control_dict
 
-    def save_model_to_json(self, variant_dir: str, commit=False,new_branch=False):
+    def save_model_to_json(self, variant_dir: str, commit=False,
+                           new_branch=False, commit_code=False):
         """Write model configuration data to ``model.json``.
 
         Parameters
@@ -479,6 +496,9 @@ class Study:
         new_branch : bool, optional
             If True and ``commit`` is also True, create and check out a new
             auto-generated branch before committing.
+        commit_code : bool, optional
+            If True, commit existing tracked code changes before committing
+            ``model.json``. Requires ``commit=True``.
 
         Returns
         -------
@@ -487,6 +507,8 @@ class Study:
         """
         if not commit and new_branch:
             raise ValueError(f'Cannot set new branch to true without committing.')
+        if commit_code and not commit:
+            raise ValueError("Cannot commit code without committing generated JSON.")
 
         msg = f"AutoCommit: Created data for variant {self.control.variant_name}"
         study_dict=replace_none_with_empty_quotes(self._to_dict())
@@ -501,9 +523,14 @@ class Study:
         model_dict['control']=new_control_dict
 
         model_path=os.path.join(variant_dir,'model.json')
+        if commit:
+            self._prepare_repository_for_autocommit(
+                new_branch=new_branch, commit_code=commit_code
+            )
         self._save_to_json(model_dict,model_path)
         if commit:
-            self._commit_json_to_branch(json_paths=[model_path],commit_message=msg,new_branch=new_branch)
+            self._commit_json_to_branch(json_paths=[model_path],
+                                        commit_message=msg)
 
         return model_path
     @staticmethod
@@ -538,7 +565,8 @@ class Study:
         }
 
 
-    def save_results_to_json(self, variant_path: str, commit=False):
+    def save_results_to_json(self, variant_path: str, commit=False,
+                             commit_code=False):
         """Write current study results to ``results.json``.
 
         Parameters
@@ -547,6 +575,9 @@ class Study:
             Variant directory where ``results.json`` is written.
         commit : bool, optional
             If True, commit the generated JSON file to git.
+        commit_code : bool, optional
+            If True, commit existing tracked code changes before committing
+            ``results.json``. Requires ``commit=True``.
 
 
         Returns
@@ -565,6 +596,8 @@ class Study:
         """
 
 
+        if commit_code and not commit:
+            raise ValueError("Cannot commit code without committing generated JSON.")
         msg = f"AutoCommit: Writing results for variant {self.control.variant_name}"
         results_path=os.path.join(variant_path,'results.json')
         study_dict=replace_none_with_empty_quotes(self._to_dict())
@@ -602,12 +635,16 @@ class Study:
                 raise ValueError(f"Study's loaded in hash does not match current model"
                                  "hash.")
 
+        if commit:
+            self._prepare_repository_for_autocommit(
+                new_branch=False, commit_code=commit_code
+            )
         self._save_to_json(results_dict,results_path)
 
         if commit:
-            self._commit_json_to_branch([results_path],commit_message=msg,new_branch=False)
+            self._commit_json_to_branch([results_path],commit_message=msg)
 
-    def save_post_to_json(self,variant_path,commit=False):
+    def save_post_to_json(self,variant_path,commit=False,commit_code=False):
         """Write post-processing data to ``post.json``.
 
         Parameters
@@ -616,6 +653,9 @@ class Study:
             Variant directory where ``post.json`` is written.
         commit : bool, optional
             If True, commit the generated JSON file to git.
+        commit_code : bool, optional
+            If True, commit existing tracked code changes before committing
+            ``post.json``. Requires ``commit=True``.
 
         Returns
         -------
@@ -630,6 +670,8 @@ class Study:
 
         """
 
+        if commit_code and not commit:
+            raise ValueError("Cannot commit code without committing generated JSON.")
         msg=f"AutoCommit: Writing post processing data for variant {self.control.variant_name}"
         post_processing_path=os.path.join(variant_path,'post.json')
         study_dict=replace_none_with_empty_quotes(self._to_dict())
@@ -670,11 +712,115 @@ class Study:
             "header":header_data,
             "post_storage":self._post_data
                    }
+        if commit:
+            self._prepare_repository_for_autocommit(
+                new_branch=False, commit_code=commit_code
+            )
         self._save_to_json(post_dict,post_processing_path)
         if commit:
-            self._commit_json_to_branch([post_processing_path],msg,new_branch=False)
+            self._commit_json_to_branch([post_processing_path],msg)
 
-    def _commit_json_to_branch(self, json_paths, commit_message,new_branch):
+    def _get_repository_for_autocommit(self):
+        """Return the configured repository after validating its state."""
+        path = Path(self.control.repo_root)
+        if not path.is_dir():
+            raise NotADirectoryError(
+                f"The provided repository root path {self.control.repo_root} is not a directory.\n"
+                "The repo root must be a directory."
+            )
+
+        try:
+            repo_path = pygit2.discover_repository(path)
+        except KeyError:
+            repo_path = None
+
+        if repo_path is None:
+            raise ValueError("No repository found with provided path")
+
+        repo_path = Path(repo_path)
+        if path / ".git" != repo_path:
+            raise ValueError(
+                f"Provided path: {self.control.repo_root} does not have a repo"
+            )
+
+        repo = pygit2.Repository(repo_path)
+        if repo.head_is_unborn:
+            raise RuntimeError(
+                "Cannot commit: repository has no commits yet (unborn HEAD)."
+            )
+        if repo.head_is_detached:
+            raise RuntimeError("Cannot commit: repo is in detached HEAD state.")
+        return repo
+
+    @staticmethod
+    def _git_diff_returncode(repo, staged=False):
+        command = ["git", "diff"]
+        if staged:
+            command.append("--staged")
+        command.extend(["--exit-code", "--quiet"])
+        result = subprocess.run(command, cwd=repo.workdir)
+        if result.returncode not in (0, 1):
+            raise RuntimeError("Unable to inspect repository changes before autocommit.")
+        return result.returncode
+
+    def _checkout_new_autocommit_branch(self, repo):
+        parent_commit = repo[repo.head.target]
+        increment = 1
+        for branch_name in repo.branches.local:
+            match = re.fullmatch(r"AutoCommit(\d+)", branch_name)
+            if match:
+                increment = max(increment, int(match.group(1)) + 1)
+
+        new_branch_name = f"AutoCommit{increment}"
+        repo.branches.local.create(new_branch_name, parent_commit)
+        repo.checkout(f"refs/heads/{new_branch_name}")
+
+    def _prepare_repository_for_autocommit(self, new_branch, commit_code):
+        """Validate the worktree, optionally branch, and commit tracked code."""
+        repo = self._get_repository_for_autocommit()
+        staged_changes = self._git_diff_returncode(repo, staged=True)
+        unstaged_changes = self._git_diff_returncode(repo)
+
+        if not commit_code:
+            if staged_changes:
+                raise RuntimeError(
+                    "The repository has staged changes when attempting to "
+                    "autocommit; the index must be clean before committing."
+                )
+            if unstaged_changes:
+                raise RuntimeError(
+                    "The repository has unstaged changes to tracked files when "
+                    "attempting to autocommit. Set commit_code=True to commit "
+                    "them first."
+                )
+
+        if new_branch:
+            self._checkout_new_autocommit_branch(repo)
+
+        if not commit_code or not (staged_changes or unstaged_changes):
+            return
+
+        subprocess.run(
+            ["git", "add", "--update", "--", "."],
+            cwd=repo.workdir,
+            check=True,
+        )
+        index = repo.index
+        index.read()
+        parent = repo.head.target
+        parent_commit = repo[parent]
+        tree = index.write_tree()
+        if tree == parent_commit.tree_id:
+            return
+
+        author = pygit2.Signature(self.control.author, "fake@email")
+        committer = pygit2.Signature(self.control.author, "fake@email")
+        repo.create_commit(
+            "HEAD", author, committer, "AutoCommit: Committed code", tree, [parent]
+        )
+
+    def _commit_json_to_branch(self, json_paths,
+                               commit_message):
         """Commit generated JSON artifacts to the configured git repository.
 
         Parameters
@@ -683,10 +829,6 @@ class Study:
             Paths to JSON files to stage and commit.
         commit_message : str
             Git commit message used for the commit.
-        new_branch : bool
-            If True, create and check out a new auto-generated branch before
-            staging and committing the files.
-
         Returns
         -------
         None
@@ -707,77 +849,37 @@ class Study:
         """
 
 
-        # FIRST: Find the git repository to work with in the first place
-        # make sure it is in an acceptable state
-        path=Path(self.control.repo_root)
-        if not path.is_dir():
-            raise NotADirectoryError(
-                f"The provided repository root path {self.control.repo_root} is not a directory.\n"
-                f"The repo root must be a directory."
+        repo = self._get_repository_for_autocommit()
+        relative_json_paths = []
+        for json_path in json_paths:
+            rel_path = os.path.relpath(json_path, repo.workdir)
+            relative_json_paths.append(rel_path.replace(os.sep, "/"))
+
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "-z"],
+            cwd=repo.workdir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("Unable to inspect repository changes before autocommit.")
+        dirty_paths = {path for path in result.stdout.split("\0") if path}
+        unexpected_paths = dirty_paths.difference(relative_json_paths)
+        if unexpected_paths:
+            paths = ", ".join(sorted(unexpected_paths))
+            raise RuntimeError(
+                "The repository gained unstaged changes to tracked files after "
+                f"autocommit preparation: {paths}"
             )
 
-        try:
-            repo_path = pygit2.discover_repository(path)
-        except KeyError:
-            repo_path = None
-
-        if repo_path is None:
-            raise ValueError("No repository found with provided path")
-
-        repo_path=Path(repo_path)
-
-        expected_git_dir = path / '.git'
-
-        if expected_git_dir != repo_path:
-            raise ValueError(
-                f"Provided path: {self.control.repo_root} does not have a repo"
+        if self._git_diff_returncode(repo, staged=True):
+            raise RuntimeError(
+                "The repository has staged changes when attempting to commit "
+                "generated JSON."
             )
 
-        repo = pygit2.Repository(repo_path)
-        if repo.head_is_unborn:
-            raise RuntimeError("Cannot commit: repository has no commits yet (unborn HEAD).")
-
-        if repo.head_is_detached:
-            raise RuntimeError("Cannot commit: repo is in detached HEAD state.")
-
-        #now, using the branch name, add the jsons to the ref is that branch already exists
-        #if the branch doesn't yet exist, attempt to create it and then commit without checking
-        #out the branch itself
-
-        #check if any files are already in the index:
-        # git diff compares the staged files to the files in the head commit
-        # if there are no differences (e.g nothing staged) then the return code
-        # is a zero, if there are differences, the return code is a 1.
-
-        # --cached is equivalent to --staged makes it compare against the HEAD
-        # should be run from the directory of the git repository
-        result=subprocess.run(["git","diff","--staged","--exit-code","--quiet"],cwd=repo.workdir)
-        if result.returncode!=0:
-            raise RuntimeError(f'The repository has staged changes when attempting to autocommit,'
-                             ' the index should be clean before committing')
-        parents=repo.head.target
-        parent_commit=repo[parents]
-        if new_branch:
-            # desired branch name
-            base_branch_name='AutoCommit'
-            increment=1
-            for branch_name in repo.branches.local:
-                match = re.fullmatch(r"AutoCommit(\d+)", branch_name)
-
-                if match:
-                    num = int(match.group(1))
-                    increment = max(increment, num + 1)
-
-            new_branch_name=base_branch_name+f'{increment}'
-
-            repo.branches.local.create(
-                new_branch_name,
-                parent_commit,
-            )
-
-            repo.checkout(f"refs/heads/{new_branch_name}")
-            # index object (can stage/unstage by interacting with api)
-
+        parents = repo.head.target
+        parent_commit = repo[parents]
         index=repo.index
         for json_path in json_paths:
             # stage the JSON file
@@ -1283,11 +1385,14 @@ class Variants:
         self.log.debug(f"add variant {name}")
         self.variants[name] = (func_list, options)
 
-    def generate_variants(self, commit=False):
+    def generate_variants(self, commit=False, commit_code=False):
         """Generate, save, and return all configured study variants.
 
         Parameters
         ----------
+        commit_code : bool, optional
+            If True, commit existing tracked code changes before committing
+            generated JSON artifacts. Requires ``commit=True``.
         commit : bool, optional
             If True, also commit generated JSON artifacts to git.
 
@@ -1331,13 +1436,18 @@ class Variants:
             study.control._set_repo_root(self.repo_dir)
             study.control._set_variant_name(name)
 
-            study.save_model_to_json(this_variant_dir, commit=commit,new_branch=new_branch)
+            study.save_model_to_json(
+                this_variant_dir,
+                commit=commit,
+                new_branch=new_branch,
+                commit_code=commit_code,
+            )
             if commit and new_branch:
                 new_branch=False
             studies.append(study)
         return studies
 
-    def generate_variant(self,variant_name,variant_dir,commit=False):
+    def generate_variant(self,variant_name,variant_dir,commit=False,commit_code=False):
         self.log.debug(f"generate variant {variant_name}")
 
         studies = []
@@ -1353,7 +1463,12 @@ class Variants:
         study.control._set_repo_root(self.repo_dir)
         study.control._set_variant_name(variant_name)
 
-        study.save_model_to_json(variant_dir, commit=commit,new_branch=False)
+        study.save_model_to_json(
+            variant_dir,
+            commit=commit,
+            new_branch=False,
+            commit_code=commit_code,
+        )
 
         return study
 

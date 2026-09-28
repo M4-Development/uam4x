@@ -173,6 +173,8 @@ class Optimization:
                 des_var_vals["lower"] = np.array(des_var_vals["lower"])
             if isinstance(des_var_vals["upper"], list):
                 des_var_vals["upper"] = np.array(des_var_vals["upper"])
+            if isinstance(des_var_vals['initial_value'],list):
+                des_var_vals['initial_value']=np.array(des_var_vals['initial_value'])
 
         obj.des_vars = data["des_vars"]
         obj.constraints = data["constraints"]
@@ -192,6 +194,7 @@ class Optimization:
         lower: np.ndarray | float | np.floating | None = None,
         upper: np.ndarray | float | np.floating | None = None,
         indices: list | None = None,
+        initial_value: np.ndarray | float | np.floating | None = None
     ):
         """Add a design variable to the optimization definition.
 
@@ -223,7 +226,13 @@ class Optimization:
         self.check_upper_lower(
             name, "design variable", lower=lower, upper=upper, indices=indices
         )
-        self.des_vars[name] = {"lower": lower, "upper": upper, "indices": indices}
+        self.des_vars[name] = {
+            "lower": lower,
+              "upper": upper,
+              "initial_value":initial_value,
+              "indices": indices,
+
+            }
 
     def edit_design_var(
             self,
@@ -243,10 +252,14 @@ class Optimization:
         current_desvar = self.des_vars[name]
         if dict_key not in current_desvar:
             raise KeyError
-        bounds = {k: current_desvar[k] for k in ('lower', 'upper', 'indices')}
+        if dict_key == "initial_value":
+            self.des_vars[name][dict_key] = value
+            return
+        bounds = {k: current_desvar[k] for k in ('lower', 'upper','indices')}
         bounds[dict_key] = value
         self.check_upper_lower(name, 'design variable', **bounds)
         self.des_vars[name][dict_key] = value
+
 
     def add_constraint(
         self,

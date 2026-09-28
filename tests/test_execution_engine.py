@@ -258,7 +258,7 @@ def test_check_model_full_optimization_positive(engine_setup):
     state = {
         "optimization": True,
         "des_vars": {
-            "vehicles.exec_vehicle.core.x": {"lower": 0.0, "upper": 10.0, "indices": None}
+            "vehicles.exec_vehicle.core.x": {"lower": 0.0, "upper": 10.0, "initial_value": None, "indices": None}
         },
         "constraints": {
             "stage2.objective": {"lower": 0.0, "upper": 100.0, "indices": None}
@@ -274,7 +274,7 @@ def test_check_desvars_non_continuous_raises(engine_setup):
 
     state = {
         "des_vars": {
-            "vehicles.exec_vehicle.core.n": {"lower": 0.0, "upper": 10.0, "indices": None}
+            "vehicles.exec_vehicle.core.n": {"lower": 0.0, "upper": 10.0, "initial_value": None, "indices": None}
         }
     }
 

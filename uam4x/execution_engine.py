@@ -61,7 +61,7 @@ class Engine:
 
         """
         self.study = study
-        self.work_dir = work_dir
+        self.work_dir =  os.path.abspath(os.path.normpath(work_dir))
         os.makedirs(self.work_dir, exist_ok=True)
         self.log = get_log(log, object_name="engine")
         self.create_step_work_dirs = True
