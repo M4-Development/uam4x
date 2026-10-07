@@ -1,8 +1,17 @@
+from __future__ import annotations
+import copy
 from uam4x.subsystems import Subsystem
 from uam4x.log import get_log
 from uam4x.utils import log
 from collections import Counter
 
+
+def copy_vehicles(vehicle_manager:VehicleManager):
+    execution_vehicles = VehicleManager()
+    for vehicle in vehicle_manager:
+        vehicle_dict = copy.deepcopy(vehicle._to_dict())
+        execution_vehicles.add_vehicle(Vehicle._from_dict(vehicle_dict))
+    return execution_vehicles
 
 class VehicleManager:
     """Manage the collection of vehicles in a study.
@@ -109,15 +118,22 @@ class VehicleManager:
 
         Raises
         ------
-        ValueError
-            If no vehicle with name ``item`` is present.
+        AttributeError
+            If no vehicle or manager attribute with name ``item`` is present.
 
         Notes
         -----
         This allows attribute-style access such as ``manager.my_vehicle``.
 
         """
-        return self.get_vehicle(item)
+
+        try:
+            return self.get_vehicle(item)
+        except ValueError as exc:
+            raise AttributeError(
+                f"{type(self).__name__!s} has no attribute or vehicle {item!r}"
+            ) from exc
+
 
     def __iter__(self):
         """Return an iterator over stored vehicles.

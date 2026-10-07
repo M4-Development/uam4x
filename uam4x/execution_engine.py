@@ -1,29 +1,30 @@
 import os
+import concurrent.futures
+import time
+import shutil
+from pathlib import Path
+import inspect
+import hashlib
+import copy
+
+import numpy as np
+
 from uam4x.study import Study
 from uam4x.openmdao_optimization import Optimization
 from uam4x.control import Optimization as UAM4XOptimization
-import copy
 from uam4x.log import get_log
 from uam4x.custom_errors import PluginException
-import inspect
-import hashlib
-import numpy as np
 from uam4x.utils import (
     is_continuous_type_or_value,
     is_scalar_type_or_value,
     log,
     split_dotted_path_and_indices,
-    parse_variable_reference
+    parse_variable_reference,
 )
 from uam4x.results import Result, Tradestudy, SolutionResults
-import concurrent.futures
-import time
-from datetime import datetime
-from zoneinfo import ZoneInfo
-import shutil
-from pathlib import Path
 from uam4x.linking import uam4xLinkHandler,uam4xVariable
 from uam4x.n2_viewer import build_n2_data, render_n2_html
+from uam4x.vehicle import copy_vehicles
 
 class Engine:
     """Execute UAM4X analyses.
@@ -515,6 +516,10 @@ class Engine:
 
         result = Result(state=state)
 
+        for _, plugin in solution.recurse_generated_plugins(plugins).items():
+            for path, checksum in plugin._template_to_checksum.items():
+                result._add_template_checksum(path, checksum)
+
         for tracked_output in solution.tracked_outputs:
             temp_output_name = "solution." + tracked_output
             if "[" in tracked_output:
@@ -559,6 +564,20 @@ class Engine:
         if os.path.exists(out_dir):
             shutil.rmtree(out_dir)
         os.makedirs(out_dir)
+
+
+
+
+        execution_vehicles=copy_vehicles(self.study.vehicles)
+        tracked_output_names=copy.deepcopy(solution.tracked_outputs)
+        #tradestudy result container
+        ts = Tradestudy(trade_name,
+                        solution_name=solution.name,
+                        executed_vehicles=execution_vehicles,
+                        executed_tradestudy=None,
+                        tracked_output_names=tracked_output_names
+                        )
+
         result = self._run_single_point(
                                 solution=solution,
                                 state=state,
@@ -572,12 +591,11 @@ class Engine:
             solution_results=SolutionResults(solution.name,self.study)
             study_result.add_solution_result(solution_results)
 
-
         if trade_name in solution_results.tradestudies:
             self.log.warning(
                 f"Overwriting existing results for trade study {trade_name}"
             )
-        ts = Tradestudy(trade_name,solution_name=solution.name)
+
         ts._results.append(result)
         ts._hash_to_result[result.state_hash] = result
 
@@ -630,7 +648,8 @@ class Engine:
             # NEED TO UPDATE TO REFLECT NEW STRUCTURE FOR COMPARISON
             if reference_plugin_hash != plug_hash:
                 log.warning(
-                    f"Plugin '{plugin_class.__name__}' contains a different checksum from the one generated at branching script. Check plugin code for changes"
+                    f"Plugin '{plugin_class.__name__}' contains a different checksum from the one generated at branching script."
+                    f"Check plugin code for changes"
                 )
 
             # NEED TO UPDATE THIS TO ALIGN WITH GROUPS, MAYBE NEED A MORE CENTRALIZED
@@ -706,6 +725,17 @@ class Engine:
 
         os.environ["UAM4X_DISABLE_REGISTRY_WRITES"] = "1"
 
+        execution_vehicles=copy_vehicles(self.study.vehicles)
+        tradestudy_dict=copy.deepcopy(tradestudy._to_dict())
+        execution_trade=type(tradestudy)._from_dict(tradestudy_dict)
+        tracked_output_names=copy.deepcopy(solution.tracked_outputs)
+        #tradestudy result container
+        ts = Tradestudy(trade_name,
+                        solution_name=solution.name,
+                        executed_vehicles=execution_vehicles,
+                        executed_tradestudy=execution_trade,
+                        tracked_output_names=tracked_output_names
+                        )
         self.capture_execution_data(solution=solution,trade_name=trade_name)
         if isinstance(tradestudy, UAM4XOptimization) and num_processors is not None:
             log.warning("num_processors is ignored for single point optimizations")
@@ -733,7 +763,6 @@ class Engine:
                     f"Overwriting existing results for trade study {trade_name}"
                 )
 
-            ts = Tradestudy(trade_name,solution_name=solution.name)
             ts._results.append(result)
             ts._hash_to_result[result.state_hash] = result
             solution_results.add_tradestudy(trade_name, ts)
@@ -749,7 +778,8 @@ class Engine:
                 trade_name,
                 trade_states,
                 num_processors=num_processors,
-                trade_work_dir=trade_work_dir
+                trade_work_dir=trade_work_dir,
+                trade_result=ts
             )
 
         # add time to results metadata
@@ -758,7 +788,13 @@ class Engine:
 
         self.study._add_time_metadata(solution_name=solution_name,trade_name=trade_name,start_or_end='Completion_Time',elapsed_time=elapsed_time)
 
-    def _run_parameter_sweep(self,solution, trade_name, trade_states, trade_work_dir,num_processors=None):
+
+    def _run_parameter_sweep(self,solution,
+                             trade_name,
+                             trade_states,
+                             trade_work_dir,
+                             trade_result,
+                             num_processors=None):
         """Execute a state-based analysis over multiple states.
 
         Parameters
@@ -907,13 +943,15 @@ class Engine:
             self.log.warning(
                 f"Overwriting existing results for trade study {trade_name}"
             )
-        ts = Tradestudy(trade_name,solution_name=solution.name)
+
+
+
         for i,result in enumerate(outputs):
             result._set_case_id(i)
-            ts._results.append(result)
-            ts._hash_to_result[result.state_hash] = result
+            trade_result._results.append(result)
+            trade_result._hash_to_result[result.state_hash] = result
 
-        solution_results.add_tradestudy(trade_name, ts)
+        solution_results.add_tradestudy(trade_name, trade_result)
 
     def check_model(self, solution, plugins, state=None):
         """Perform comprehensive model validation checks.

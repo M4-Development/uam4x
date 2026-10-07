@@ -1,9 +1,14 @@
 from __future__ import annotations
+from operator import attrgetter
 import copy
-from uam4x.utils import hash_state, convert_numpy_to_python
-import numpy as np
-from uam4x.utils import split_dotted_path_and_indices
+import warnings
 
+
+import numpy as np
+
+from uam4x.vehicle import VehicleManager,Vehicle
+from uam4x.utils import hash_dict, convert_numpy_to_python,split_dotted_path_and_indices
+from uam4x.control import trade_type_to_class
 
 class Results:
     """Store analysis result sets for a study.
@@ -63,8 +68,12 @@ class Results:
         Returns
         -------
         Tradestudy or None
-            Stored trade-study result, or ``None`` if either the solution or
-            trade-study result is not present.
+            Stored trade-study result, or ``None`` if the solution is not present.
+
+        Raises
+        ------
+        ValueError
+            If the solution exists but has no result for ``trade_name``.
 
         """
         solution_result = self.get_solution_result(solution_name)
@@ -178,14 +187,61 @@ class SolutionResults:
 
             Returns
             -------
-            Tradestudy or None
-                Stored result container for ``name``, or None if it is not present.
+            Tradestudy
+                Stored result container for ``name``.
+
+            Raises
+            ------
+            ValueError
+                If no result is stored under ``name`` for this solution.
 
             """
             if name in self.tradestudies:
-                return self.tradestudies[name]
-            else:
-                return None
+                ts=self.tradestudies[name]
+                if self.study is None:
+                    raise ValueError(
+                        f"Results for solution {self.name!r} are not attached "
+                        "to a Study, so current-model consistency checks "
+                        "cannot be performed."
+                    )
+                # Compare saved execution inputs with current model inputs.
+                # A default-state run has no trade-study definition.
+                if name != "Default State":
+                    executed_trade_dict=ts._executed_tradestudy._to_dict()
+                    current_trade=self.study.control.trade_studies.get(name)
+                    if current_trade is None:
+                        warnings.warn(
+                            f"Results for solution {self.name!r}, trade {name!r} "
+                            "refer to a trade study that is not present in the "
+                            "current model. The saved results remain accessible.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
+                        trade_dict=executed_trade_dict
+                    else:
+                        trade_dict=current_trade._to_dict()
+                    if hash_dict(executed_trade_dict)!=hash_dict(trade_dict):
+                        warnings.warn(
+                            f"Results for solution {self.name!r}, trade {name!r} were run with a different trade-study definition. Rerun this combination before using current trade settings.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
+                executed_vehicles={veh.name:veh._to_dict() for veh in ts._executed_vehicles}
+                current_vehicles={veh.name:veh._to_dict() for veh in self.study.vehicles}
+                for vehicle_name in sorted(executed_vehicles):
+                    if vehicle_name not in current_vehicles:
+                        reason="is missing from the current model"
+                    elif hash_dict(executed_vehicles[vehicle_name])!=hash_dict(current_vehicles[vehicle_name]):
+                        reason="has changed since these results were run"
+                    else:
+                        continue
+                    warnings.warn(
+                        f"Results for solution {self.name!r}, trade {name!r}: vehicle {vehicle_name!r} {reason}. Rerun this combination if it depends on that vehicle.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                return ts
+            raise ValueError(f'The tradestudy {name} is not a tradestudy associated with the solution {self.name}')
 
     def add_tradestudy(self, name, trade):
         """Attach an analysis result container to this results object.
@@ -298,7 +354,10 @@ class Tradestudy:
 
     """
 
-    def __init__(self, trade_name,solution_name):
+    def __init__(self, trade_name,solution_name,
+                 executed_vehicles,
+                 executed_tradestudy,
+                 tracked_output_names):
         """Initialize storage for one analysis result set.
 
         Parameters
@@ -312,6 +371,17 @@ class Tradestudy:
         self.trade_name = trade_name
         self._results_owner = None
         self.solution_name=solution_name
+        self.tracked_output_names=tracked_output_names
+        self._executed_vehicles=executed_vehicles
+        self._executed_tradestudy=executed_tradestudy
+
+    @property
+    def executed_tradestudy(self):
+        return self._executed_tradestudy
+
+    @property
+    def executed_vehicles(self):
+        return self._executed_vehicles
 
     def get_case(self,case_id):
         for result in self._results:
@@ -326,15 +396,27 @@ class Tradestudy:
 
         Returns
         -------
-        Study or None
-            Parent study resolved through the owning :class:`Results` object, or
-            None if this result set is not attached.
+        Study
+            Parent study resolved through the owning result containers.
+
+        Raises
+        ------
+        ValueError
+            If these trade-study results are not attached to a study.
 
         """
-        if self._results_owner is None:
-            return None
-        else:
-            return self._results_owner.study
+        study = (
+            None if self._results_owner is None
+            else self._results_owner.study
+        )
+        if study is None:
+            raise ValueError(
+                f"Results for solution {self.solution_name!r}, trade "
+                f"{self.trade_name!r} are not attached to a Study. Add the "
+                "Tradestudy through SolutionResults.add_tradestudy(), then "
+                "attach that SolutionResults to a Results object with a Study."
+            )
+        return study
 
 
     def get_changing_variables(self):
@@ -353,14 +435,8 @@ class Tradestudy:
             control.
 
         """
-        if self.trade_name in self.study.control.trade_studies:
-            trade = self.study.control.trade_studies[self.trade_name]
-        elif self.trade_name == "Default State":
-            trade = None
-        else:
-            raise ValueError(
-                f'Trade study "{self.trade_name}" not found in study control.'
-            )
+
+        trade = self._executed_tradestudy
 
         # get Design variable names if applicable
         get_desvar_names = getattr(trade, "get_desvar_names", None)
@@ -370,11 +446,11 @@ class Tradestudy:
         get_param_names = getattr(trade, "get_all_param_names", None)
         param_names = get_param_names() if callable(get_param_names) else []
 
-        solution=self.study.solutions.get_solution(self.solution_name)
+
         tracked = (
             []
-            if solution.tracked_outputs is None
-            else solution.tracked_outputs
+            if self.tracked_output_names is None
+            else self.tracked_output_names
         )
 
         return des_vars + tracked + list(param_names)
@@ -408,9 +484,8 @@ class Tradestudy:
         Raises
         ------
         ValueError
-            If this result set is not attached to a :class:`Results` object, if no
-            stored results are available, if the parent study reference is missing,
-            or if ``variable_name`` cannot be resolved.
+            If no stored results are available or if ``variable_name`` cannot be
+            resolved.
 
         Notes
         -----
@@ -418,25 +493,12 @@ class Tradestudy:
         ``numpy.nan`` for the corresponding result points.
 
         """
-        if not self._results_owner:
-            raise ValueError(
-                "Tradestudy has no parent Results. Tradestudy must be attached to a Results object"
-            )
         if not self._results:
             raise ValueError("No results available in Results object.")
-        if self.study is None:
-            raise ValueError("Study reference is not set in Results object.")
 
         values = []
         # handle tradestudy desvars more robustly
-        if self.trade_name in self.study.control.trade_studies:
-            trade = self.study.control.trade_studies[self.trade_name]
-        elif self.trade_name == "Default State":
-            trade = None
-        else:
-            raise ValueError(
-                f'Trade study "{self.trade_name}" not found in study control.'
-            )
+        trade=self._executed_tradestudy
 
         # get Design variable names if applicable
         get_desvar_names = getattr(trade, "get_desvar_names", None)
@@ -454,8 +516,8 @@ class Tradestudy:
             getattr(trade, "variable_to_sensitivity_data", None) or {}
         )
         # first check if variable name is in tracked outputs
-        solution=self.study.solutions.get_solution(self.solution_name)
-        if variable_name in solution.tracked_outputs:
+        tracked_output_names = self.tracked_output_names or []
+        if variable_name in tracked_output_names:
             for result in self._results:
                 if variable_name in result.outputs:
                     values.append(result.outputs[variable_name])
@@ -511,20 +573,21 @@ class Tradestudy:
         # then check if the variable name is in the vehicle parameters
         else:
             try:
+                name='.'.join(variable_name.split('.')[1:])
                 if inds is not None:
-                    value = self.study.get_value(variable_name)[inds]
+                    value = attrgetter(name)(self._executed_vehicles)[inds]
                     values.append(value)
                 else:
-                    value = self.study.get_value(variable_name)
+                    value = attrgetter(name)(self._executed_vehicles)
                     values.append(value)
                 values = np.asarray(values)
                 if as_column:
                     values=values[:,None]
                 return values
-            except:
+            except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
                 raise ValueError(
                     f"Variable name {variable_name} not found in tracked outputs, trade study sweep variables, or vehicle parameters."
-                )
+                ) from exc
 
     def _to_dict(self):
         """Serialize the analysis result set to a dictionary.
@@ -537,6 +600,13 @@ class Tradestudy:
         """
         return {
                 "points": [result._to_dict() for result in self._results],
+                'executed_vehicles':{vehicle.name:vehicle._to_dict()
+                                     for vehicle in self._executed_vehicles},
+                'executed_tradestudy':(
+                    None if self._executed_tradestudy is None
+                    else self._executed_tradestudy._to_dict()
+                                       ),
+                'tracked_output_names':self.tracked_output_names
             }
 
     @classmethod
@@ -556,7 +626,32 @@ class Tradestudy:
             Reconstructed result set with restored :class:`Result` points.
 
         """
-        results = cls(trade_name=trade_name,solution_name=solution_name)
+
+        vehicles=VehicleManager()
+        for name,data in results_dict['executed_vehicles'].items():
+            vehicles.add_vehicle(Vehicle._from_dict(data))
+
+        trade_dict=results_dict['executed_tradestudy']
+        if not trade_dict:
+            executed_trade = None
+        else:
+            trade_type_name = trade_dict.get('type')
+            if trade_type_name not in trade_type_to_class:
+                raise ValueError(
+                    f"Unknown executed trade study type: {trade_type_name!r}"
+                )
+            analysis_type=trade_type_to_class[trade_type_name]
+            executed_trade=analysis_type._from_dict(trade_dict)
+
+        tracked_output_names=results_dict['tracked_output_names']
+
+        results = cls(
+            trade_name=trade_name,
+            solution_name=solution_name,
+            executed_vehicles=vehicles,
+            executed_tradestudy=executed_trade,
+            tracked_output_names=tracked_output_names)
+
         for result in results_dict["points"]:
             r = Result._from_dict(result)
             results._results.append(r)
@@ -587,7 +682,7 @@ class Result:
 
         """
         self.state = copy.deepcopy(state)
-        self.state_hash = hash_state(self.state)
+        self.state_hash = hash_dict(self.state)
         self.template_hashes = {}
         self.outputs = {}
         self.convergence_status = None

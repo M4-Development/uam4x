@@ -14,7 +14,7 @@ pytest.importorskip("openmdao.api")
 import uam4x.study as study_module
 import uam4x.execution_engine as execution_engine_module
 from uam4x.execution_engine import Engine
-from uam4x.results import Result
+from uam4x.results import Result, Tradestudy
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Subsystem, register_subsystem
@@ -578,6 +578,13 @@ def test_run_parameter_sweep_invalid_num_processors_raises(engine_setup):
             trade_states=[{}],
             trade_work_dir=str(Path(engine.work_dir) / "test_solution" / "invalid_np"),
             num_processors=-1,
+            trade_result=Tradestudy(
+                "invalid_np",
+                "test_solution",
+                executed_vehicles=study.vehicles,
+                executed_tradestudy=study.control.trade_studies["invalid_np"],
+                tracked_output_names=study.get_solution("test_solution").tracked_outputs,
+            ),
         )
 
 

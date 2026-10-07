@@ -681,8 +681,7 @@ class RegressionPCEPost(BasicAleatoryPost):
         original design rather than independent validation samples.
 
         """
-        trade_name = self.tradestudy.trade_name
-        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        ts = self.tradestudy.executed_tradestudy
         num_samples = len(self.tradestudy._results)
         aleatory_var_to_dist = ts.aleatory_var_to_dist
         poly_factories = []
@@ -839,8 +838,7 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
         are transformed to their underlying normal variables before fitting.
 
         """
-        trade_name = self.tradestudy.trade_name
-        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        ts = self.tradestudy.executed_tradestudy
         aleatory_var_to_dist = ts.aleatory_var_to_dist
         num_aleatory = len(aleatory_var_to_dist)
         num_samples = (ts.poly_order + 1) ** num_aleatory
@@ -1790,9 +1788,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
         outs = np.array(self.tradestudy.get_variable(output_name))[:, None]
 
         # Sobol workflow configuration for this trade study.
-        uq_distributor = self.tradestudy.study.control.trade_studies[
-            self.tradestudy.trade_name
-        ]
+        uq_distributor = self.tradestudy.executed_tradestudy
         aleatory_dict = uq_distributor.aleatory_var_to_dist
 
         # Number of model evaluations used by the Sobol design.
@@ -1887,9 +1883,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
             second-order indices.
 
         """
-        uq_distributor = self.tradestudy.study.control.trade_studies[
-            self.tradestudy.trade_name
-        ]
+        uq_distributor = self.tradestudy.executed_tradestudy
         if not uq_distributor.computeSecondOrder:
             raise ValueError(f"This run did not support second order Sobol")
 
@@ -2070,8 +2064,7 @@ class BasicMixedPost:
             samples.
 
         """
-        trade_name=self.tradestudy.trade_name
-        trade_base=self.tradestudy.study.control.trade_studies[trade_name]
+        trade_base = self.tradestudy.executed_tradestudy
         out_vals= np.array(self.tradestudy.get_variable(var_name))
         #special case for IVP problems with ad hoc state generation
         epistemic_vars=list(trade_base.epistemic_var_to_interval.keys())
@@ -2302,8 +2295,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
             distributions.
 
         """
-        trade_name = self.tradestudy.trade_name
-        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        ts = self.tradestudy.executed_tradestudy
         mixed_var_to_dist = {}
         for name, interval in ts.epistemic_var_to_interval.items():
             mixed_var_to_dist[name] = UniformDistribution(interval[0], interval[1])
@@ -2337,8 +2329,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
         original design rather than independent validation samples.
 
         """
-        trade_name = self.tradestudy.trade_name
-        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        ts = self.tradestudy.executed_tradestudy
         num_samples = len(self.tradestudy._results)
         all_var_to_dist = self._get_mixed_var_to_dist()
         poly_factories = []
@@ -3369,8 +3360,7 @@ class LocalSensitivityPost:
             ``"central"``.
 
         """
-        trade_name = self.tradestudy.trade_name
-        ts = self.tradestudy.study.control.trade_studies[trade_name]
+        ts = self.tradestudy.executed_tradestudy
         perturbation_vars = list(ts.variable_to_sensitivity_data.keys())
         # use np.max and np.min to locate
         outs = np.array(self.tradestudy.get_variable(output_name))

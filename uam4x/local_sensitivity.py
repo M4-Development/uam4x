@@ -1,7 +1,6 @@
 from __future__ import annotations
 import copy
 import numpy as np
-from uam4x.results import Tradestudy
 
 
 class LocalSensitivity:

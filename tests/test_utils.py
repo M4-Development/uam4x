@@ -670,6 +670,7 @@ def test_convert_numpy_to_python_parametrized(value, expected, check_idempotence
         result2 = convert_numpy_to_python(result)
         assert result2 == result
 
+
 def test_get_param_type():
 
     @register_plugin
@@ -968,7 +969,7 @@ def test_get_param_type_raises():
     with pytest.raises(AttributeError):
         study.get_param_type("vehicles.mtr.NotAComponent.height")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(AttributeError):
         study.get_param_type("vehicles.NotAVehicle.wing.span")
 
     with pytest.raises(ValueError):

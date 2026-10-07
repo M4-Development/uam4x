@@ -7,9 +7,19 @@ import pytest
 
 from uam4x.results import Results, SolutionResults, Tradestudy, Result
 from uam4x.post import BasicPost
+from uam4x.vehicle import Vehicle, VehicleManager
+from uam4x.subsystems import Subsystem, register_subsystem
+from uam4x.control import ParameterSweep
 
 
 SOLUTION_NAME = "test_solution"
+
+
+@register_subsystem
+class ResultsTestSubsystem(Subsystem):
+    def setup(self):
+        self.add_parameter("p", default_value=123.0, dtype=float)
+
 
 
 class _DummySolution:
@@ -38,6 +48,12 @@ class _DummyStudy:
         self.control = _DummyControl()
         self._vehicle_value = vehicle_value
         self._post_data = {}
+        self.vehicles = VehicleManager()
+        vehicle = Vehicle("v")
+        component = ResultsTestSubsystem("c")
+        component.p = vehicle_value
+        vehicle.add_component(component)
+        self.vehicles.add_vehicle(vehicle)
 
     def get_value(self, name):
         if name == "vehicles.v.c.p":
@@ -80,7 +96,18 @@ def _add_results(ts):
 
 
 def _attach_tradestudy(study, trade_name):
-    ts = Tradestudy(trade_name, SOLUTION_NAME)
+    executed_trade = study.control.trade_studies.get(trade_name)
+    if trade_name != "Default State" and executed_trade is None:
+        executed_trade = ParameterSweep({"x": [1.0]})
+        study.control.trade_studies[trade_name] = executed_trade
+    tracked_outputs = study.solutions.get_solution(SOLUTION_NAME).tracked_outputs
+    ts = Tradestudy(
+        trade_name,
+        SOLUTION_NAME,
+        executed_vehicles=study.vehicles,
+        executed_tradestudy=executed_trade,
+        tracked_output_names=tracked_outputs,
+    )
     results = Results(study=study)
     solution_results = SolutionResults(SOLUTION_NAME)
     results.add_solution_result(solution_results)
@@ -108,7 +135,13 @@ def test_result_roundtrip_and_equal_states():
 
 
 def test_tradestudy_get_case_by_case_id():
-    ts = Tradestudy("trade", SOLUTION_NAME)
+    ts = Tradestudy(
+        "trade",
+        SOLUTION_NAME,
+        executed_vehicles=VehicleManager(),
+        executed_tradestudy=ParameterSweep({"x": [1.0]}),
+        tracked_output_names=[],
+    )
     first = Result(state={"x": 1.0})
     second = Result(state={"x": 2.0})
     first._set_case_id(0)
@@ -143,9 +176,17 @@ def test_result_get_var_val_unknown_name_raises():
 
 
 def test_tradestudy_get_variable_error_paths():
-    ts = Tradestudy("trade", SOLUTION_NAME)
+    ts = Tradestudy(
+        "trade",
+        SOLUTION_NAME,
+        executed_vehicles=VehicleManager(),
+        executed_tradestudy=ParameterSweep({"x": [1.0]}),
+        tracked_output_names=[],
+    )
 
-    with pytest.raises(ValueError, match="no parent Results"):
+    with pytest.raises(ValueError, match="not attached to a Study"):
+        _ = ts.study
+    with pytest.raises(ValueError, match="No results available"):
         ts.get_variable("x")
 
     owner = Results(study=_DummyStudy())
@@ -187,7 +228,7 @@ def test_tradestudy_default_state_branch():
 
 def test_tradestudy_to_dict_and_from_dict_roundtrip():
     study = _DummyStudy(tracked_outputs=["tracked.y"])
-    study.control.trade_studies["trade"] = _DummyTrade()
+    study.control.trade_studies["trade"] = ParameterSweep({"x": [1.0]})
     study._post_data[SOLUTION_NAME] = {
         "trade": {"user_note": "saved-only freeform post data"}
     }
@@ -242,18 +283,26 @@ def test_results_get_tradestudy_uses_solution_and_trade_names():
     results, ts = _attach_tradestudy(study, "trade")
 
     assert results.get_tradestudy(SOLUTION_NAME, "trade") is ts
-    assert results.get_tradestudy(SOLUTION_NAME, "missing") is None
+    with pytest.raises(ValueError, match="not a tradestudy associated"):
+        results.get_tradestudy(SOLUTION_NAME, "missing")
     assert results.get_tradestudy("missing", "trade") is None
 
 
 def test_results_roundtrip_keeps_same_trade_name_separate_by_solution():
     study = _DummyStudy()
     results = Results(study=study)
+    executed_trade = ParameterSweep({"x": [1.0]})
+    study.control.trade_studies["shared_trade"] = executed_trade
 
     for solution_name, value in (("first", 1.0), ("second", 2.0)):
         solution_results = SolutionResults(solution_name)
         results.add_solution_result(solution_results)
-        tradestudy = Tradestudy("shared_trade", solution_name)
+        tradestudy = Tradestudy(
+            "shared_trade", solution_name,
+            executed_vehicles=study.vehicles,
+            executed_tradestudy=executed_trade,
+            tracked_output_names=[],
+        )
         result = Result(state={})
         result._add_result("out", value)
         tradestudy._results.append(result)

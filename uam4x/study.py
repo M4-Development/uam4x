@@ -10,7 +10,8 @@ from uam4x.utils import (
     log,
     split_dotted_path_and_indices,
     replace_none_with_empty_quotes,
-    parse_variable_reference
+    parse_variable_reference,
+    hash_dict
 )
 from operator import attrgetter
 import sys
@@ -80,142 +81,8 @@ class Study:
         self._results_dict_hash=''
         self._post_data={}
 
-    def _get_post_data(self,solution_name,trade_name):
-        solution_post_data=self._post_data.setdefault(solution_name,{})
-        return solution_post_data.setdefault(trade_name,{})
 
-    def _get_runtime_metadata(self,solution_name,trade_name):
-        #i assume this is something like: if its there leave it
-        #if its not, make a key dict pair in the base dict
-        solution_metadata=self._runtime_meta_data.setdefault(solution_name,{})
-        #then it says essentially, in that dictionary, if the trade is already there return that
-        #value associated with the key, otherwise assign that key to that value and return the value
-        return solution_metadata.setdefault(trade_name,{})
-
-
-    def _add_runtime_plugin_checksums(self, solution_name, trade_name, plugin_to_checksum):
-        """Store plugin checksum metadata for a trade execution.
-
-        Parameters
-        ----------
-        trade_name : str
-            Name of the trade study associated with the recorded runtime
-            metadata.
-        plugin_to_checksum : dict
-            Mapping from plugin identifiers to checksum strings captured during
-            execution.
-
-        Returns
-        -------
-        None
-
-        """
-        trade_meta_dict=self._get_runtime_metadata(solution_name,trade_name)
-        trade_meta_dict["step_plugin_hashes"] = plugin_to_checksum
-
-    def _add_runtime_external_executable_data(
-        self, solution_name,trade_name, external_executable_to_data
-    ):
-        """Store external executable metadata for a trade execution.
-
-        Parameters
-        ----------
-        trade_name : str
-            Name of the trade study associated with the recorded runtime
-            metadata.
-        external_executable_to_data : dict
-            Mapping from external executable identifiers to execution metadata
-            captured during the run.
-
-        Returns
-        -------
-        None
-
-        """
-        trade_meta_dict=self._get_runtime_metadata(solution_name,trade_name)
-        trade_meta_dict[
-            "step_external_executable_data"
-        ] = external_executable_to_data
-
-    def _capture_environment(self, solution_name,trade_name):
-        """Capture runtime environment metadata for a trade execution.
-
-        Parameters
-        ----------
-        trade_name : str
-            Name of the trade study associated with the recorded runtime
-            metadata.
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        The captured metadata includes machine information, Python interpreter
-        details, installed package versions, and a formatted start-time string
-        in the America/Los_Angeles time zone.
-
-        """
-
-        machine_dict = {
-            "os_system": platform.system(),
-            "os_release": platform.release(),
-            "os_version": platform.version(),
-            "platform": platform.platform(),
-            "machine": platform.machine(),
-            "processor": platform.processor(),
-        }
-
-        code = "import sys; print(sys.executable)"
-        out = subprocess.check_output(["python", "-c", code]).decode().strip()
-
-        python_dict = {"python_spec": sys.version, "python_executable": str(Path(out))}
-
-        environ_dict = {dist.name: dist.version for dist in distributions()}
-
-        trade_meta_dict=self._get_runtime_metadata(solution_name=solution_name,trade_name=trade_name)
-        trade_meta_dict["environment"] = {
-            "Machine": machine_dict,
-            "Python": python_dict,
-            "Packages": environ_dict,
-        }
-        self._add_time_metadata(
-            solution_name=solution_name,
-            trade_name=trade_name,
-            start_or_end='Start_Time')
-
-    def _add_time_metadata(self,solution_name, trade_name,start_or_end:str,elapsed_time=None):
-        trade_dict=self._get_runtime_metadata(
-            solution_name=solution_name,
-            trade_name=trade_name)
-        if start_or_end=='Start_Time':
-            mess_start='Executed'
-            trade_dict['time_info']={}
-        elif start_or_end=='Completion_Time':
-            mess_start='Completed'
-            trade_dict['time_info']['Elapsed_Time']=f'Analysis took {elapsed_time} seconds'
-        else:
-            raise ValueError('Must be either start or end')
-        dt = datetime.now(tz=ZoneInfo("America/Los_Angeles"))
-        message = f"{mess_start} on"
-        keywords = ["A", "B", "d", "Y", "I", "M", "S", "p"]
-        for keyword in keywords:
-            if not keyword in ["M", "S"]:
-                message += f' {dt.strftime(f"%{keyword}")}'
-            else:
-                message += f':{dt.strftime(f"%{keyword}")}'
-            if keyword in ["A", "d"]:
-                message += ","
-            if keyword == "Y":
-                message += " at"
-
-        message += " Pacific Time"
-
-
-
-        trade_dict['time_info'][start_or_end]=message
-
+    #--------------Direct Study level API and interaction
 
     def add_trade(self, trade_name: str, trade) -> None:
         """Register a trade study with the study control object.
@@ -284,828 +151,35 @@ class Study:
     def get_solution(self,solution_name:str):
         return self.solutions.get_solution(solution_name)
 
-    def _to_dict(self) -> dict:
-        """Serialize the study to a dictionary.
-
-        Returns
-        -------
-        dict
-            JSON-compatible dictionary containing the study control data,
-            vehicles, solution data, results data, and execution metadata.
-
-        """
-        self.log.debug("write to dict")
-
-        study_dict = {
-            "control": convert_numpy_to_python(self.control._to_dict()),
-            "vehicles": convert_numpy_to_python(
-                {v.name: convert_numpy_to_python(v._to_dict()) for v in self.vehicles}
-            ),
-            "solutions": {solution.name:convert_numpy_to_python(solution._to_dict()) for solution in self.solutions},
-            "results": convert_numpy_to_python(self.results._to_dict()),
-            "execution_meta_data": convert_numpy_to_python(self._runtime_meta_data),
-        }
-
-        return study_dict
-
-    @classmethod
-    def _from_dict(cls, data: dict, work_dir=None) -> "Study":
-        """Reconstruct a study from a dictionary.
-
-        Parameters
-        ----------
-        data : dict
-            Serialized study dictionary, typically produced by :meth:`_to_dict`.
-        work_dir : str or path-like, optional
-            Directory used for study logging during reconstruction. If omitted,
-            the existing logging configuration is used.
-
-        Returns
-        -------
-        Study
-            Reconstructed study containing vehicles, solution, control,
-            results, and execution metadata.
-
-        """
-        cls.log.debug("study from dict")
-        study = cls(log_dir=work_dir)
-        for vname, vdata in data["vehicles"].items():
-            study.add_vehicle(Vehicle._from_dict(vdata))
-        for sname,sdata in data["solutions"].items():
-            solution=Solution._from_dict(sdata)
-            if solution.name != sname:
-                raise ValueError(
-                    f"Solution key {sname!r} does not match "
-                    f"serialized name {solution.name!r}"
-                )
-            study.solutions.add_solution(solution)
-
-        study.control = Control._from_dict(data["control"])
-        if "results" in data:
-            study.results = Results._from_dict(data["results"], study)
-            study._runtime_meta_data = defaultdict(
-                dict, data["execution_meta_data"]
-            )
-
-        return study
-
-    def _save_to_json(self,data, json_path: str, commit=False, commit_message=""):
-        """Write serializable data to a JSON file.
-
-        Parameters
-        ----------
-        data : dict
-            JSON-serializable data payload to write.
-        json_path : str or path-like
-            Output path for the JSON file.
-
-        Returns
-        -------
-        None
-
-        """
-        self.log.debug("save to json")
-
-        with open(json_path, "w") as f:
-            json.dump(data, f, indent=4)
-
-    def save_to_json(self,variant_dir:str,commit=False,commit_code=False):
-        """Write study model data and, when available, results data to JSON files.
-
-        Parameters
-        ----------
-        variant_dir : str or path-like
-            Variant directory where ``model.json`` and, if results exist,
-            ``results.json`` are written.
-        commit : bool, optional
-            If True, commit the written JSON file or files to the current git
-            branch.
-        commit_code : bool, optional
-            If True, commit existing tracked code changes before committing the
-            generated JSON artifacts. Requires ``commit=True``.
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        If the current model hash differs from the loaded model hash, only
-        ``model.json`` is rewritten and existing results are discarded rather
-        than saved.
-        """
-
-        if commit_code and not commit:
-            raise ValueError("Cannot commit code without committing generated JSON.")
-
-        #Paths
-        model_path=os.path.join(variant_dir,'model.json')
-        result_path=os.path.join(variant_dir,'results.json')
-
-        #Full study dictionary
-        study_dict=replace_none_with_empty_quotes(self._to_dict())
-        model_dict={
-            "control":study_dict["control"],
-            "vehicles":study_dict["vehicles"],
-            "solutions":study_dict["solutions"],
-        }
-
-        model_hash=Study._generate_data_hash(model_dict)
-        new_control_dict=Study._update_control(model_dict,model_hash)
-        model_dict['control']=new_control_dict
-
-        msg = f"AutoCommit: Writing study to json for variant {self.control.variant_name}"
-        if self._model_dict_hash:
-            if self._model_dict_hash!=model_hash:
-                if commit:
-                    self._prepare_repository_for_autocommit(
-                        new_branch=True, commit_code=commit_code
-                    )
-                self._save_to_json(model_dict,model_path)
-                print(f'New model does not match loaded model, discarding results and saving')
-                if commit:
-                    self._commit_json_to_branch(
-                        json_paths=[model_path], commit_message=msg
-                    )
-                return
-
-        if commit:
-            self._prepare_repository_for_autocommit(
-                new_branch=False, commit_code=commit_code
-            )
-        self._save_to_json(model_dict,model_path)
-        written=[model_path]
-        #save the results
-        if study_dict['results']:
-            results_dict={
-                "results":study_dict["results"],
-                "execution_meta_data":study_dict["execution_meta_data"]
-            }
-            results_hash=Study._generate_data_hash(results_dict)
-            header_data=Study._generate_header_dict(study_dict["control"],
-                                                model_hash,results_hash)
-            result_dict={
-                "header":header_data,
-                'results':study_dict['results'],
-                'execution_meta_data':study_dict['execution_meta_data']
-                }
-            self._save_to_json(result_dict,result_path)
-            written.append(result_path)
-        if commit:
-            self._commit_json_to_branch(written,commit_message=msg)
-
-    @staticmethod
-    def _update_control(model_dict,model_hash):
-        """Insert the model hash into serialized control data.
-
-        Parameters
-        ----------
-        model_dict : dict
-            Serialized model dictionary containing a ``"control"`` entry.
-        model_hash : str
-            Hash string to insert into the serialized control data.
-
-        Returns
-        -------
-        dict
-            Updated control dictionary including ``"model_hash"``.
-
-        Notes
-        -----
-        The method preserves the original control key order and inserts
-        ``"model_hash"`` after the fourth existing control entry.
-
-        """
-        new_control_dict={}
-        for i,(name,data) in enumerate(model_dict["control"].items()):
-            new_control_dict[name]=data
-            if i==3:
-                new_control_dict["model_hash"]=model_hash
-        return new_control_dict
-
-    def save_model_to_json(self, variant_dir: str, commit=False,
-                           new_branch=False, commit_code=False):
-        """Write model configuration data to ``model.json``.
-
-        Parameters
-        ----------
-        variant_dir : str or path-like
-            Variant directory where ``model.json`` is written.
-        commit : bool, optional
-            If True, commit the generated JSON file to git.
-        new_branch : bool, optional
-            If True and ``commit`` is also True, create and check out a new
-            auto-generated branch before committing.
-        commit_code : bool, optional
-            If True, commit existing tracked code changes before committing
-            ``model.json``. Requires ``commit=True``.
-
-        Returns
-        -------
-        None
-
-        """
-        if not commit and new_branch:
-            raise ValueError(f'Cannot set new branch to true without committing.')
-        if commit_code and not commit:
-            raise ValueError("Cannot commit code without committing generated JSON.")
-
-        msg = f"AutoCommit: Created data for variant {self.control.variant_name}"
-        study_dict=replace_none_with_empty_quotes(self._to_dict())
-        model_dict={
-            "control":study_dict["control"],
-            "vehicles":study_dict["vehicles"],
-            "solutions":study_dict["solutions"],
-        }
-
-        model_hash=Study._generate_data_hash(model_dict)
-        new_control_dict=Study._update_control(model_dict,model_hash)
-        model_dict['control']=new_control_dict
-
-        model_path=os.path.join(variant_dir,'model.json')
-        if commit:
-            self._prepare_repository_for_autocommit(
-                new_branch=new_branch, commit_code=commit_code
-            )
-        self._save_to_json(model_dict,model_path)
-        if commit:
-            self._commit_json_to_branch(json_paths=[model_path],
-                                        commit_message=msg)
-
-        return model_path
-    @staticmethod
-    def _generate_header_dict(control_dict,model_hash,results_hash):
-        """Build header metadata for serialized results or post-processing data.
-
-        Parameters
-        ----------
-        control_dict : dict
-            Serialized control dictionary containing study metadata such as
-            title, author, description, repository root, and variant name.
-        model_hash : str
-            Hash of the serialized model data.
-        results_hash : str
-            Hash of the serialized results data.
-
-        Returns
-        -------
-        dict
-            Header dictionary containing study metadata together with the model
-            and results hashes.
-
-        """
-        return {
-            "title":control_dict['title'],
-            "author":control_dict["author"],
-            "description":control_dict["description"],
-            "model_hash":model_hash,
-            "results_hash":results_hash,
-            "repo_root":control_dict["repo_root"],
-            "variant_name":control_dict["variant_name"]
-        }
-
-
-    def save_results_to_json(self, variant_path: str, commit=False,
-                             commit_code=False):
-        """Write current study results to ``results.json``.
-
-        Parameters
-        ----------
-        variant_path : str or path-like
-            Variant directory where ``results.json`` is written.
-        commit : bool, optional
-            If True, commit the generated JSON file to git.
-        commit_code : bool, optional
-            If True, commit existing tracked code changes before committing
-            ``results.json``. Requires ``commit=True``.
-
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        ValueError
-            If no results exist, if ``model.json`` does not exist, or if the
-            current model hash does not match the loaded model hash.
-        AttributeError
-            If the study was not loaded from JSON before attempting to save
-            results.
-
-        """
-
-
-        if commit_code and not commit:
-            raise ValueError("Cannot commit code without committing generated JSON.")
-        msg = f"AutoCommit: Writing results for variant {self.control.variant_name}"
-        results_path=os.path.join(variant_path,'results.json')
-        study_dict=replace_none_with_empty_quotes(self._to_dict())
-        model_path=os.path.join(variant_path,'model.json')
-        if not study_dict['results']:
-            raise ValueError(f'Attempted to save results to json but no results exist for study')
-        if not os.path.exists(model_path):
-            raise ValueError(f'model.json file must exist before saving results to json')
-
-        model_dict={
-            "control":study_dict["control"],
-            "vehicles":study_dict["vehicles"],
-            "solutions":study_dict["solutions"],
-        }
-        model_hash= Study._generate_data_hash(model_dict)
-
-        temp_results_dict={
-            "results":study_dict["results"],
-            "execution_meta_data":study_dict["execution_meta_data"]
-        }
-
-        results_hash=Study._generate_data_hash(temp_results_dict)
-        header_data=Study._generate_header_dict(study_dict["control"],
-                                                model_hash,results_hash)
-        results_dict={
-            "header":header_data,
-            "results":study_dict["results"],
-            "execution_meta_data":study_dict["execution_meta_data"]
-        }
-        if not self._model_dict_hash:
-            raise AttributeError(f'Study must be loaded from json before run '
-                                 'if results are to be saved')
-        else:
-            if self._model_dict_hash!=model_hash:
-                raise ValueError(f"Study's loaded in hash does not match current model"
-                                 "hash.")
-
-        if commit:
-            self._prepare_repository_for_autocommit(
-                new_branch=False, commit_code=commit_code
-            )
-        self._save_to_json(results_dict,results_path)
-
-        if commit:
-            self._commit_json_to_branch([results_path],commit_message=msg)
-
-    def save_post_to_json(self,variant_path,commit=False,commit_code=False):
-        """Write post-processing data to ``post.json``.
-
-        Parameters
-        ----------
-        variant_path : str or path-like
-            Variant directory where ``post.json`` is written.
-        commit : bool, optional
-            If True, commit the generated JSON file to git.
-        commit_code : bool, optional
-            If True, commit existing tracked code changes before committing
-            ``post.json``. Requires ``commit=True``.
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        ValueError
-            If results do not exist, if required ``model.json`` or
-            ``results.json`` files are missing, or if the current results hash
-            does not match the loaded results hash.
-
-        """
-
-        if commit_code and not commit:
-            raise ValueError("Cannot commit code without committing generated JSON.")
-        msg=f"AutoCommit: Writing post processing data for variant {self.control.variant_name}"
-        post_processing_path=os.path.join(variant_path,'post.json')
-        study_dict=replace_none_with_empty_quotes(self._to_dict())
-        results_path=os.path.join(variant_path,'results.json')
-        #i dont think these checks actually matter because to process the
-        #results, you actually need the results already but this
-        #is just a safeguard i guess
-        if not study_dict['results']:
-            raise ValueError(f'Attempted to save post to json but no results exist for study')
-        if not os.path.exists(results_path):
-            raise ValueError(f'results.json file must exist before saving post to json')
-        if not os.path.exists(os.path.join(variant_path,'model.json')):
-            raise ValueError(f'model.json file must exist before saving post to json')
-
-
-        model_dict={
-            "control":study_dict["control"],
-            "vehicles":study_dict["vehicles"],
-            "solutions":study_dict["solutions"],
-        }
-        model_hash= Study._generate_data_hash(model_dict)
-
-
-
-        result_dict={
-            "results":study_dict["results"],
-            "execution_meta_data":study_dict["execution_meta_data"]
-                     }
-        results_hash=Study._generate_data_hash(result_dict)
-
-        if self._results_dict_hash and self._results_dict_hash!=results_hash:
-            raise ValueError(f"Study's loaded in hash does not match current results"
-                             "hash.")
-        header_data=Study._generate_header_dict(study_dict["control"],
-                                                model_hash,results_hash)
-        header_data["result_hash"]=results_hash
-        post_dict={
-            "header":header_data,
-            "post_storage":self._post_data
-                   }
-        if commit:
-            self._prepare_repository_for_autocommit(
-                new_branch=False, commit_code=commit_code
-            )
-        self._save_to_json(post_dict,post_processing_path)
-        if commit:
-            self._commit_json_to_branch([post_processing_path],msg)
-
-    def _get_repository_for_autocommit(self):
-        """Return the configured repository after validating its state."""
-        path = Path(self.control.repo_root)
-        if not path.is_dir():
-            raise NotADirectoryError(
-                f"The provided repository root path {self.control.repo_root} is not a directory.\n"
-                "The repo root must be a directory."
-            )
-
-        try:
-            repo_path = pygit2.discover_repository(path)
-        except KeyError:
-            repo_path = None
-
-        if repo_path is None:
-            raise ValueError("No repository found with provided path")
-
-        repo_path = Path(repo_path)
-        if path / ".git" != repo_path:
-            raise ValueError(
-                f"Provided path: {self.control.repo_root} does not have a repo"
-            )
-
-        repo = pygit2.Repository(repo_path)
-        if repo.head_is_unborn:
-            raise RuntimeError(
-                "Cannot commit: repository has no commits yet (unborn HEAD)."
-            )
-        if repo.head_is_detached:
-            raise RuntimeError("Cannot commit: repo is in detached HEAD state.")
-        return repo
-
-    @staticmethod
-    def _git_diff_returncode(repo, staged=False):
-        command = ["git", "diff"]
-        if staged:
-            command.append("--staged")
-        command.extend(["--exit-code", "--quiet"])
-        result = subprocess.run(command, cwd=repo.workdir)
-        if result.returncode not in (0, 1):
-            raise RuntimeError("Unable to inspect repository changes before autocommit.")
-        return result.returncode
-
-    def _checkout_new_autocommit_branch(self, repo):
-        parent_commit = repo[repo.head.target]
-        increment = 1
-        for branch_name in repo.branches.local:
-            match = re.fullmatch(r"AutoCommit(\d+)", branch_name)
-            if match:
-                increment = max(increment, int(match.group(1)) + 1)
-
-        new_branch_name = f"AutoCommit{increment}"
-        repo.branches.local.create(new_branch_name, parent_commit)
-        repo.checkout(f"refs/heads/{new_branch_name}")
-
-    def _prepare_repository_for_autocommit(self, new_branch, commit_code):
-        """Validate the worktree, optionally branch, and commit tracked code."""
-        repo = self._get_repository_for_autocommit()
-        staged_changes = self._git_diff_returncode(repo, staged=True)
-        unstaged_changes = self._git_diff_returncode(repo)
-
-        if not commit_code:
-            if staged_changes:
-                raise RuntimeError(
-                    "The repository has staged changes when attempting to "
-                    "autocommit; the index must be clean before committing."
-                )
-            if unstaged_changes:
-                raise RuntimeError(
-                    "The repository has unstaged changes to tracked files when "
-                    "attempting to autocommit. Set commit_code=True to commit "
-                    "them first."
-                )
-
-        if new_branch:
-            self._checkout_new_autocommit_branch(repo)
-
-        if not commit_code or not (staged_changes or unstaged_changes):
-            return
-
-        subprocess.run(
-            ["git", "add", "--update", "--", "."],
-            cwd=repo.workdir,
-            check=True,
-        )
-        index = repo.index
-        index.read()
-        parent = repo.head.target
-        parent_commit = repo[parent]
-        tree = index.write_tree()
-        if tree == parent_commit.tree_id:
-            return
-
-        author = pygit2.Signature(self.control.author, "fake@email")
-        committer = pygit2.Signature(self.control.author, "fake@email")
-        repo.create_commit(
-            "HEAD", author, committer, "AutoCommit: Committed code", tree, [parent]
-        )
-
-    def _commit_json_to_branch(self, json_paths,
-                               commit_message):
-        """Commit generated JSON artifacts to the configured git repository.
-
-        Parameters
-        ----------
-        json_paths : iterable of str or path-like
-            Paths to JSON files to stage and commit.
-        commit_message : str
-            Git commit message used for the commit.
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        NotADirectoryError
-            If :attr:`control.repo_root` is not a directory.
-        RuntimeError
-            If the repository is in a detached HEAD state or has an unborn
-            HEAD.
-
-        Notes
-        -----
-        If staging the requested files produces no tree changes relative to
-        the target branch HEAD, no commit is created.
-
-        """
-
-
-        repo = self._get_repository_for_autocommit()
-        relative_json_paths = []
-        for json_path in json_paths:
-            rel_path = os.path.relpath(json_path, repo.workdir)
-            relative_json_paths.append(rel_path.replace(os.sep, "/"))
-
-        result = subprocess.run(
-            ["git", "diff", "--name-only", "-z"],
-            cwd=repo.workdir,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError("Unable to inspect repository changes before autocommit.")
-        dirty_paths = {path for path in result.stdout.split("\0") if path}
-        unexpected_paths = dirty_paths.difference(relative_json_paths)
-        if unexpected_paths:
-            paths = ", ".join(sorted(unexpected_paths))
-            raise RuntimeError(
-                "The repository gained unstaged changes to tracked files after "
-                f"autocommit preparation: {paths}"
-            )
-
-        if self._git_diff_returncode(repo, staged=True):
-            raise RuntimeError(
-                "The repository has staged changes when attempting to commit "
-                "generated JSON."
-            )
-
-        parents = repo.head.target
-        parent_commit = repo[parents]
-        index=repo.index
-        for json_path in json_paths:
-            # stage the JSON file
-            # rel path
-            rel_path = os.path.relpath(json_path, repo.workdir)
-            rel_path = rel_path.replace(os.sep, "/")
-            # same as git add path but does it to the pygit2 object (in memory)
-            index.add(rel_path)
-        #equivalent to running git add . or staging to commit directly
-        index.write()
-        # this is the snapshot of your repo as a hash
-        tree = index.write_tree()
-        if tree==parent_commit.tree_id:
-            self.log.debug("No JSON changes detected; skipping commit.")
-            print("No JSON changes detected; skipping commit.")
-            return
-        author = pygit2.Signature(self.control.author, "fake@email")
-        committer = pygit2.Signature(self.control.author, "fake@email")
-        repo.create_commit("HEAD", author, committer, commit_message, tree, [parents])
-
-    @classmethod
-    def load_study_from_directory(cls, variant_dir: str) -> "Study":
-        """Create a study from JSON artifacts in a variant directory.
-
-        Parameters
-        ----------
-        variant_dir : str or path-like
-            Directory containing ``model.json`` and, optionally,
-            ``results.json`` using those conventional filenames.
-
-        Returns
-        -------
-        Study
-            Study reconstructed from the serialized data in ``variant_dir``.
-
-        """
-        cls.log.debug("create study from json")
-        model_path=os.path.join(variant_dir,'model.json')
-        with open(model_path, "r") as f:
-            model_data = json.load(f)
-
-        loaded_model_hash=model_data["control"]["model_hash"]
-        del model_data['control']['model_hash']
-        #initially loads in model
-        total_dict={
-            "control":model_data["control"],
-            "vehicles":model_data["vehicles"],
-            "solutions":model_data["solutions"],
-        }
-
-
-        model_hash=Study._generate_data_hash(total_dict)
-
-        if loaded_model_hash!=model_hash:
-            log.warning(
-            f'Warning, loaded model hash differs from model checksum at save point'
-            )
-
-        results_path=os.path.join(variant_dir,'results.json')
-        results_hash=None
-        if os.path.exists(results_path):
-            with open(results_path,'r') as f:
-                result_data=json.load(f)
-
-            total_dict["results"]=result_data["results"]
-            total_dict["execution_meta_data"]=result_data["execution_meta_data"]
-            result_dict={
-                "results":result_data["results"],
-                "execution_meta_data":result_data["execution_meta_data"]
-            }
-            results_hash=Study._generate_data_hash(result_dict)
-
-        study=cls._from_dict(total_dict,work_dir=variant_dir)
-        study._model_dict_hash=model_hash
-        if results_hash:
-            study._results_dict_hash=results_hash
-
-        return study
-
-    @classmethod
-    def load_model_from_json(cls, model_json_path: str) -> "Study":
-        """Create a study from a serialized ``model.json`` file.
-
-        Parameters
-        ----------
-        model_json_path : str or path-like
-            Path to the ``model.json`` file to load.
-
-        Returns
-        -------
-        Study
-            Study reconstructed from the serialized model data.
-
-        """
-        cls.log.debug("create study from json")
-        variant_dir=os.path.dirname(model_json_path)
-        with open(model_json_path, "r") as f:
-            model_data = json.load(f)
-
-        loaded_model_hash=model_data["control"]["model_hash"]
-        del model_data['control']['model_hash']
-        #initially loads in model
-        total_dict={
-            "control":model_data["control"],
-            "vehicles":model_data["vehicles"],
-            "solutions":model_data["solutions"],
-        }
-
-
-        model_hash=Study._generate_data_hash(total_dict)
-
-        if loaded_model_hash!=model_hash:
-            cls.log.warning(
-            f'Warning, loaded model hash differs from model checksum at save point'
-            )
-
-        study=cls._from_dict(total_dict,work_dir=variant_dir)
-        study._model_dict_hash=model_hash
-
-        return study
-
-    def load_results_from_json(self, results_json_path: str) -> None:
-        """Load serialized results onto an existing study instance.
-
-        Parameters
-        ----------
-        results_json_path : str or path-like
-            Path to the ``results.json`` file to load.
-
-        Raises
-        ------
-        ValueError
-            If ``results.json`` does not exist, if no model has been loaded
-            into this study, or if the loaded model hash does not match the
-            model hash stored in ``results.json``.
-
-        Returns
-        -------
-        None
-            This method updates the existing study instance in place.
-
-        """
-        #if no model hash and results hash differs from model hash raise.
-        self.log.debug("load results from json")
-        results_hash=None
-        results_dict={}
-        if not os.path.exists(results_json_path):
-            raise ValueError(f'No results .json exists at path specified: {results_json_path}')
-        if not self._model_dict_hash:
-            raise ValueError(f'Must have model loaded in before loading in results')
-        if self._results_dict_hash!='':
-            self.log.warning(f'Results currently loaded in study, overwriting results')
-        with open(results_json_path,'r') as f:
-            result_data=json.load(f)
-
-        results_dict["results"]=result_data["results"]
-        results_dict["execution_meta_data"]=result_data["execution_meta_data"]
-        result_dict={
-            "results":result_data["results"],
-            "execution_meta_data":result_data["execution_meta_data"]
-        }
-
-
-        if result_data['header']['model_hash']!=self._model_dict_hash:
-            raise ValueError(f'Model hash from results json and from loaded model do not match')
-
-
-        results_hash=Study._generate_data_hash(result_dict)
-        self.results = Results._from_dict(result_data['results'], self)
-        self._runtime_meta_data =  defaultdict(dict, result_data["execution_meta_data"])
-
-        if results_hash:
-            self._results_dict_hash=results_hash
-
-    @staticmethod
-    def _generate_data_hash(model_dict):
-        """Generate a deterministic hash for serialized study data.
-
-        Parameters
-        ----------
-        model_dict : dict
-            JSON-serializable dictionary to hash.
-
-        Returns
-        -------
-        str
-            SHA-256 hash of the normalized serialized data.
-
-        """
-        payload = json.dumps(
-        model_dict,
-        sort_keys=True,
-        separators=(",", ":"),   # remove whitespace for stable bytes
-        ).encode("utf-8")
-        model_hash=hashlib.sha256(payload).hexdigest()
-        return model_hash
-
 
     def get_value(self, dotted_path: str):
-        """Retrieve a study value from a dotted path.
+           """Retrieve a study value from a dotted path.
 
-        Parameters
-        ----------
-        dotted_path : str
-            Dotted attribute path to resolve from the study. Paths may include a
-            trailing bracketed index or slice for array-like values, for
-            example ``"vehicles.my_vehicle.wing.span[0]"``.
+           Parameters
+           ----------
+           dotted_path : str
+               Dotted attribute path to resolve from the study. Paths may include a
+               trailing bracketed index or slice for array-like values, for
+               example ``"vehicles.my_vehicle.wing.span[0]"``.
 
-        Returns
-        -------
-        object
-            Value resolved from ``dotted_path``.
+           Returns
+           -------
+           object
+               Value resolved from ``dotted_path``.
 
-        Notes
-        -----
-        Dotted-path resolution uses :func:`operator.attrgetter`. If bracketed
-        indices are present, they are applied after the base attribute path is
-        resolved.
+           Notes
+           -----
+           Dotted-path resolution uses :func:`operator.attrgetter`. If bracketed
+           indices are present, they are applied after the base attribute path is
+           resolved.
 
-        """
-        self.log.debug(f"get the value of {dotted_path}")
-        dotted_path,inds=parse_variable_reference(dotted_path)
-        value = attrgetter(dotted_path)(self)
-        if inds is not None:
-            value = value[inds]
-        return value
+           """
+           self.log.debug(f"get the value of {dotted_path}")
+           dotted_path,inds=parse_variable_reference(dotted_path)
+           value = attrgetter(dotted_path)(self)
+           if inds is not None:
+               value = value[inds]
+           return value
 
     def set_value(self, dotted_path: str, value):
         """Set a vehicle parameter value from a dotted path.
@@ -1294,6 +368,954 @@ class Study:
 
         return paths
 
+    #------------------High level study API (Loading, saving, etc.)
+
+    def save_to_json(self,variant_dir:str,commit=False,commit_code=False):
+           """Write study model data and, when available, results data to JSON files.
+
+           Parameters
+           ----------
+           variant_dir : str or path-like
+               Variant directory where ``model.json`` and, if results exist,
+               ``results.json`` are written.
+           commit : bool, optional
+               If True, commit the written JSON file or files to the current git
+               branch.
+           commit_code : bool, optional
+               If True, commit existing tracked code changes before committing the
+               generated JSON artifacts. Requires ``commit=True``.
+
+           Returns
+           -------
+           None
+
+           Notes
+           -----
+           If the current model hash differs from the loaded model hash, only
+           ``model.json`` is rewritten and existing results are discarded rather
+           than saved.
+           """
+
+           if commit_code and not commit:
+               raise ValueError("Cannot commit code without committing generated JSON.")
+
+           #Paths
+           model_path=os.path.join(variant_dir,'model.json')
+           result_path=os.path.join(variant_dir,'results.json')
+
+           #Full study dictionary
+           study_dict=replace_none_with_empty_quotes(self._to_dict())
+           model_dict={
+               "control":study_dict["control"],
+               "vehicles":study_dict["vehicles"],
+               "solutions":study_dict["solutions"],
+           }
+
+           model_hash=hash_dict(model_dict)
+           new_control_dict=Study._update_control(model_dict,model_hash)
+           model_dict['control']=new_control_dict
+
+           msg = f"AutoCommit: Writing study to json for variant {self.control.variant_name}"
+           if self._model_dict_hash:
+               if self._model_dict_hash!=model_hash:
+                   if commit:
+                       self._prepare_repository_for_autocommit(
+                           new_branch=True, commit_code=commit_code
+                       )
+                   self._save_to_json(model_dict,model_path)
+                   print(f'New model does not match loaded model, discarding results and saving')
+                   if commit:
+                       self._commit_json_to_branch(
+                           json_paths=[model_path], commit_message=msg
+                       )
+                   return
+
+           if commit:
+               self._prepare_repository_for_autocommit(
+                   new_branch=False, commit_code=commit_code
+               )
+           self._save_to_json(model_dict,model_path)
+           written=[model_path]
+           #save the results
+           if study_dict['results']:
+               results_dict={
+                   "results":study_dict["results"],
+                   "execution_meta_data":study_dict["execution_meta_data"]
+               }
+               results_hash=hash_dict(results_dict)
+               header_data=Study._generate_header_dict(study_dict["control"],
+                                                   model_hash,results_hash)
+               result_dict={
+                   "header":header_data,
+                   'results':study_dict['results'],
+                   'execution_meta_data':study_dict['execution_meta_data']
+                   }
+               self._save_to_json(result_dict,result_path)
+               written.append(result_path)
+           if commit:
+               self._commit_json_to_branch(written,commit_message=msg)
+
+
+    def save_model_to_json(self, variant_dir: str, commit=False,
+                           new_branch=False, commit_code=False):
+        """Write model configuration data to ``model.json``.
+
+        Parameters
+        ----------
+        variant_dir : str or path-like
+            Variant directory where ``model.json`` is written.
+        commit : bool, optional
+            If True, commit the generated JSON file to git.
+        new_branch : bool, optional
+            If True and ``commit`` is also True, create and check out a new
+            auto-generated branch before committing.
+        commit_code : bool, optional
+            If True, commit existing tracked code changes before committing
+            ``model.json``. Requires ``commit=True``.
+
+        Returns
+        -------
+        None
+
+        """
+        if not commit and new_branch:
+            raise ValueError(f'Cannot set new branch to true without committing.')
+        if commit_code and not commit:
+            raise ValueError("Cannot commit code without committing generated JSON.")
+
+        msg = f"AutoCommit: Created data for variant {self.control.variant_name}"
+        study_dict=replace_none_with_empty_quotes(self._to_dict())
+        model_dict={
+            "control":study_dict["control"],
+            "vehicles":study_dict["vehicles"],
+            "solutions":study_dict["solutions"],
+        }
+
+        model_hash=hash_dict(model_dict)
+        new_control_dict=Study._update_control(model_dict,model_hash)
+        model_dict['control']=new_control_dict
+
+        model_path=os.path.join(variant_dir,'model.json')
+        if commit:
+            self._prepare_repository_for_autocommit(
+                new_branch=new_branch, commit_code=commit_code
+            )
+        self._save_to_json(model_dict,model_path)
+        if commit:
+            self._commit_json_to_branch(json_paths=[model_path],
+                                        commit_message=msg)
+
+        return model_path
+
+    def save_results_to_json(self, variant_path: str, commit=False,
+                             commit_code=False):
+        """Write current study results to ``results.json``.
+
+        Parameters
+        ----------
+        variant_path : str or path-like
+            Variant directory where ``results.json`` is written.
+        commit : bool, optional
+            If True, commit the generated JSON file to git.
+        commit_code : bool, optional
+            If True, commit existing tracked code changes before committing
+            ``results.json``. Requires ``commit=True``.
+
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If no results exist, if ``model.json`` does not exist, or if the
+            current model hash does not match the loaded model hash.
+        AttributeError
+            If the study was not loaded from JSON before attempting to save
+            results.
+
+        """
+
+
+        if commit_code and not commit:
+            raise ValueError("Cannot commit code without committing generated JSON.")
+        msg = f"AutoCommit: Writing results for variant {self.control.variant_name}"
+        results_path=os.path.join(variant_path,'results.json')
+        study_dict=replace_none_with_empty_quotes(self._to_dict())
+        model_path=os.path.join(variant_path,'model.json')
+        if not study_dict['results']:
+            raise ValueError(
+                "Cannot save results.json because this study has no results. "
+                "If the final trade result was removed, the existing results.json "
+                "must also be removed to avoid loading stale results."
+            )
+        if not os.path.exists(model_path):
+            raise ValueError(f'model.json file must exist before saving results to json')
+
+        model_dict={
+            "control":study_dict["control"],
+            "vehicles":study_dict["vehicles"],
+            "solutions":study_dict["solutions"],
+        }
+        model_hash=hash_dict(model_dict)
+
+        temp_results_dict={
+            "results":study_dict["results"],
+            "execution_meta_data":study_dict["execution_meta_data"]
+        }
+
+        results_hash=hash_dict(temp_results_dict)
+        header_data=Study._generate_header_dict(study_dict["control"],
+                                                model_hash,results_hash)
+        results_dict={
+            "header":header_data,
+            "results":study_dict["results"],
+            "execution_meta_data":study_dict["execution_meta_data"]
+        }
+        if not self._model_dict_hash:
+            raise AttributeError(f'Study must be loaded from json before run '
+                                 'if results are to be saved')
+        else:
+            if self._model_dict_hash!=model_hash:
+                raise ValueError(f"Study's loaded in hash does not match current model"
+                                 "hash.")
+
+        if commit:
+            self._prepare_repository_for_autocommit(
+                new_branch=False, commit_code=commit_code
+            )
+        self._save_to_json(results_dict,results_path)
+
+        if commit:
+            self._commit_json_to_branch([results_path],commit_message=msg)
+
+        return results_hash
+
+    def save_post_to_json(self,variant_path,commit=False,commit_code=False):
+        """Write post-processing data to ``post.json``.
+
+        Parameters
+        ----------
+        variant_path : str or path-like
+            Variant directory where ``post.json`` is written.
+        commit : bool, optional
+            If True, commit the generated JSON file to git.
+        commit_code : bool, optional
+            If True, commit existing tracked code changes before committing
+            ``post.json``. Requires ``commit=True``.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If results do not exist, if required ``model.json`` or
+            ``results.json`` files are missing, or if the current results hash
+            does not match the loaded results hash.
+
+        """
+
+        if commit_code and not commit:
+            raise ValueError("Cannot commit code without committing generated JSON.")
+        msg=f"AutoCommit: Writing post processing data for variant {self.control.variant_name}"
+        post_processing_path=os.path.join(variant_path,'post.json')
+        study_dict=replace_none_with_empty_quotes(self._to_dict())
+        results_path=os.path.join(variant_path,'results.json')
+        #i dont think these checks actually matter because to process the
+        #results, you actually need the results already but this
+        #is just a safeguard i guess
+        if not study_dict['results']:
+            raise ValueError(f'Attempted to save post to json but no results exist for study')
+        if not os.path.exists(results_path):
+            raise ValueError(f'results.json file must exist before saving post to json')
+        if not os.path.exists(os.path.join(variant_path,'model.json')):
+            raise ValueError(f'model.json file must exist before saving post to json')
+
+
+        model_dict={
+            "control":study_dict["control"],
+            "vehicles":study_dict["vehicles"],
+            "solutions":study_dict["solutions"],
+        }
+        model_hash= hash_dict(model_dict)
+
+
+
+        result_dict={
+            "results":study_dict["results"],
+            "execution_meta_data":study_dict["execution_meta_data"]
+                     }
+        results_hash=hash_dict(result_dict)
+
+        if self._results_dict_hash and self._results_dict_hash!=results_hash:
+            raise ValueError(f"Study's loaded in hash does not match current results"
+                             "hash.")
+        header_data=Study._generate_header_dict(study_dict["control"],
+                                                model_hash,results_hash)
+        header_data["result_hash"]=results_hash
+        post_dict={
+            "header":header_data,
+            "post_storage":self._post_data
+                   }
+        if commit:
+            self._prepare_repository_for_autocommit(
+                new_branch=False, commit_code=commit_code
+            )
+        self._save_to_json(post_dict,post_processing_path)
+        if commit:
+            self._commit_json_to_branch([post_processing_path],msg)
+
+    @classmethod
+    def load_study_from_directory(cls, variant_dir: str) -> "Study":
+        """Create a study from JSON artifacts in a variant directory.
+
+        Parameters
+        ----------
+        variant_dir : str or path-like
+            Directory containing ``model.json`` and, optionally,
+            ``results.json`` using those conventional filenames.
+
+        Returns
+        -------
+        Study
+            Study reconstructed from the serialized data in ``variant_dir``.
+
+        """
+        cls.log.debug("create study from json")
+        model_path=os.path.join(variant_dir,'model.json')
+        with open(model_path, "r") as f:
+            model_data = json.load(f)
+
+        loaded_model_hash=model_data["control"]["model_hash"]
+        del model_data['control']['model_hash']
+        #initially loads in model
+        total_dict={
+            "control":model_data["control"],
+            "vehicles":model_data["vehicles"],
+            "solutions":model_data["solutions"],
+        }
+
+        model_hash=hash_dict(total_dict)
+
+
+
+        if loaded_model_hash!=model_hash:
+            log.warning(
+            f'Warning, loaded model hash differs from model checksum at save point'
+            )
+
+        results_path=os.path.join(variant_dir,'results.json')
+        results_hash=None
+        if os.path.exists(results_path):
+            with open(results_path,'r') as f:
+                result_data=json.load(f)
+
+            result_dict={
+                "results":result_data["results"],
+                "execution_meta_data":result_data["execution_meta_data"]
+            }
+            results_hash=hash_dict(result_dict)
+            if result_data["header"]["results_hash"]!=results_hash:
+                raise ValueError("Results checksum does not match results.json")
+            if result_data["header"]["model_hash"]!=model_hash:
+                cls.log.warning("Results model hash does not match loaded model")
+            total_dict["results"]=result_data["results"]
+            total_dict["execution_meta_data"]=result_data["execution_meta_data"]
+
+        study=cls._from_dict(total_dict,work_dir=variant_dir)
+        study._model_dict_hash=model_hash
+        if results_hash:
+            study._results_dict_hash=results_hash
+
+        return study
+
+    @classmethod
+    def load_model_from_json(cls, model_json_path: str) -> "Study":
+        """Create a study from a serialized ``model.json`` file.
+
+        Parameters
+        ----------
+        model_json_path : str or path-like
+            Path to the ``model.json`` file to load.
+
+        Returns
+        -------
+        Study
+            Study reconstructed from the serialized model data.
+
+        """
+        cls.log.debug("create study from json")
+        variant_dir=os.path.dirname(model_json_path)
+        with open(model_json_path, "r") as f:
+            model_data = json.load(f)
+
+        loaded_model_hash=model_data["control"]["model_hash"]
+        del model_data['control']['model_hash']
+        #initially loads in model
+        total_dict={
+            "control":model_data["control"],
+            "vehicles":model_data["vehicles"],
+            "solutions":model_data["solutions"],
+        }
+
+
+        model_hash=hash_dict(total_dict)
+
+        if loaded_model_hash!=model_hash:
+            cls.log.warning(
+            f'Warning, loaded model hash differs from model checksum at save point'
+            )
+
+        study=cls._from_dict(total_dict,work_dir=variant_dir)
+        study._model_dict_hash=model_hash
+        return study
+
+    def load_results_from_json(self, results_json_path: str) -> None:
+        """Load serialized results onto an existing study instance.
+
+        Parameters
+        ----------
+        results_json_path : str or path-like
+            Path to the ``results.json`` file to load.
+
+        Raises
+        ------
+        ValueError
+            If ``results.json`` does not exist, if no model has been loaded
+            into this study, or if the saved results checksum does not match
+            the results data. A model hash mismatch is logged as a warning.
+
+        Returns
+        -------
+        None
+            This method updates the existing study instance in place.
+
+        """
+        self.log.debug("load results from json")
+        if not os.path.exists(results_json_path):
+            raise ValueError(f'No results .json exists at path specified: {results_json_path}')
+        if not self._model_dict_hash:
+            raise ValueError(f'Must have model loaded in before loading in results')
+        if self._results_dict_hash!='':
+            self.log.warning(f'Results currently loaded in study, overwriting results')
+        with open(results_json_path,'r') as f:
+            result_data=json.load(f)
+
+        result_dict={
+            "results":result_data["results"],
+            "execution_meta_data":result_data["execution_meta_data"]
+        }
+        results_hash=hash_dict(result_dict)
+        if result_data["header"]["results_hash"]!=results_hash:
+            raise ValueError("Results checksum does not match results.json")
+        if result_data["header"]["model_hash"]!=self._model_dict_hash:
+            self.log.warning("Results model hash does not match loaded model")
+
+        self.results = Results._from_dict(result_data['results'], self)
+        self._runtime_meta_data =  defaultdict(dict, result_data["execution_meta_data"])
+        self._results_dict_hash=results_hash
+
+    def remove_trade_result(self,solution_name,trade_name,variant_dir,
+                            commit=False,
+                            commit_code=False):
+
+        trades=self.results.solutions[solution_name].tradestudies
+        meta=self._runtime_meta_data[solution_name]
+        if trade_name not in trades or trade_name not in meta:
+            raise ValueError(
+                f"Cannot remove trade {trade_name!r} for solution {solution_name!r}: "
+                "both the result and its execution metadata must exist."
+            )
+        if sum(len(solution.tradestudies) for solution in self.results.solutions.values()) == 1:
+            raise ValueError(
+                "Cannot remove the final trade result through this method. "
+                "Delete results.json manually if you want to discard all saved results."
+            )
+        #get existing result location
+        trades.pop(trade_name)
+        if len(trades.keys())==0:
+            self.results.solutions.pop(solution_name)
+            self._runtime_meta_data.pop(solution_name)
+            self.log.warning(
+                f"No results remain for solution sequence {solution_name!r} "
+                f"after removing trade {trade_name!r}."
+            )
+        #delete execution meta data
+        meta.pop(trade_name)
+
+        results_hash=self.save_results_to_json(variant_dir,commit=commit,commit_code=commit_code)
+        self._results_dict_hash=results_hash
+
+    #---------------------Encapsulated save/load stuff
+
+
+    def _to_dict(self) -> dict:
+        """Serialize the study to a dictionary.
+
+        Returns
+        -------
+        dict
+            JSON-compatible dictionary containing the study control data,
+            vehicles, solution data, results data, and execution metadata.
+
+        """
+        self.log.debug("write to dict")
+
+        study_dict = {
+            "control": convert_numpy_to_python(self.control._to_dict()),
+            "vehicles": convert_numpy_to_python(
+                {v.name: convert_numpy_to_python(v._to_dict()) for v in self.vehicles}
+            ),
+            "solutions": {solution.name:convert_numpy_to_python(solution._to_dict()) for solution in self.solutions},
+            "results": convert_numpy_to_python(self.results._to_dict()),
+            "execution_meta_data": convert_numpy_to_python(self._runtime_meta_data),
+        }
+
+        return study_dict
+
+    @classmethod
+    def _from_dict(cls, data: dict, work_dir=None) -> "Study":
+        """Reconstruct a study from a dictionary.
+
+        Parameters
+        ----------
+        data : dict
+            Serialized study dictionary, typically produced by :meth:`_to_dict`.
+        work_dir : str or path-like, optional
+            Directory used for study logging during reconstruction. If omitted,
+            the existing logging configuration is used.
+
+        Returns
+        -------
+        Study
+            Reconstructed study containing vehicles, solution, control,
+            results, and execution metadata.
+
+        """
+        cls.log.debug("study from dict")
+        study = cls(log_dir=work_dir)
+        for vname, vdata in data["vehicles"].items():
+            study.add_vehicle(Vehicle._from_dict(vdata))
+        for sname,sdata in data["solutions"].items():
+            solution=Solution._from_dict(sdata)
+            if solution.name != sname:
+                raise ValueError(
+                    f"Solution key {sname!r} does not match "
+                    f"serialized name {solution.name!r}"
+                )
+            study.solutions.add_solution(solution)
+
+        study.control = Control._from_dict(data["control"])
+        if "results" in data:
+            study.results = Results._from_dict(data["results"], study)
+            study._runtime_meta_data = defaultdict(
+                dict, data["execution_meta_data"]
+            )
+
+        return study
+
+    def _save_to_json(self,data, json_path: str, commit=False, commit_message=""):
+        """Write serializable data to a JSON file.
+
+        Parameters
+        ----------
+        data : dict
+            JSON-serializable data payload to write.
+        json_path : str or path-like
+            Output path for the JSON file.
+
+        Returns
+        -------
+        None
+
+        """
+        self.log.debug("save to json")
+
+        with open(json_path, "w") as f:
+            json.dump(data, f, indent=4)
+
+
+    @staticmethod
+    def _generate_header_dict(control_dict,model_hash,results_hash):
+        """Build header metadata for serialized results or post-processing data.
+
+        Parameters
+        ----------
+        control_dict : dict
+            Serialized control dictionary containing study metadata such as
+            title, author, description, repository root, and variant name.
+        model_hash : str
+            Hash of the serialized model data.
+        results_hash : str
+            Hash of the serialized results data.
+
+        Returns
+        -------
+        dict
+            Header dictionary containing study metadata together with the model
+            and results hashes.
+
+        """
+        return {
+            "title":control_dict['title'],
+            "author":control_dict["author"],
+            "description":control_dict["description"],
+            "model_hash":model_hash,
+            "results_hash":results_hash,
+            "repo_root":control_dict["repo_root"],
+            "variant_name":control_dict["variant_name"]
+        }
+
+
+    @staticmethod
+    def _update_control(model_dict,model_hash):
+        """Insert the model hash into serialized control data.
+        Parameters
+        ----------
+        model_dict : dict
+            Serialized model dictionary containing a ``"control"`` entry.
+        model_hash : str
+            Hash string to insert into the serialized control data.
+        Returns
+        -------
+        dict
+            Updated control dictionary including ``"model_hash"``.
+        Notes
+        -----
+        The method preserves the original control key order and inserts
+        ``"model_hash"`` after the fourth existing control entry.
+        """
+        new_control_dict={}
+        for i,(name,data) in enumerate(model_dict["control"].items()):
+            new_control_dict[name]=data
+            if i==3:
+                new_control_dict["model_hash"]=model_hash
+        return new_control_dict
+
+    def _get_post_data(self,solution_name,trade_name):
+        solution_post_data=self._post_data.setdefault(solution_name,{})
+        return solution_post_data.setdefault(trade_name,{})
+
+    #-------------------Run time encapsulated stuff
+
+    def _get_runtime_metadata(self,solution_name,trade_name):
+        #i assume this is something like: if its there leave it
+        #if its not, make a key dict pair in the base dict
+        solution_metadata=self._runtime_meta_data.setdefault(solution_name,{})
+        #then it says essentially, in that dictionary, if the trade is already there return that
+        #value associated with the key, otherwise assign that key to that value and return the value
+        return solution_metadata.setdefault(trade_name,{})
+
+
+    def _add_runtime_plugin_checksums(self, solution_name, trade_name, plugin_to_checksum):
+        """Store plugin checksum metadata for a trade execution.
+
+        Parameters
+        ----------
+        trade_name : str
+            Name of the trade study associated with the recorded runtime
+            metadata.
+        plugin_to_checksum : dict
+            Mapping from plugin identifiers to checksum strings captured during
+            execution.
+
+        Returns
+        -------
+        None
+
+        """
+        trade_meta_dict=self._get_runtime_metadata(solution_name,trade_name)
+        trade_meta_dict["step_plugin_hashes"] = plugin_to_checksum
+
+    def _add_runtime_external_executable_data(
+        self, solution_name,trade_name, external_executable_to_data
+    ):
+        """Store external executable metadata for a trade execution.
+
+        Parameters
+        ----------
+        trade_name : str
+            Name of the trade study associated with the recorded runtime
+            metadata.
+        external_executable_to_data : dict
+            Mapping from external executable identifiers to execution metadata
+            captured during the run.
+
+        Returns
+        -------
+        None
+
+        """
+        trade_meta_dict=self._get_runtime_metadata(solution_name,trade_name)
+        trade_meta_dict[
+            "step_external_executable_data"
+        ] = external_executable_to_data
+
+    def _capture_environment(self, solution_name,trade_name):
+        """Capture runtime environment metadata for a trade execution.
+
+        Parameters
+        ----------
+        trade_name : str
+            Name of the trade study associated with the recorded runtime
+            metadata.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The captured metadata includes machine information, Python interpreter
+        details, installed package versions, and a formatted start-time string
+        in the America/Los_Angeles time zone.
+
+        """
+
+        machine_dict = {
+            "os_system": platform.system(),
+            "os_release": platform.release(),
+            "os_version": platform.version(),
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+        }
+
+        code = "import sys; print(sys.executable)"
+        out = subprocess.check_output(["python", "-c", code]).decode().strip()
+
+        python_dict = {"python_spec": sys.version, "python_executable": str(Path(out))}
+
+        environ_dict = {dist.name: dist.version for dist in distributions()}
+
+        trade_meta_dict=self._get_runtime_metadata(solution_name=solution_name,trade_name=trade_name)
+        trade_meta_dict["environment"] = {
+            "Machine": machine_dict,
+            "Python": python_dict,
+            "Packages": environ_dict,
+        }
+        self._add_time_metadata(
+            solution_name=solution_name,
+            trade_name=trade_name,
+            start_or_end='Start_Time')
+
+    def _add_time_metadata(self,solution_name, trade_name,start_or_end:str,elapsed_time=None):
+        trade_dict=self._get_runtime_metadata(
+            solution_name=solution_name,
+            trade_name=trade_name)
+        if start_or_end=='Start_Time':
+            mess_start='Executed'
+            trade_dict['time_info']={}
+        elif start_or_end=='Completion_Time':
+            mess_start='Completed'
+            trade_dict['time_info']['Elapsed_Time']=f'Analysis took {elapsed_time} seconds'
+        else:
+            raise ValueError('Must be either start or end')
+        dt = datetime.now(tz=ZoneInfo("America/Los_Angeles"))
+        message = f"{mess_start} on"
+        keywords = ["A", "B", "d", "Y", "I", "M", "S", "p"]
+        for keyword in keywords:
+            if not keyword in ["M", "S"]:
+                message += f' {dt.strftime(f"%{keyword}")}'
+            else:
+                message += f':{dt.strftime(f"%{keyword}")}'
+            if keyword in ["A", "d"]:
+                message += ","
+            if keyword == "Y":
+                message += " at"
+
+        message += " Pacific Time"
+
+
+
+        trade_dict['time_info'][start_or_end]=message
+
+    #-------------------Git autocommit stuff
+
+    def _get_repository_for_autocommit(self):
+        """Return the configured repository after validating its state."""
+        path = Path(self.control.repo_root)
+        if not path.is_dir():
+            raise NotADirectoryError(
+                f"The provided repository root path {self.control.repo_root} is not a directory.\n"
+                "The repo root must be a directory."
+            )
+
+        try:
+            repo_path = pygit2.discover_repository(path)
+        except KeyError:
+            repo_path = None
+
+        if repo_path is None:
+            raise ValueError("No repository found with provided path")
+
+        repo_path = Path(repo_path)
+        if path / ".git" != repo_path:
+            raise ValueError(
+                f"Provided path: {self.control.repo_root} does not have a repo"
+            )
+
+        repo = pygit2.Repository(repo_path)
+        if repo.head_is_unborn:
+            raise RuntimeError(
+                "Cannot commit: repository has no commits yet (unborn HEAD)."
+            )
+        if repo.head_is_detached:
+            raise RuntimeError("Cannot commit: repo is in detached HEAD state.")
+        return repo
+
+    @staticmethod
+    def _git_diff_returncode(repo, staged=False):
+        command = ["git", "diff"]
+        if staged:
+            command.append("--staged")
+        command.extend(["--exit-code", "--quiet"])
+        result = subprocess.run(command, cwd=repo.workdir)
+        if result.returncode not in (0, 1):
+            raise RuntimeError("Unable to inspect repository changes before autocommit.")
+        return result.returncode
+
+    def _checkout_new_autocommit_branch(self, repo):
+        parent_commit = repo[repo.head.target]
+        increment = 1
+        for branch_name in repo.branches.local:
+            match = re.fullmatch(r"AutoCommit(\d+)", branch_name)
+            if match:
+                increment = max(increment, int(match.group(1)) + 1)
+
+        new_branch_name = f"AutoCommit{increment}"
+        repo.branches.local.create(new_branch_name, parent_commit)
+        repo.checkout(f"refs/heads/{new_branch_name}")
+
+    def _prepare_repository_for_autocommit(self, new_branch, commit_code):
+        """Validate the worktree, optionally branch, and commit tracked code."""
+        repo = self._get_repository_for_autocommit()
+        staged_changes = self._git_diff_returncode(repo, staged=True)
+        unstaged_changes = self._git_diff_returncode(repo)
+
+        if not commit_code:
+            if staged_changes:
+                raise RuntimeError(
+                    "The repository has staged changes when attempting to "
+                    "autocommit; the index must be clean before committing."
+                )
+            if unstaged_changes:
+                raise RuntimeError(
+                    "The repository has unstaged changes to tracked files when "
+                    "attempting to autocommit. Set commit_code=True to commit "
+                    "them first."
+                )
+
+        if new_branch:
+            self._checkout_new_autocommit_branch(repo)
+
+        if not commit_code or not (staged_changes or unstaged_changes):
+            return
+
+        subprocess.run(
+            ["git", "add", "--update", "--", "."],
+            cwd=repo.workdir,
+            check=True,
+        )
+        index = repo.index
+        index.read()
+        parent = repo.head.target
+        parent_commit = repo[parent]
+        tree = index.write_tree()
+        if tree == parent_commit.tree_id:
+            return
+
+        author = pygit2.Signature(self.control.author, "fake@email")
+        committer = pygit2.Signature(self.control.author, "fake@email")
+        repo.create_commit(
+            "HEAD", author, committer, "AutoCommit: Committed code", tree, [parent]
+        )
+
+    def _commit_json_to_branch(self, json_paths,
+                               commit_message):
+        """Commit generated JSON artifacts to the configured git repository.
+
+        Parameters
+        ----------
+        json_paths : iterable of str or path-like
+            Paths to JSON files to stage and commit.
+        commit_message : str
+            Git commit message used for the commit.
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        NotADirectoryError
+            If :attr:`control.repo_root` is not a directory.
+        RuntimeError
+            If the repository is in a detached HEAD state or has an unborn
+            HEAD.
+
+        Notes
+        -----
+        If staging the requested files produces no tree changes relative to
+        the target branch HEAD, no commit is created.
+
+        """
+
+
+        repo = self._get_repository_for_autocommit()
+        relative_json_paths = []
+        for json_path in json_paths:
+            rel_path = os.path.relpath(json_path, repo.workdir)
+            relative_json_paths.append(rel_path.replace(os.sep, "/"))
+
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "-z"],
+            cwd=repo.workdir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("Unable to inspect repository changes before autocommit.")
+        dirty_paths = {path for path in result.stdout.split("\0") if path}
+        unexpected_paths = dirty_paths.difference(relative_json_paths)
+        if unexpected_paths:
+            paths = ", ".join(sorted(unexpected_paths))
+            raise RuntimeError(
+                "The repository gained unstaged changes to tracked files after "
+                f"autocommit preparation: {paths}"
+            )
+
+        if self._git_diff_returncode(repo, staged=True):
+            raise RuntimeError(
+                "The repository has staged changes when attempting to commit "
+                "generated JSON."
+            )
+
+        parents = repo.head.target
+        parent_commit = repo[parents]
+        index=repo.index
+        for json_path in json_paths:
+            # stage the JSON file
+            # rel path
+            rel_path = os.path.relpath(json_path, repo.workdir)
+            rel_path = rel_path.replace(os.sep, "/")
+            # same as git add path but does it to the pygit2 object (in memory)
+            index.add(rel_path)
+        #equivalent to running git add . or staging to commit directly
+        index.write()
+        # this is the snapshot of your repo as a hash
+        tree = index.write_tree()
+        if tree==parent_commit.tree_id:
+            self.log.debug("No JSON changes detected; skipping commit.")
+            print("No JSON changes detected; skipping commit.")
+            return
+        author = pygit2.Signature(self.control.author, "fake@email")
+        committer = pygit2.Signature(self.control.author, "fake@email")
+        repo.create_commit("HEAD", author, committer, commit_message, tree, [parents])
+
+
 class Variants:
     """Manage generation of multiple study variants.
 
@@ -1471,7 +1493,6 @@ class Variants:
         )
 
         return study
-
 
 if __name__ == "__main__":
     from uam4x.vehicle import Vehicle

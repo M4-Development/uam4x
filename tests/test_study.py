@@ -12,6 +12,8 @@ from uam4x.study import Study, Variants
 from uam4x.vehicle import Vehicle, VehicleManager
 from uam4x.subsystems import Subsystem, register_subsystem
 from uam4x.solution import Solution, SolutionManager, Plugin, register_plugin
+from uam4x.results import Result, Tradestudy
+from uam4x.control import ParameterSweep
 
 
 SOLUTION_NAME = "test_solution"
@@ -49,6 +51,23 @@ def demo_study():
     solution.add_tracked_output("step1.y")
 
     return s
+
+
+def _saved_trade_result(study, trade_name="trade_a"):
+    executed_trade = ParameterSweep(
+        {"vehicles.demo_vehicle.wing.span": [12.0]}
+    )
+    trade_result = Tradestudy(
+        trade_name,
+        SOLUTION_NAME,
+        executed_vehicles=study.vehicles,
+        executed_tradestudy=executed_trade,
+        tracked_output_names=study.get_solution(SOLUTION_NAME).tracked_outputs,
+    )
+    point = Result(state={"step1": {"x": 1.0}})
+    point._add_result("step1.y", 6.0)
+    trade_result._results.append(point)
+    return trade_result._to_dict()
 
 
 def test_study_initialization_types():
@@ -174,16 +193,7 @@ def test_study_load_results_from_json_updates_existing_instance(tmp_path, demo_s
 
     data_with_results = loaded_model._to_dict()
     data_with_results["results"] = {
-        SOLUTION_NAME: {
-            "trade_a": {
-                "points": [
-                    {
-                        "input_state": {"step1": {"x": 1.0}},
-                        "outputs": {"step1.y": 6.0},
-                    }
-                ]
-            }
-        }
+        SOLUTION_NAME: {"trade_a": _saved_trade_result(loaded_model)}
     }
     data_with_results["execution_meta_data"] = {
         SOLUTION_NAME: {"trade_a": {"time_info": {"Start_Time": "saved"}}}
@@ -215,16 +225,7 @@ def test_study_load_study_from_directory_loads_model_and_results(
     loaded_model = Study.load_model_from_json(str(out / "model.json"))
     data_with_results = loaded_model._to_dict()
     data_with_results["results"] = {
-        SOLUTION_NAME: {
-            "trade_a": {
-                "points": [
-                    {
-                        "input_state": {"step1": {"x": 1.0}},
-                        "outputs": {"step1.y": 6.0},
-                    }
-                ]
-            }
-        }
+        SOLUTION_NAME: {"trade_a": _saved_trade_result(loaded_model)}
     }
     data_with_results["execution_meta_data"] = {
         SOLUTION_NAME: {"trade_a": {"time_info": {"Start_Time": "saved"}}}

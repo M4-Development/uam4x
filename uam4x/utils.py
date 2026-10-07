@@ -448,13 +448,16 @@ def _canonicalize_state(x):
     if isinstance(x, float):
         return round(x, 12)
 
-    if isinstance(x, (np.integer, np.floating, np.bool_)):
+    if isinstance(x, (np.integer, np.bool_)):
         return x.item()
+
+    if isinstance(x, np.floating):
+        return round(x.item(),12)
 
     return x
 
 
-def hash_state(state):
+def hash_dict(some_dict):
     """Return a deterministic SHA-256 hash for a state dictionary.
 
     Parameters
@@ -474,7 +477,7 @@ def hash_state(state):
     order or NumPy container types.
 
     """
-    canon = _canonicalize_state(state)
+    canon = _canonicalize_state(some_dict)
 
     data = json.dumps(
         canon,
