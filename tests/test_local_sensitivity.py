@@ -7,7 +7,7 @@ import pytest
 
 from uam4x.local_sensitivity import LocalSensitivity
 from uam4x.post import LocalSensitivityPost
-from uam4x.results import Results, SolutionResults, Tradestudy, Result
+from uam4x.results import Results, SolutionResults, TradestudyResults, Result
 from uam4x.vehicle import VehicleManager
 
 
@@ -54,7 +54,7 @@ def _build_sensitivity_tradestudy(method_states):
     ls.add_perturbation_var("x", evaluation_point=1.0)
     study.control.trade_studies["sens"] = ls
 
-    ts = Tradestudy(
+    ts = TradestudyResults(
         "sens",
         SOLUTION_NAME,
         executed_vehicles=VehicleManager(),

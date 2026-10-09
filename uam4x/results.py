@@ -55,7 +55,7 @@ class Results:
         else:
             return None
 
-    def get_tradestudy(self, solution_name, trade_name)->Tradestudy:
+    def get_tradestudy(self, solution_name, trade_name)->TradestudyResults:
         """Return a trade-study result from a named solution.
 
         Parameters
@@ -67,7 +67,7 @@ class Results:
 
         Returns
         -------
-        Tradestudy or None
+        TradestudyResults or None
             Stored trade-study result, or ``None`` if the solution is not present.
 
         Raises
@@ -173,6 +173,16 @@ class Results:
 
 class SolutionResults:
     def __init__(self,name='',study=None):
+        """Initialize the results associated with one solution.
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of the solution that produced these results.
+        study : Study, optional
+            Parent study used for current-model consistency checks.
+
+        """
         self.name=name
         self.study=study
         self.tradestudies={}
@@ -187,7 +197,7 @@ class SolutionResults:
 
             Returns
             -------
-            Tradestudy
+            TradestudyResults
                 Stored result container for ``name``.
 
             Raises
@@ -250,7 +260,7 @@ class SolutionResults:
         ----------
         name : str
             Analysis name.
-        trade : Tradestudy
+        trade : TradestudyResults
             Result container to attach.
 
         Returns
@@ -259,7 +269,7 @@ class SolutionResults:
 
         Notes
         -----
-        The attached :class:`Tradestudy` receives a back-reference to this
+        The attached :class:`TradestudyResults` receives a back-reference to this
         :class:`Results` object.
 
         """
@@ -311,7 +321,7 @@ class SolutionResults:
         -------
         dict
             JSON-compatible dictionary mapping analysis names to serialized
-            :class:`Tradestudy` data.
+            :class:`TradestudyResults` data.
 
         """
         tradename_to_tradestudy = {}
@@ -325,8 +335,10 @@ class SolutionResults:
 
         Parameters
         ----------
+        solution_name : str
+            Name of the solution associated with the serialized results.
         tradename_to_results : dict
-            Mapping from analysis names to serialized :class:`Tradestudy` data.
+            Mapping from analysis names to serialized :class:`TradestudyResults` data.
         study : Study
             Parent study associated with the reconstructed results.
 
@@ -339,15 +351,15 @@ class SolutionResults:
 
         res = cls(name=solution_name,study=study)
         for trade_name, results in tradename_to_results.items():
-            ts = Tradestudy._from_dict(trade_name, results,solution_name)
+            ts = TradestudyResults._from_dict(trade_name, results,solution_name)
             res.add_tradestudy(trade_name, ts)
         return res
 
 
-class Tradestudy:
+class TradestudyResults:
     """Store all result points for one named analysis.
 
-    A ``Tradestudy`` groups the individual :class:`Result` objects produced by
+    A ``TradestudyResults`` groups the individual :class:`Result` objects produced by
     one analysis and provides access to variables that change across those
     result points.
 
@@ -364,6 +376,15 @@ class Tradestudy:
         ----------
         trade_name : str
             Name of the analysis associated with these results.
+        solution_name : str
+            Name of the solution that produced these results.
+        executed_vehicles : VehicleManager
+            Snapshot of the vehicles used for execution.
+        executed_tradestudy : object or None
+            Snapshot of the trade-study definition used for execution. This is
+            ``None`` for a default-state run.
+        tracked_output_names : sequence of str or None
+            Output variable names captured for each result point.
 
         """
         self._results = []
@@ -377,13 +398,33 @@ class Tradestudy:
 
     @property
     def executed_tradestudy(self):
+        """Return the trade-study definition used to produce these results."""
         return self._executed_tradestudy
 
     @property
     def executed_vehicles(self):
+        """Return the vehicle snapshot used to produce these results."""
         return self._executed_vehicles
 
     def get_case(self,case_id):
+        """Return a result point by case identifier.
+
+        Parameters
+        ----------
+        case_id : int
+            Identifier assigned to the result point during execution.
+
+        Returns
+        -------
+        Result
+            Result point whose ``case_id`` matches ``case_id``.
+
+        Raises
+        ------
+        ValueError
+            If no stored result has the requested case identifier.
+
+        """
         for result in self._results:
             if result.case_id==case_id:
                 return result
@@ -413,7 +454,7 @@ class Tradestudy:
             raise ValueError(
                 f"Results for solution {self.solution_name!r}, trade "
                 f"{self.trade_name!r} are not attached to a Study. Add the "
-                "Tradestudy through SolutionResults.add_tradestudy(), then "
+                "TradestudyResults through SolutionResults.add_tradestudy(), then "
                 "attach that SolutionResults to a Results object with a Study."
             )
         return study
@@ -619,10 +660,12 @@ class Tradestudy:
             Name of the analysis associated with the serialized results.
         results_dict : dict
             Serialized result-set dictionary, typically produced by :meth:`_to_dict`.
+        solution_name : str
+            Name of the solution that produced the serialized results.
 
         Returns
         -------
-        Tradestudy
+        TradestudyResults
             Reconstructed result set with restored :class:`Result` points.
 
         """
@@ -689,9 +732,40 @@ class Result:
         self.case_id=0
 
     def _set_case_id(self,case_id):
+        """Assign the execution case identifier for this result point.
+
+        Parameters
+        ----------
+        case_id : int
+            Identifier assigned by the execution engine.
+
+        """
         self.case_id=case_id
 
     def get_var_val(self,name):
+        """Return a state or output value by variable name.
+
+        Parameters
+        ----------
+        name : str
+            Variable name to retrieve.
+
+        Returns
+        -------
+        object
+            Value stored in the input state or tracked outputs.
+
+        Raises
+        ------
+        ValueError
+            If ``name`` is absent from both the input state and outputs.
+
+        Notes
+        -----
+        Input-state values take precedence if the same name appears in both
+        mappings.
+
+        """
         if name in self.state:
             return self.state[name]
         elif name in self.outputs:

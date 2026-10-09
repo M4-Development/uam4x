@@ -12,7 +12,7 @@ from uam4x.study import Study, Variants
 from uam4x.vehicle import Vehicle, VehicleManager
 from uam4x.subsystems import Subsystem, register_subsystem
 from uam4x.solution import Solution, SolutionManager, Plugin, register_plugin
-from uam4x.results import Result, Tradestudy
+from uam4x.results import Result, TradestudyResults
 from uam4x.control import ParameterSweep
 
 
@@ -57,7 +57,7 @@ def _saved_trade_result(study, trade_name="trade_a"):
     executed_trade = ParameterSweep(
         {"vehicles.demo_vehicle.wing.span": [12.0]}
     )
-    trade_result = Tradestudy(
+    trade_result = TradestudyResults(
         trade_name,
         SOLUTION_NAME,
         executed_vehicles=study.vehicles,

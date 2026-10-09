@@ -5,7 +5,7 @@ os.environ.setdefault("UAM4X_DISABLE_REGISTRY_WRITES", "1")
 import numpy as np
 import pytest
 
-from uam4x.results import Results, SolutionResults, Tradestudy, Result
+from uam4x.results import Results, SolutionResults, TradestudyResults, Result
 from uam4x.post import BasicPost
 from uam4x.vehicle import Vehicle, VehicleManager
 from uam4x.subsystems import Subsystem, register_subsystem
@@ -101,7 +101,7 @@ def _attach_tradestudy(study, trade_name):
         executed_trade = ParameterSweep({"x": [1.0]})
         study.control.trade_studies[trade_name] = executed_trade
     tracked_outputs = study.solutions.get_solution(SOLUTION_NAME).tracked_outputs
-    ts = Tradestudy(
+    ts = TradestudyResults(
         trade_name,
         SOLUTION_NAME,
         executed_vehicles=study.vehicles,
@@ -135,7 +135,7 @@ def test_result_roundtrip_and_equal_states():
 
 
 def test_tradestudy_get_case_by_case_id():
-    ts = Tradestudy(
+    ts = TradestudyResults(
         "trade",
         SOLUTION_NAME,
         executed_vehicles=VehicleManager(),
@@ -176,7 +176,7 @@ def test_result_get_var_val_unknown_name_raises():
 
 
 def test_tradestudy_get_variable_error_paths():
-    ts = Tradestudy(
+    ts = TradestudyResults(
         "trade",
         SOLUTION_NAME,
         executed_vehicles=VehicleManager(),
@@ -242,7 +242,7 @@ def test_tradestudy_to_dict_and_from_dict_roundtrip():
     ts._hash_to_result[r.state_hash] = r
 
     d = ts._to_dict()
-    rebuilt_ts = Tradestudy._from_dict("trade", d, SOLUTION_NAME)
+    rebuilt_ts = TradestudyResults._from_dict("trade", d, SOLUTION_NAME)
 
     assert len(rebuilt_ts._results) == 1
     assert rebuilt_ts.get_case(4).case_id == 4
@@ -297,7 +297,7 @@ def test_results_roundtrip_keeps_same_trade_name_separate_by_solution():
     for solution_name, value in (("first", 1.0), ("second", 2.0)):
         solution_results = SolutionResults(solution_name)
         results.add_solution_result(solution_results)
-        tradestudy = Tradestudy(
+        tradestudy = TradestudyResults(
             "shared_trade", solution_name,
             executed_vehicles=study.vehicles,
             executed_tradestudy=executed_trade,

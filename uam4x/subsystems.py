@@ -1197,57 +1197,121 @@ class Wing(Subsystem):
 
 @register_subsystem
 class Rotor(Subsystem):
-    """Represent a rotor component."""
-
     def setup(self):
-        """Register baseline rotor parameters.
 
-        Returns
-        -------
-        None
+        # Geometric parms
+        self.add_parameter("radius",1.0,float, description="rotor radius")
 
-        """
-        self.add_parameter(
-            "vtip",
-            550.0,
-            float,
-            unit_type=UnitType.SPEED,
-            description="Rotor tip speed",
-        )
-        self.add_parameter(
-            "tilt", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor tilt"
-        )
-        self.add_parameter(
-            "radius", 1.0, float, unit_type=UnitType.LENGTH, description="Rotor radius"
-        )
-        self.add_parameter("nblade", 2, int, description="Number of blades")
-        self.add_parameter(
-            "rpm",
-            1000.0,
-            float,
-            unit_type=UnitType.FREQUENCY if hasattr(UnitType, "FREQUENCY") else None,
-            description="Rotor RPM",
-        )
-        self.add_parameter(
-            "blade_chord",
-            0.1,
-            float,
-            unit_type=UnitType.LENGTH,
-            description="Blade chord length",
-        )
-        self.add_parameter(
-            "collective_pitch",
-            0.0,
-            float,
-            unit_type=UnitType.ANGLE,
-            description="Collective pitch angle (deg)",
-        )
-        self.add_parameter(
-                "disk_loading",
-                0.0,
-                float,
-                unit_type=None,
-                description="Diskloading (thrust/rotor area)")
+        self.add_parameter("root_chord",1.0,float)
+
+        self.add_parameter("tip_chord",1.0,float)
+
+        self.add_parameter("taper_ratio",1.0,float)
+
+        self.add_parameter("chord_array",np.zeros(5),np.ndarray)
+
+        self.add_parameter("span",1.0,float)
+
+        self.add_parameter("spanwise_coordinates",np.zeros(5),np.ndarray)
+
+        self.add_parameter("twist",1.0,float)
+
+        self.add_parameter("twist_array",np.zeros(5),np.ndarray)
+
+        self.add_parameter("nblade",1,int,description="number of blades")
+
+        self.add_parameter("A",1.,float,description="rotor area")
+
+        self.add_parameter("solidity",1.,float,description="sigma, N*c/(pi*R) how much area" \
+        "is actually taken up by the blades")
+
+        self.add_parameter("lock_number",1.,float,description="")
+        #Aerodynamic/dynamic parms
+        self.add_parameter("omega",1000.0,float,description="rotor rotational speed")
+
+        self.add_parameter("vtip",500.0,float,description="tip speed")
+
+        self.add_parameter("disk_loading",0.0,float,description="thrust per rotor area")
+
+        self.add_parameter("blade_loading",0.0,float,description="Ct/sigma")
+
+        self.add_parameter("Cl_alpha",2*np.pi,float,"lift slope of rotor")
+
+        self.add_parameter("alphas",1.0,float,description="sectional lift coefficient")
+
+        self.add_parameter("M_array",np.zeros(5),np.ndarray,description="Mach number at spanwise points")
+
+        self.add_parameter("M_at",0.0,float,description="tip mach number")
+
+        self.add_parameter("flap_angle",0.0,float)
+
+        self.add_parameter("lag_angle",0.0,float)
+
+        self.add_parameter("pitch_angle",0.0,float)
+
+        self.add_parameter("mu",0.0,float,description="rotor advance ratio")
+
+        self.add_parameter("muz",0.0,float,description="normal velocity ratio")
+
+        self.add_parameter("lambda",0.0,float,description="rotor inflow ratio")
+
+        self.add_parameter("lambda_i",0.0,float,description="induced inflow ratio")
+
+        self.add_parameter("thrust",0.0,float,description="Rotor Thrust")
+
+        self.add_parameter("drag",0.0,float,description="Rotor drag")
+
+        self.add_parameter("side_force",0.0,float,description="Rotor side force")
+
+        self.add_parameter("rotor_shaft_torque",0.0,float,description="Rotor shaft power")
+
+        self.add_parameter("rotor_shaft_power",0.0,float,description="rotor shaft power")
+
+        #Mass terms
+        self.add_parameter("m",1.0,float,description="mass per unit length as a function of r of blade")
+
+        #-------------------------------------Rotor Hub parameters
+
+        #set the location relative to a reference coordinate system
+        #geometric, defined on the fuselage
+        #Option 1: Polar
+        self.add_parameter("angle",0.0,float,description="angle rotor hub makes with x axis of fuselage")
+        self.add_parameter("length",0.0,float,description="distance from fuselage ref and hub")
+        self.add_parameter("L/R",0.0,float,description="distance from fuselage ref" \
+        "normalized by rotor radius")
+
+        #Option 2: Cartesian
+        self.add_parameter("xloc",0.0,float,description="x coordinate of hub wrt fuselage ref")
+        self.add_parameter("yloc",0.0,float,description="y coordinate of hub wrt fuselage ref")
+        self.add_parameter("xloc/R",0.0,float,description="x coordinate of hub normalized" \
+        "by rotor radius relative to fuselage ref")
+        self.add_parameter("yloc/R",0.0,float,description="y coordinate of hub normalized" \
+        "by rotor radius relative to fuselage ref")
+
+        #Angles:
+        #Largely relevant when moment at root is a concern so more for hingless
+        #not really needed for articulated
+        self.add_parameter("precone",0.0,float,description="preset mechanical " \
+        "angle of hub from horizontal")
+
+        #assumes x aft, z up,
+        self.add_parameter("cant",0.0,float,description="angle with aircraft z axis" \
+        "in yz plane")
+        #note incidence positive aft
+        self.add_parameter("incidence",0.0,float,description="angle with aircraft z axis" \
+        "in xz plane")
+
+        #radial location of hinge relative to rotor hub center
+        self.add_parameter('e',0.0,float,description="location of hinge relative to hub center")
+        self.add_parameter('e/R',0.0,float,description="location of hinge relative to hub center" \
+        "normalized by rotor radius")
+
+        # rigid body frequencies
+        self.add_parameter("flap_freq",0.0,float,description="flap frequency of blade")
+
+        self.add_parameter("lag_freq",0.0,float,description="lag frequency of blade")
+
+        self.add_parameter("pitch_freq",0.0,float,description="pitch frequency of blade")
 
 @register_subsystem
 class RotorBladeRegion(Subsystem):
@@ -1362,36 +1426,109 @@ class RotorBladeRegion(Subsystem):
             "mainsparweb_angle", 0.0, float, unit_type=UnitType.ANGLE, description=""
         )
 
-        self.add_parameter(
-            'RICWG',0.0,float
-        )
-        self.add_parameter(
-            'chord_array',np.array([0.0,0.0]),np.ndarray
-        )
+
+
+@register_subsystem
+class Rotorcraft(Subsystem):
+    def setup(self):
+        # Mass props
+        self.add_parameter("DGW",0.0,float,description="Design Gross Weight of rotorcraft")
+
+        self.add_parameter("MGTOW",0.0,float,description="Max Gross Takeoff Weight")
+
+        self.add_parameter("ZFW",0.0,float, description="Zero Fuel Weight")
+
+        self.add_parameter("MLW",0.0,float,description="Max Landing Weight")
+
+        self.add_parameter("npass",0.0,float,description="Number of passengers")
+
+        self.add_parameter("Wpass",0.0,float,description="Weight per passenger")
+
+        self.add_parameter("Wpass_net",0.0,float,description="Total passenger weight")
+
+        self.add_parameter("cg",0.0,float,description="Cg of rotorcraft")
+
+        self.add_parameter("Ixx",0.0,float)
+
+        self.add_parameter("Iyy",0.0,float)
+
+        self.add_parameter("Izz",0.0,float)
+
+        self.add_parameter("Ixy",0.0,float)
+
+        self.add_parameter("Ixz",0.0,float)
+
+        self.add_parameter("Iyz",0.0,float)
+
+        self.add_parameter("Cd",0.0,float,description="Drag coefficient of rotorcraft")
+
+        self.add_parameter("Cl",0.0,float,description="Lift coefficient of rotorcraft")
+
+        self.add_parameter("Aref",0.0,float,description="Reference area assocaited with coefficients")
+
+        self.add_parameter("cref",0.0,float,description="Reference chord associated with aircraft level coefficients")
+
+        self.add_parameter("bref",0.0,float,description="Reference span associated with aircraft level coeffiients")
+
+        # Power
+        self.add_parameter("nrotor",1,int,description="Number of rotors")
+
+        # Aerodynamics/dynamics
+
+        self.add_parameter("Vkts",0.0,float,description="forward speed in knotts")
+
+        self.add_parameter("V",0.0,float,description="Forward speed")
+
+        self.add_parameter("Thrust",0.0,float,description="Net thrust on rotorcraft")
+
+        self.add_parameter("Mach",0.0,float,description="Mach of rotorcraft")
 
 
 
 @register_subsystem
-class Aircraft(Subsystem):
-    """Represent an aircraft-level component."""
+class Mission(Subsystem):
     def setup(self):
-        """Register baseline aircraft-level parameters.
+        self.add_parameter('Vkts',0.0,float,description='horizontal speed')
 
-        Returns
-        -------
-        None
+        self.add_parameter('ROC',0.0,float,description='Rate of climb')
 
-        """
-        self.add_parameter('Wpass',0.0,float,description='Weight per passenger')
+        self.add_parameter('altitude',0.0,float,description='Altitude')
 
-        self.add_parameter('Wenviron',75.,float,description='Environmental Control Lumped Weight')
+@register_subsystem
+class AeroState(Subsystem):
+    def setup(self):
 
-        self.add_parameter('Wfurnish',0.0,float,'Weight of all furnishings (seats, carpet, etc.)')
+        #Flight point
+        self.add_parameter("mach",0.0,float,description="mach")
+        self.add_parameter("dynamic_pressure",0.0,float,description="dynamic pressure")
+        self.add_parameter("rho",0.0,float,description="density")
 
-        self.add_parameter('Welectrical',0.0,float,'Weight of misc electrical systems (lights, entertainment)')
+        self.add_parameter("vkeas",0.0,float,description="airspeed in knotts equivalent airspeed")
+        self.add_parameter("vktas",0.0,float,description="airspeed in knotts true airspeed")
+        self.add_parameter("veas",0.0,float,description="equivalent airspeed in user defined units")
+        self.add_parameter("vtas",0.0,float,description="true airspeed in user defined units")
 
-        self.add_parameter('Npass',1,int,'Number of passengers')
+        #Angles with airspeed
+        self.add_parameter('alpha',0.0,float,description="vehicle level angle of attach")
+        self.add_parameter('beta',0.0,float,description="vehicle level sideslip")
 
+        #Angles
+
+        #Rates
+        self.add_parameter("p",0.0,float,description="roll rate")
+        self.add_parameter("q",0.0,float,description="pitch rate")
+        self.add_parameter("r",0.0,float,description="yaw rate")
+
+        #Accelerations
+        self.add_parameter("ax",0.0,float,description="x-translational acceleration")
+        self.add_parameter("ay",0.0,float,description="y-translational acceleration")
+        self.add_parameter("az",0.0,float,description="z-translational acceleration")
+
+        self.add_parameter("pdot",0.0,float,description="roll acceleration")
+        self.add_parameter("qdot",0.0,float,description="pitch acceleration")
+        self.add_parameter("rdot",0.0,float,description="yaw acceleration")
+
+        #Control inputs
 
 
 

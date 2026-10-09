@@ -21,7 +21,7 @@ from uam4x.utils import (
     split_dotted_path_and_indices,
     parse_variable_reference,
 )
-from uam4x.results import Result, Tradestudy, SolutionResults
+from uam4x.results import Result, TradestudyResults, SolutionResults
 from uam4x.linking import uam4xLinkHandler,uam4xVariable
 from uam4x.n2_viewer import build_n2_data, render_n2_html
 from uam4x.vehicle import copy_vehicles
@@ -283,6 +283,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution workflow to execute.
         state : dict
             State dictionary containing input values and execution flags.
         trade_work_dir : str or path-like
@@ -300,15 +302,16 @@ class Engine:
 
         Notes
         -----
-        If ``iteration`` is provided, outputs are written under
-        ``out_<iteration>`` so each state has an isolated working directory.
+        If ``iteration`` is provided and per-step work directories are enabled,
+        outputs are written under ``out_<iteration>``. In-memory workflows can
+        disable those directories and run directly in ``trade_work_dir``.
 
         """
         self.log.debug("run solution")
         # Parallel workers rebuild Study from a serialized form, which does not
         # preserve the derived execution order stored in `_execution_steps`.
         # Recompute it here so serial and parallel runs build the same model.
-        if iteration is not None:
+        if iteration is not None and self.create_step_work_dirs:
             out_dir = os.path.join(trade_work_dir, f"out_{iteration}")
         else:
             out_dir = os.path.join(trade_work_dir)
@@ -348,12 +351,15 @@ class Engine:
             Serialized study dictionary used to reconstruct the study in the worker.
         state : dict
             State dictionary containing input values and execution flags.
+        solution_name : str
+            Name of the solution to execute in the reconstructed study.
         iteration : int, optional
             Iteration index used to name per-state output directories.
         trade_work_dir : str or path-like, optional
             Working directory for the trade study being executed.
         create_step_work_dirs : bool, optional
-            Whether to create per-step work directories inside the worker.
+            Whether to create per-state and per-step work directories inside
+            the worker.
 
         Returns
         -------
@@ -366,7 +372,7 @@ class Engine:
         before execution.
 
         """
-        if iteration is not None:
+        if iteration is not None and create_step_work_dirs:
             worker_log_dir = os.path.join(trade_work_dir, f"out_{iteration}")
         else:
             worker_log_dir = trade_work_dir
@@ -391,6 +397,8 @@ class Engine:
         ----------
         state : dict
             State dictionary containing optimization settings and bounds.
+        solution : Solution
+            Solution workflow to optimize.
         plugins : dict
             Generated plugin-instance mapping for the current solution.
         out_dir : str or path-like
@@ -429,6 +437,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution workflow to execute.
         state : dict
             State dictionary containing analysis inputs.
         plugins : dict
@@ -571,7 +581,7 @@ class Engine:
         execution_vehicles=copy_vehicles(self.study.vehicles)
         tracked_output_names=copy.deepcopy(solution.tracked_outputs)
         #tradestudy result container
-        ts = Tradestudy(trade_name,
+        ts = TradestudyResults(trade_name,
                         solution_name=solution.name,
                         executed_vehicles=execution_vehicles,
                         executed_tradestudy=None,
@@ -613,6 +623,8 @@ class Engine:
         ----------
         trade_name : str
             Name of the analysis whose execution metadata is being recorded.
+        solution : Solution
+            Solution whose runtime plugin metadata is captured.
 
         Returns
         -------
@@ -693,7 +705,9 @@ class Engine:
         check : bool, optional
             If True, perform model validation before execution.
         create_step_work_dirs : bool, optional
-            If True, create per-step work directories during execution.
+            If True, create per-state and per-step work directories during
+            execution. If False, all states and steps use the shared trade-study
+            directory, which is intended for in-memory workflows.
 
         Returns
         -------
@@ -730,7 +744,7 @@ class Engine:
         execution_trade=type(tradestudy)._from_dict(tradestudy_dict)
         tracked_output_names=copy.deepcopy(solution.tracked_outputs)
         #tradestudy result container
-        ts = Tradestudy(trade_name,
+        ts = TradestudyResults(trade_name,
                         solution_name=solution.name,
                         executed_vehicles=execution_vehicles,
                         executed_tradestudy=execution_trade,
@@ -799,10 +813,16 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution workflow being executed.
         trade_name : str
             Name of the analysis being executed.
         trade_states : sequence of dict
             State dictionaries to execute.
+        trade_work_dir : str or path-like
+            Working directory shared by the analysis states.
+        trade_result : TradestudyResults
+            Result container populated with each completed state.
         num_processors : int, optional
             Number of worker processes to use. If omitted or set to 1, execution is
             serial.
@@ -962,6 +982,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution workflow to validate.
         plugins : dict
             Dictionary of plugin instances to validate.
         state : dict, optional
@@ -1000,6 +1022,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution whose links are validated.
         plugins : dict
             Dictionary of plugin instances to validate.
 
@@ -1020,6 +1044,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution whose link types are validated.
         plugins : dict
             Dictionary of plugin instances to validate.
 
@@ -1036,6 +1062,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution whose indexed links are validated.
         plugins : dict
             Generated plugin-instance mapping for the current solution.
 
@@ -1057,6 +1085,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution used to resolve plugin variable metadata.
         var_name : str
             Fully qualified analysis variable name.
         plugins : dict
@@ -1087,6 +1117,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution containing the design variables.
         plugins : dict
             Generated plugin-instance mapping for the current solution.
         state : dict
@@ -1132,6 +1164,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution containing the constraint variables.
         plugins : dict
             Generated plugin-instance mapping for the current solution.
         state : dict
@@ -1308,6 +1342,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution containing the objective variable.
         plugins : dict
             Dictionary of plugin instances to validate.
         state : dict
@@ -1344,6 +1380,8 @@ class Engine:
 
         Parameters
         ----------
+        solution : Solution
+            Solution whose optimization links are validated.
         plugins : dict
             Dictionary of plugin instances to validate.
 

@@ -102,7 +102,6 @@ autodoc_mock_imports = [
     'cpylog',
     'matplotlib',
     'matplotlib.pyplot',
-    'numpy',
     'openmdao',
     'openmdao.api',
     'openturns',

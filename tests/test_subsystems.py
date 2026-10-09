@@ -1,5 +1,5 @@
 import pytest
-from uam4x.subsystems import Wing, Rotor, RotorBladeRegion, Aircraft
+from uam4x.subsystems import Wing, Rotor, RotorBladeRegion, Rotorcraft
 from uam4x.subsystems import Parameter, get_subsystem_class, Subsystem, _Mode, _subsystem_registry, register_subsystem
 from uam4x import  check_and_get_config
 import os
@@ -233,26 +233,25 @@ def test_Mode_parameters_property():
 
     assert R.vtip == 670.
     assert R.nblade == 8
-    assert R.tilt == 1.0
     assert R.radius == 1.0
-    assert R.rpm == 1000.0
-    assert R.blade_chord == 0.1
-    assert R.collective_pitch == 0.0
+    assert R.omega == 1000.0
+    assert R.root_chord == 1.0
+    assert R.pitch_angle == 0.0
 
     R.add_mode('vertical_rotor')
-    R.vertical_rotor.set_parameter('tilt', 90.0)
+    R.vertical_rotor.set_parameter('incidence', 90.0)
     R.vertical_rotor.set_parameter('vtip', 80.0)
 
     vt_mode_params = R.vertical_rotor.parameters
 
-    rotor_param_names = ['vtip', 'tilt', 'radius', 'nblade', 'rpm', 'blade_chord', 'collective_pitch']
+    rotor_param_names = ['vtip', 'incidence', 'radius', 'nblade', 'omega', 'root_chord', 'pitch_angle']
     for param_name in  rotor_param_names:
         assert param_name in  vt_mode_params.keys()
 
     assert vt_mode_params['vtip'].value == 80.0
-    assert vt_mode_params['tilt'].value == 90.0
+    assert vt_mode_params['incidence'].value == 90.0
     assert vt_mode_params['radius'].value == 1.0
-    assert vt_mode_params['rpm'].value == 1000.0
+    assert vt_mode_params['omega'].value == 1000.0
 
 def test_Mode_str():
     A = Wing('Main')
@@ -319,11 +318,10 @@ def test_Mode_parameters_property_bad(name, value, error):
 
     assert R.vtip == 670.
     assert R.nblade == 8
-    assert R.tilt == 1.0
     assert R.radius == 1.0
-    assert R.rpm == 1000.0
-    assert R.blade_chord == 0.1
-    assert R.collective_pitch == 0.0
+    assert R.omega == 1000.0
+    assert R.root_chord == 1.0
+    assert R.pitch_angle == 0.0
 
     R.add_mode('vertical_rotor')
     #User really shouldn't mess with encapsulation, but we cover this
@@ -414,12 +412,12 @@ def test_Subsystem_add_mode():
     R.add_mode('vertical')
 
     R.vertical.vtip = 5.0
-    R.vertical.set_parameter('rpm', 2000.0)
+    R.vertical.set_parameter('omega', 2000.0)
 
     assert R.vertical.vtip == 5.0
-    assert R.vtip == 550.
-    assert R.rpm == 1000.
-    assert R.vertical.rpm == 2000.0
+    assert R.vtip == 500.
+    assert R.omega == 1000.
+    assert R.vertical.omega == 2000.0
 
 
 def test_RotorBladeRegion_get_parameter_defaults():
@@ -810,21 +808,21 @@ def test_rotor_parameters():
     rotor = Rotor("rotor1")
     assert rotor.name == "rotor1"
     assert rotor.radius == 1.0
-    rotor.set_parameter("rpm", 1200.0)
-    assert rotor.rpm == 1200.0
+    rotor.set_parameter("omega", 1200.0)
+    assert rotor.omega == 1200.0
     rotor.add_mode("hover")
-    rotor.hover.rpm = 1500.0
-    assert rotor.hover.rpm == 1500.0
-    assert rotor.rpm == 1200.0
+    rotor.hover.omega = 1500.0
+    assert rotor.hover.omega == 1500.0
+    assert rotor.omega == 1200.0
 #-----------------------------------RotorBladeRegion checks
 
-#-----------------------------------Aircraft checks
-def test_aircraft_parameters():
-    aircraft = Aircraft("ac1")
-    assert aircraft.name == "ac1"
-    assert aircraft.Npass == 1
-    aircraft.set_parameter("Wpass", 180.0)
-    assert aircraft.Wpass == 180.0
+#-----------------------------------Rotorcraft checks
+def test_rotorcraft_parameters():
+    rotorcraft = Rotorcraft("ac1")
+    assert rotorcraft.name == "ac1"
+    assert rotorcraft.npass == 0.0
+    rotorcraft.set_parameter("Wpass", 180.0)
+    assert rotorcraft.Wpass == 180.0
 
 #----------------------------------Subsystem registry
 def test_register_subsystem_good():
@@ -855,7 +853,7 @@ def test_register_subsystem_good():
 
 
 def test_subsystem_registry():
-    for name in ("Wing", "Rotor", "Aircraft"):
+    for name in ("Wing", "Rotor", "Rotorcraft"):
         subsystem_class = get_subsystem_class(name)
         assert subsystem_class.__name__ == name
         assert isinstance(subsystem_class("registry_test"), Subsystem)

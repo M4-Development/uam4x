@@ -6,7 +6,7 @@ import os
 import json
 from uam4x.study import Study
 from uam4x.solution import Plugin, Solution, register_plugin
-from uam4x.subsystems import Subsystem, Wing, register_subsystem, Rotor, RotorBladeRegion, Aircraft
+from uam4x.subsystems import Subsystem, Wing, register_subsystem, Rotor, RotorBladeRegion, Rotorcraft
 from uam4x.vehicle import Vehicle
 
 def test_check_and_get_config_good():
@@ -28,7 +28,7 @@ def test_check_and_get_config_good():
     "SUBSYSTEMS": {
         "Wing": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
         "Rotor": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
-        "Aircraft": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
+        "Rotorcraft": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
         "WeightingFactor": "E:\\NASA_UAM\\uam4x_examples\\multi_objective\\custom.py",
         "RotorBladeRegion": "e:\\nasa_uam\\uam4x\\uam4x\\subsystems.py",
         "NdarcTechFactors": "E:\\NASA_UAM\\uam4x_examples\\tilt_rotor\\custom.py",
@@ -719,20 +719,20 @@ def test_get_param_type():
     wing.set_parameter("area", 142.1)
     wing.set_parameter("sweep", 0.5)
 
-    aircraft = Aircraft("aircraft")
-    aircraft.set_parameter("Npass", 6)
-    aircraft.set_parameter("Wpass", 200.0)
+    rotorcraft = Rotorcraft("rotorcraft")
+    rotorcraft.set_parameter("npass", 6.0)
+    rotorcraft.set_parameter("Wpass", 200.0)
 
     rotor = Rotor("rotor")
     rotor.set_parameter("nblade", 8)
     vflight_rotor = rotor.add_mode("vflight")
-    vflight_rotor.set_parameter("tilt", 90.0)
+    vflight_rotor.set_parameter("incidence", 90.0)
     cruise_rotor = rotor.add_mode("cruise")
-    cruise_rotor.set_parameter("tilt", 0.0)
+    cruise_rotor.set_parameter("incidence", 0.0)
 
     mtr.add_component(wing)
     mtr.add_component(rotor)
-    mtr.add_component(aircraft)
+    mtr.add_component(rotorcraft)
 
     # -------- Vehicle 2: Bridge --------
     BC = BridgeSubsystem("bridge_face_cards")
@@ -748,7 +748,7 @@ def test_get_param_type():
 
     # Add links for test plugin
     solution.add_link("vehicles.mtr.wing.span", "test_plug.testin_cont")
-    solution.add_link("vehicles.mtr.aircraft.Npass", "test_plug.testin_discrete")
+    solution.add_link("vehicles.mtr.rotorcraft.nrotor", "test_plug.testin_discrete")
 
     plugins = solution.generate_plugins()
 
@@ -762,19 +762,19 @@ def test_get_param_type():
     actual = study.get_param_type("vehicles.mtr.wing.sweep")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = study.get_param_type("vehicles.mtr.aircraft.Wpass")
+    actual = study.get_param_type("vehicles.mtr.rotorcraft.Wpass")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = study.get_param_type("vehicles.mtr.aircraft.Npass")
-    assert actual == int, f"expected int, got {actual}"
+    actual = study.get_param_type("vehicles.mtr.rotorcraft.npass")
+    assert actual == float, f"expected float, got {actual}"
 
     actual = study.get_param_type("vehicles.mtr.rotor.nblade")
     assert actual == int, f"expected int, got {actual}"
 
-    actual = study.get_param_type("vehicles.mtr.rotor.vflight.tilt")
+    actual = study.get_param_type("vehicles.mtr.rotor.vflight.incidence")
     assert actual == float, f"expected float, got {actual}"
 
-    actual = study.get_param_type("vehicles.mtr.rotor.cruise.tilt")
+    actual = study.get_param_type("vehicles.mtr.rotor.cruise.incidence")
     assert actual == float, f"expected float, got {actual}"
 
     # -------- Plugin I/O checks --------
@@ -952,9 +952,9 @@ def test_get_param_type_raises():
     rotor.set_parameter("nblade", 8)
     mtr.add_component(rotor)
 
-    aircraft = Aircraft("aircraft")
-    aircraft.set_parameter("Npass", 6)
-    mtr.add_component(aircraft)
+    rotorcraft = Rotorcraft("rotorcraft")
+    rotorcraft.set_parameter("npass", 6.0)
+    mtr.add_component(rotorcraft)
 
     study.add_vehicle(mtr)
 

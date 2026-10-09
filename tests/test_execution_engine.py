@@ -14,7 +14,7 @@ pytest.importorskip("openmdao.api")
 import uam4x.study as study_module
 import uam4x.execution_engine as execution_engine_module
 from uam4x.execution_engine import Engine
-from uam4x.results import Result, Tradestudy
+from uam4x.results import Result, TradestudyResults
 from uam4x.study import Study
 from uam4x.vehicle import Vehicle
 from uam4x.subsystems import Subsystem, register_subsystem
@@ -464,15 +464,21 @@ def test_run_state_parallel_rebuilds_study_and_runs(tmp_path):
     study.get_solution("test_solution").add_link("stage1.arr_scalar", "stage2.arr_scalar")
     study.get_solution("test_solution").add_tracked_output("stage2.objective")
 
+    trade_work_dir = tmp_path / "parallel"
     result = Engine._run_state_parallel(
         study._to_dict(),
         solution_name="test_solution",
         state={},
-        iteration=None,
-        trade_work_dir=str(tmp_path / "parallel"),
+        iteration=0,
+        trade_work_dir=str(trade_work_dir),
+        create_step_work_dirs=False,
     )
 
     assert result.outputs["stage2.objective"] == pytest.approx(40.0)
+    assert trade_work_dir.is_dir()
+    assert not (trade_work_dir / "out_0").exists()
+    assert not (trade_work_dir / "stage1").exists()
+    assert not (trade_work_dir / "stage2").exists()
 
 
 def test_run_solution_populates_results_and_runtime_metadata(engine_setup, monkeypatch):
@@ -549,6 +555,40 @@ def test_run_tradestudy_parameter_sweep(engine_setup, monkeypatch):
     assert values == [pytest.approx(38.0), pytest.approx(40.0)]
 
 
+def test_run_tradestudy_without_work_dirs_uses_shared_trade_directory(
+    engine_setup, monkeypatch
+):
+    study, engine, _ = engine_setup
+    _mock_python_cmd(monkeypatch)
+    study.add_trade(
+        "in_memory_sweep",
+        ParameterSweep({"vehicles.exec_vehicle.core.x": [1.0, 2.0]}),
+    )
+
+    engine.run_tradestudy(
+        "in_memory_sweep",
+        solution_name="test_solution",
+        num_processors=1,
+        create_step_work_dirs=False,
+    )
+
+    trade_work_dir = (
+        Path(engine.work_dir) / "test_solution" / "in_memory_sweep"
+    )
+    assert trade_work_dir.is_dir()
+    assert not (trade_work_dir / "out_0").exists()
+    assert not (trade_work_dir / "out_1").exists()
+    assert not (trade_work_dir / "stage1").exists()
+    assert not (trade_work_dir / "stage2").exists()
+
+    ts = study.results.get_tradestudy("test_solution", "in_memory_sweep")
+    assert [result.case_id for result in ts._results] == [0, 1]
+    assert [result.outputs["stage2.objective"] for result in ts._results] == [
+        pytest.approx(38.0),
+        pytest.approx(40.0),
+    ]
+
+
 def test_run_tradestudy_optimization_uses_case_zero(engine_setup, monkeypatch):
     study, engine, _ = engine_setup
     _mock_python_cmd(monkeypatch)
@@ -578,7 +618,7 @@ def test_run_parameter_sweep_invalid_num_processors_raises(engine_setup):
             trade_states=[{}],
             trade_work_dir=str(Path(engine.work_dir) / "test_solution" / "invalid_np"),
             num_processors=-1,
-            trade_result=Tradestudy(
+            trade_result=TradestudyResults(
                 "invalid_np",
                 "test_solution",
                 executed_vehicles=study.vehicles,

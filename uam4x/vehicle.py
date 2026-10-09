@@ -7,6 +7,25 @@ from collections import Counter
 
 
 def copy_vehicles(vehicle_manager:VehicleManager):
+    """Return a deep, serialization-safe copy of a vehicle manager.
+
+    Parameters
+    ----------
+    vehicle_manager : VehicleManager
+        Manager containing the vehicles to copy.
+
+    Returns
+    -------
+    VehicleManager
+        New manager populated with reconstructed copies of every vehicle.
+
+    Notes
+    -----
+    Vehicles are copied through their dictionary representations so the copy
+    has no shared vehicle, subsystem, mode, or parameter objects with the
+    source manager.
+
+    """
     execution_vehicles = VehicleManager()
     for vehicle in vehicle_manager:
         vehicle_dict = copy.deepcopy(vehicle._to_dict())

@@ -1,5 +1,5 @@
 import pytest
-from uam4x.subsystems import Subsystem, Wing, Rotor, RotorBladeRegion, Aircraft, _Mode
+from uam4x.subsystems import Subsystem, Wing, Rotor, RotorBladeRegion, Rotorcraft, _Mode
 import numpy as np
 from uam4x.vehicle import Vehicle, VehicleManager
 import  re
@@ -27,8 +27,8 @@ def demo_rotor_blade_region() -> RotorBladeRegion:
     return RotorBladeRegion('rotor_blade_region_demo')
 
 @pytest.fixture
-def demo_aircraft() -> Aircraft:
-    return Aircraft('aircraft_demo')
+def demo_rotorcraft() -> Rotorcraft:
+    return Rotorcraft('rotorcraft_demo')
 
 @pytest.fixture
 def demo_mode()-> _Mode:
@@ -100,19 +100,19 @@ def test_adding_same_vehicle(demo_vehicle_manager):
 
 # Expected behavior checks
 #Test adding components
-def test_adding_vehicle_components_good(demo_rotor, demo_wing, demo_aircraft):
-    veh = Vehicle('SampleVehicle', [demo_wing, demo_aircraft])
+def test_adding_vehicle_components_good(demo_rotor, demo_wing, demo_rotorcraft):
+    veh = Vehicle('SampleVehicle', [demo_wing, demo_rotorcraft])
     veh.add_component(demo_rotor)
 
     assert veh.wing_demo is demo_wing
-    assert veh.aircraft_demo is  demo_aircraft
+    assert veh.rotorcraft_demo is demo_rotorcraft
     assert veh.rotor_demo is demo_rotor
 
 
 
 #Check querying of attributes via name
 def test_vehicle_component_attribute_values(
-    demo_vehicle, demo_wing, demo_rotor, demo_rotor_blade_region, demo_aircraft
+    demo_vehicle, demo_wing, demo_rotor, demo_rotor_blade_region, demo_rotorcraft
 ):
     # -------------------------
     # Set some non-default values
@@ -123,10 +123,10 @@ def test_vehicle_component_attribute_values(
     # sweep, aspect_ratio left at defaults
 
     demo_rotor.vtip = 60.0
-    demo_rotor.set_parameter("tilt", 10.0)
+    demo_rotor.set_parameter("incidence", 10.0)
     demo_rotor.radius = 3.14
     demo_rotor.nblade = 5
-    # rpm, blade_chord, collective_pitch left at defaults
+    # omega, root_chord, pitch_angle left at defaults
 
     demo_rotor_blade_region.spanwise_start = 40.0
     demo_rotor_blade_region.set_parameter("spanwise_stop", 50.0)
@@ -134,7 +134,7 @@ def test_vehicle_component_attribute_values(
     demo_rotor_blade_region.chord_stop = 69.0
     # everything else left at defaults
 
-    demo_aircraft.Npass = 15
+    demo_rotorcraft.npass = 15.0
     # Wpass left at default
 
     # -------------------------
@@ -143,7 +143,7 @@ def test_vehicle_component_attribute_values(
     demo_vehicle.add_component(demo_wing)
     demo_vehicle.add_component(demo_rotor)
     demo_vehicle.add_component(demo_rotor_blade_region)
-    demo_vehicle.add_component(demo_aircraft)
+    demo_vehicle.add_component(demo_rotorcraft)
 
     # -------------------------
     # Identity: access via name returns the same objects
@@ -151,7 +151,7 @@ def test_vehicle_component_attribute_values(
     assert demo_vehicle.wing_demo is demo_wing
     assert demo_vehicle.rotor_demo is demo_rotor
     assert demo_vehicle.rotor_blade_region_demo is demo_rotor_blade_region
-    assert demo_vehicle.aircraft_demo is demo_aircraft
+    assert demo_vehicle.rotorcraft_demo is demo_rotorcraft
 
     # -------------------------
     # Wing parameters (explicit + defaults)
@@ -170,14 +170,14 @@ def test_vehicle_component_attribute_values(
     # -------------------------
     # explicit
     assert demo_vehicle.rotor_demo.vtip == demo_rotor.vtip == 60.0
-    assert demo_vehicle.rotor_demo.tilt == demo_rotor.tilt == 10.0
+    assert demo_vehicle.rotor_demo.incidence == demo_rotor.incidence == 10.0
     assert demo_vehicle.rotor_demo.radius == demo_rotor.radius == 3.14
     assert demo_vehicle.rotor_demo.nblade == demo_rotor.nblade == 5
 
     # defaults
-    assert demo_vehicle.rotor_demo.rpm == demo_rotor.rpm == 1000.0
-    assert demo_vehicle.rotor_demo.blade_chord == demo_rotor.blade_chord == 0.1
-    assert demo_vehicle.rotor_demo.collective_pitch == demo_rotor.collective_pitch == 0.0
+    assert demo_vehicle.rotor_demo.omega == demo_rotor.omega == 1000.0
+    assert demo_vehicle.rotor_demo.root_chord == demo_rotor.root_chord == 1.0
+    assert demo_vehicle.rotor_demo.pitch_angle == demo_rotor.pitch_angle == 0.0
 
     # -------------------------
     # RotorBladeRegion parameters (explicit + defaults)
@@ -263,17 +263,17 @@ def test_vehicle_component_attribute_values(
     )
 
     # -------------------------
-    # Aircraft parameters (explicit + defaults)
+    # Rotorcraft parameters (explicit + defaults)
     # -------------------------
     # explicit
-    assert demo_vehicle.aircraft_demo.Npass == demo_aircraft.Npass == 15
+    assert demo_vehicle.rotorcraft_demo.npass == demo_rotorcraft.npass == 15.0
 
     # default
-    assert demo_vehicle.aircraft_demo.Wpass == demo_aircraft.Wpass == 0.0
+    assert demo_vehicle.rotorcraft_demo.Wpass == demo_rotorcraft.Wpass == 0.0
 
 
 def test_vehicle_component_attribute_identity(
-    demo_vehicle, demo_wing, demo_rotor, demo_rotor_blade_region, demo_aircraft
+    demo_vehicle, demo_wing, demo_rotor, demo_rotor_blade_region, demo_rotorcraft
 ):
     # -------------------------
     # Set some non-default values
@@ -284,10 +284,10 @@ def test_vehicle_component_attribute_identity(
     # sweep, aspect_ratio left at defaults
 
     demo_rotor.vtip = 60.0
-    demo_rotor.set_parameter("tilt", 10.0)
+    demo_rotor.set_parameter("incidence", 10.0)
     demo_rotor.radius = 3.14
     demo_rotor.nblade = 5
-    # rpm, blade_chord, collective_pitch left at defaults
+    # omega, root_chord, pitch_angle left at defaults
 
     demo_rotor_blade_region.spanwise_start = 40.0
     demo_rotor_blade_region.set_parameter("spanwise_stop", 50.0)
@@ -295,7 +295,7 @@ def test_vehicle_component_attribute_identity(
     demo_rotor_blade_region.chord_stop = 69.0
     # everything else left at defaults
 
-    demo_aircraft.Npass = 15
+    demo_rotorcraft.npass = 15.0
     # Wpass left at default
 
     # -------------------------
@@ -304,7 +304,7 @@ def test_vehicle_component_attribute_identity(
     demo_vehicle.add_component(demo_wing)
     demo_vehicle.add_component(demo_rotor)
     demo_vehicle.add_component(demo_rotor_blade_region)
-    demo_vehicle.add_component(demo_aircraft)
+    demo_vehicle.add_component(demo_rotorcraft)
 
     # -------------------------
     # Identity: access via name returns the same subsystem objects
@@ -312,7 +312,7 @@ def test_vehicle_component_attribute_identity(
     assert demo_vehicle.wing_demo is demo_wing
     assert demo_vehicle.rotor_demo is demo_rotor
     assert demo_vehicle.rotor_blade_region_demo is demo_rotor_blade_region
-    assert demo_vehicle.aircraft_demo is demo_aircraft
+    assert demo_vehicle.rotorcraft_demo is demo_rotorcraft
 
     # -------------------------
     # Wing parameters (explicit + defaults) – identity
@@ -331,14 +331,14 @@ def test_vehicle_component_attribute_identity(
     # -------------------------
     # explicit
     assert demo_vehicle.rotor_demo.vtip is demo_rotor.vtip
-    assert demo_vehicle.rotor_demo.tilt is demo_rotor.tilt
+    assert demo_vehicle.rotor_demo.incidence is demo_rotor.incidence
     assert demo_vehicle.rotor_demo.radius is demo_rotor.radius
     assert demo_vehicle.rotor_demo.nblade is demo_rotor.nblade
 
     # defaults
-    assert demo_vehicle.rotor_demo.rpm is demo_rotor.rpm
-    assert demo_vehicle.rotor_demo.blade_chord is demo_rotor.blade_chord
-    assert demo_vehicle.rotor_demo.collective_pitch is demo_rotor.collective_pitch
+    assert demo_vehicle.rotor_demo.omega is demo_rotor.omega
+    assert demo_vehicle.rotor_demo.root_chord is demo_rotor.root_chord
+    assert demo_vehicle.rotor_demo.pitch_angle is demo_rotor.pitch_angle
 
     # -------------------------
     # RotorBladeRegion parameters (explicit + defaults) – identity
@@ -412,13 +412,13 @@ def test_vehicle_component_attribute_identity(
     )
 
     # -------------------------
-    # Aircraft parameters (explicit + defaults) – identity
+    # Rotorcraft parameters (explicit + defaults) – identity
     # -------------------------
     # explicit
-    assert demo_vehicle.aircraft_demo.Npass is demo_aircraft.Npass
+    assert demo_vehicle.rotorcraft_demo.npass is demo_rotorcraft.npass
 
     # default
-    assert demo_vehicle.aircraft_demo.Wpass is demo_aircraft.Wpass
+    assert demo_vehicle.rotorcraft_demo.Wpass is demo_rotorcraft.Wpass
 
 
 #Check adding component then querying
@@ -431,32 +431,32 @@ def test_vehicle_component_access(demo_vehicle,demo_wing):
     assert demo_vehicle.get_component('wing_demo') is demo_vehicle.wing_demo
 
 # Ensure test_get_component_names is correct
-def test_get_component_names(demo_vehicle,demo_wing,demo_aircraft):
+def test_get_component_names(demo_vehicle,demo_wing,demo_rotorcraft):
 
 
     demo_vehicle.add_component(demo_wing)
-    demo_vehicle.add_component(demo_aircraft)
+    demo_vehicle.add_component(demo_rotorcraft)
     assert 'wing_demo' in demo_vehicle.get_component_names()
-    assert 'aircraft_demo' in demo_vehicle.get_component_names()
-    assert ['wing_demo','aircraft_demo']==demo_vehicle.get_component_names()
+    assert 'rotorcraft_demo' in demo_vehicle.get_component_names()
+    assert ['wing_demo','rotorcraft_demo']==demo_vehicle.get_component_names()
 
 # Ensure that removing a component does what is expected
 
-def test_remove_component(demo_vehicle,demo_wing,demo_aircraft):
+def test_remove_component(demo_vehicle,demo_wing,demo_rotorcraft):
     demo_vehicle.add_component(demo_wing)
-    demo_vehicle.add_component(demo_aircraft)
+    demo_vehicle.add_component(demo_rotorcraft)
     assert 'wing_demo' in demo_vehicle.get_component_names()
     demo_vehicle.remove_component(demo_wing)
     assert 'wing_demo' not in demo_vehicle.get_component_names()
-    assert demo_vehicle.get_component_names()==['aircraft_demo']
+    assert demo_vehicle.get_component_names()==['rotorcraft_demo']
 
 #Check the components property
-def test_components_property(demo_vehicle,demo_wing,demo_aircraft):
+def test_components_property(demo_vehicle,demo_wing,demo_rotorcraft):
     demo_vehicle.add_component(demo_wing)
-    demo_vehicle.add_component(demo_aircraft)
-    assert demo_vehicle.components == [demo_wing,demo_aircraft]
+    demo_vehicle.add_component(demo_rotorcraft)
+    assert demo_vehicle.components == [demo_wing,demo_rotorcraft]
     assert demo_vehicle.components[0] is demo_wing
-    assert demo_vehicle.components[1] is demo_aircraft
+    assert demo_vehicle.components[1] is demo_rotorcraft
 
 #check expected positive behavior of check_all_parameter_types
 def test_check_all_parameter_types_positive(demo_vehicle,demo_wing):
@@ -543,24 +543,24 @@ def test_vehicle_to_dict(demo_vehicle, demo_wing):
     )
 
 # Test string access
-def test_vehicle__str__(demo_vehicle, demo_wing, demo_aircraft):
+def test_vehicle__str__(demo_vehicle, demo_wing, demo_rotorcraft):
     demo_vehicle.add_component(demo_wing)
-    demo_vehicle.add_component(demo_aircraft)
-    assert demo_vehicle.__str__() == 'Vehicle(name=vehicle_demo, components=[wing_demo (Wing), aircraft_demo (Aircraft)])'
+    demo_vehicle.add_component(demo_rotorcraft)
+    assert demo_vehicle.__str__() == 'Vehicle(name=vehicle_demo, components=[wing_demo (Wing), rotorcraft_demo (Rotorcraft)])'
 
-def test_vehicle_from_dict_roundtrip(demo_wing, demo_aircraft):
+def test_vehicle_from_dict_roundtrip(demo_wing, demo_rotorcraft):
     # -------------------------
     # Create original vehicle with components
     # -------------------------
     demo_wing.area = 123.0
     demo_wing.span = 42.0
-    demo_aircraft.Npass = 7
+    demo_rotorcraft.npass = 7.0
 
-    original = Vehicle("demo_vehicle_from_dict", [demo_wing, demo_aircraft])
+    original = Vehicle("demo_vehicle_from_dict", [demo_wing, demo_rotorcraft])
 
     # Sanity: original vehicle
     assert original.name == "demo_vehicle_from_dict"
-    assert original.get_component_names() == ["wing_demo", "aircraft_demo"]
+    assert original.get_component_names() == ["wing_demo", "rotorcraft_demo"]
 
     # -------------------------
     # Serialize to dict
@@ -581,22 +581,22 @@ def test_vehicle_from_dict_roundtrip(demo_wing, demo_aircraft):
 
     # Component-level checks: same names and types
     rebuilt_names = rebuilt.get_component_names()
-    assert set(rebuilt_names) == {"wing_demo", "aircraft_demo"}
+    assert set(rebuilt_names) == {"wing_demo", "rotorcraft_demo"}
 
     rebuilt_wing = rebuilt.get_component("wing_demo")
-    rebuilt_aircraft = rebuilt.get_component("aircraft_demo")
+    rebuilt_rotorcraft = rebuilt.get_component("rotorcraft_demo")
 
     assert isinstance(rebuilt_wing, Wing)
-    assert isinstance(rebuilt_aircraft, Aircraft)
+    assert isinstance(rebuilt_rotorcraft, Rotorcraft)
 
     # Parameter values preserved (not identity, just equality)
     assert rebuilt_wing.area == demo_wing.area == 123.0
     assert rebuilt_wing.span == demo_wing.span == 42.0
-    assert rebuilt_aircraft.Npass == demo_aircraft.Npass == 7
+    assert rebuilt_rotorcraft.npass == demo_rotorcraft.npass == 7.0
 
     # Make sure new components are distinct objects from originals
     assert rebuilt_wing is not demo_wing
-    assert rebuilt_aircraft is not demo_aircraft
+    assert rebuilt_rotorcraft is not demo_rotorcraft
 
 #----------------------------------------------------------Negative checks
 def test_component_access_wrong_name(demo_vehicle, demo_wing):
