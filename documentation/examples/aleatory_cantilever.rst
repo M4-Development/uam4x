@@ -100,7 +100,7 @@ studies and one Gauss quadrature PCE study.
 
     def setup_tradestudy(study: Study):
         lhs_reg_pce_analysis = RegressionPCE(
-            42, LatinHypercubeSampler, poly_order=5, seed=0
+            42, LatinHypercubeSampler, seed=0
         )
         lhs_reg_pce_analysis.add_aleatory_variable(
             "vehicles.vehicle1.beam1.bending_moment",
@@ -145,7 +145,7 @@ analytical moments directly from those surrogate objects.
     solution_results = study.results.get_solution_result("basic")
     lhs_nipc_ts = solution_results.get_tradestudy("lhs_pce_analysis")
     lhs_nipc_post = RegressionPCEPost(lhs_nipc_ts)
-    lhs_nipc_surrogate = lhs_nipc_post.generate_surrogate("calculate_failure.g_val")
+    lhs_nipc_surrogate = lhs_nipc_post.generate_surrogate("calculate_failure.g_val", poly_order=5)
     lhs_mean = float(lhs_nipc_surrogate.analytical_mean)
     lhs_std = float(lhs_nipc_surrogate.analytical_std)
 

@@ -382,8 +382,8 @@ class Study:
                If True, commit the written JSON file or files to the current git
                branch.
            commit_code : bool, optional
-               If True, commit existing tracked code changes before committing the
-               generated JSON artifacts. Requires ``commit=True``.
+               If True, commit tracked changes and untracked non-ignored files
+               before committing the generated JSON artifacts. Requires ``commit=True``.
 
            Returns
            -------
@@ -470,8 +470,8 @@ class Study:
             If True and ``commit`` is also True, create and check out a new
             auto-generated branch before committing.
         commit_code : bool, optional
-            If True, commit existing tracked code changes before committing
-            ``model.json``. Requires ``commit=True``.
+            If True, commit tracked changes and untracked non-ignored files
+            before committing ``model.json``. Requires ``commit=True``.
 
         Returns
         -------
@@ -518,8 +518,8 @@ class Study:
         commit : bool, optional
             If True, commit the generated JSON file to git.
         commit_code : bool, optional
-            If True, commit existing tracked code changes before committing
-            ``results.json``. Requires ``commit=True``.
+            If True, commit tracked changes and untracked non-ignored files
+            before committing ``results.json``. Requires ``commit=True``.
 
 
         Returns
@@ -602,8 +602,8 @@ class Study:
         commit : bool, optional
             If True, commit the generated JSON file to git.
         commit_code : bool, optional
-            If True, commit existing tracked code changes before committing
-            ``post.json``. Requires ``commit=True``.
+            If True, commit tracked changes and untracked non-ignored files
+            before committing ``post.json``. Requires ``commit=True``.
 
         Returns
         -------
@@ -1178,6 +1178,19 @@ class Study:
             raise RuntimeError("Unable to inspect repository changes before autocommit.")
         return result.returncode
 
+    @staticmethod
+    def _get_untracked_nonignored_files(repo):
+        result = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+            cwd=repo.workdir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("Unable to inspect repository for untracked files.")
+
+        return [path for path in result.stdout.split("\0") if path]
+
     def _checkout_new_autocommit_branch(self, repo):
         parent_commit = repo[repo.head.target]
         increment = 1
@@ -1191,10 +1204,11 @@ class Study:
         repo.checkout(f"refs/heads/{new_branch_name}")
 
     def _prepare_repository_for_autocommit(self, new_branch, commit_code):
-        """Validate the worktree, optionally branch, and commit tracked code."""
+        """Validate the worktree, optionally branch, and commit code changes."""
         repo = self._get_repository_for_autocommit()
         staged_changes = self._git_diff_returncode(repo, staged=True)
         unstaged_changes = self._git_diff_returncode(repo)
+        untracked_paths = self._get_untracked_nonignored_files(repo)
 
         if not commit_code:
             if staged_changes:
@@ -1208,15 +1222,23 @@ class Study:
                     "attempting to autocommit. Set commit_code=True to commit "
                     "them first."
                 )
+            if untracked_paths:
+                paths = ", ".join(sorted(untracked_paths))
+                raise RuntimeError(
+                    "The repository has untracked, non-ignored files when attempting "
+                    f"to autocommit: {paths}"
+                )
 
         if new_branch:
             self._checkout_new_autocommit_branch(repo)
 
-        if not commit_code or not (staged_changes or unstaged_changes):
+        if not commit_code or not (
+            staged_changes or unstaged_changes or untracked_paths
+        ):
             return
 
         subprocess.run(
-            ["git", "add", "--update", "--", "."],
+            ["git", "add", "--all", "--", "."],
             cwd=repo.workdir,
             check=True,
         )
@@ -1233,6 +1255,35 @@ class Study:
         repo.create_commit(
             "HEAD", author, committer, "AutoCommit: Committed code", tree, [parent]
         )
+
+    def check_git(self):
+        """Verify that the configured repository has no uncommitted files.
+
+        Ignored files are excluded from this check. Staged changes, unstaged
+        changes to tracked files, and untracked non-ignored files cause the
+        check to fail.
+        """
+        repo = self._get_repository_for_autocommit()
+
+        if self._git_diff_returncode(repo, staged=True):
+            raise RuntimeError(
+                "The repository has staged changes; commit or discard them "
+                "before execution."
+            )
+
+        if self._git_diff_returncode(repo):
+            raise RuntimeError(
+                "The repository has unstaged changes to tracked files; "
+                "commit or discard them before execution."
+            )
+
+        untracked_paths = self._get_untracked_nonignored_files(repo)
+        if untracked_paths:
+            paths = ", ".join(sorted(untracked_paths))
+            raise RuntimeError(
+                "The repository has untracked, non-ignored files; add, ignore, "
+                f"or remove them before execution: {paths}"
+            )
 
     def _commit_json_to_branch(self, json_paths,
                                commit_message):
@@ -1413,8 +1464,8 @@ class Variants:
         Parameters
         ----------
         commit_code : bool, optional
-            If True, commit existing tracked code changes before committing
-            generated JSON artifacts. Requires ``commit=True``.
+            If True, commit tracked changes and untracked non-ignored files
+            before committing generated JSON artifacts. Requires ``commit=True``.
         commit : bool, optional
             If True, also commit generated JSON artifacts to git.
 

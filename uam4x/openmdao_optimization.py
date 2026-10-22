@@ -163,6 +163,7 @@ class Optimization:
                 group.options["step_name"] = step_name
                 group.options["work_dir"] = work_dir
                 group.options["links"] = data.links
+                group.options["cycle_solver_options"] = self.state.get("cycle_solver_options", {})
                 if isinstance(self.plugins[step_name], dict):
                     group.options["sub_plugins"] = self.plugins[step_name]
                 else:
@@ -213,6 +214,7 @@ class Optimization:
 
             const_type = self.solution.get_var_type(name, self.plugins)
             lower, upper = data["lower"], data["upper"]
+            equals = data.get("equals")
             indices = data["indices"]
 
             # additional array wrapping here for floats, lists already wrapped
@@ -221,14 +223,19 @@ class Optimization:
                     lower = np.array(lower)
                 if upper is not None:
                     upper = np.array(upper)
+                if equals is not None:
+                    equals = np.array(equals)
             else:
                 if lower is not None:
                     lower = const_type(lower)
                 if upper is not None:
                     upper = const_type(upper)
-            problem.model.add_constraint(
-                name.replace(".", "~"), lower=lower, upper=upper, indices=indices
-            )
+                if equals is not None:
+                    equals = const_type(equals)
+            constraint_options = {"lower": lower, "upper": upper, "indices": indices}
+            if equals is not None:
+                constraint_options["equals"] = equals
+            problem.model.add_constraint(name.replace(".", "~"), **constraint_options)
 
         result = Result(state=self.state)
         # add template hashes to results before template files are run in optimization
@@ -238,6 +245,7 @@ class Optimization:
             if plug._template_to_checksum:
                 for path, checksum in plug._template_to_checksum.items():
                     result._add_template_checksum(path, checksum)
+
         # add objectives
         problem.model.add_objective(self.state["objective_name"].replace(".", "~"))
         driver_name = self.state["driver"]
@@ -249,6 +257,12 @@ class Optimization:
         if hasattr(problem.driver, "opt_settings"):
             for name, value in self.state["optimizer_options"].items():
                 problem.driver.opt_settings[name] = value
+
+        approx = self.solution._approx_totals
+        if approx["compute"]:
+            problem.model.approx_totals(
+                method=approx["method"], form=approx["form"], step=approx["step"]
+            )
 
         problem.model.options["auto_order"]=True
         problem.setup()
@@ -473,34 +487,38 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
             plugin_name = self.options["step_name"]
             start_ind = len(plugin_name.split("."))
             name = ".".join(input_name.split(".")[start_ind:])
-            input_type = self.plugin.plugin_input_names[name]["type"]
-            input_shape = self.plugin.plugin_input_names[name]["shape"]
+            metadata = self.plugin.plugin_input_names[name]
+            input_type = metadata["type"]
+            default = metadata["value"]
             if not is_continuous_type_or_value(input_type):
-                if input_type is int:
-                    temp = 1
-                else:
-                    temp = "temp"
-                self.add_discrete_input(input_name.replace(".", "~"), temp)
+                if default is None:
+                    default = 1 if input_type is int else "temp"
+                self.add_discrete_input(input_name.replace(".", "~"), val=default)
             else:
                 cont_input = True
-                self.add_input(input_name.replace(".", "~"), shape=input_shape)
+                options = {"shape": metadata["shape"]}
+                if default is not None:
+                    options["val"] = default
+                self.add_input(input_name.replace(".", "~"), **options)
 
         for output_name in self.output_names:
             plugin_name = self.options["step_name"]
             start_ind = len(plugin_name.split("."))
             name = ".".join(output_name.split(".")[start_ind:])
-            output_type = self.plugin.plugin_output_names[name]["type"]
-            output_shape = self.plugin.plugin_output_names[name]["shape"]
+            metadata = self.plugin.plugin_output_names[name]
+            output_type = metadata["type"]
+            default = metadata["value"]
 
             if not is_continuous_type_or_value(output_type):
-                if output_type is int:
-                    temp = 1
-                else:
-                    temp = "temp"
-                self.add_discrete_output(output_name.replace(".", "~"), temp)
+                if default is None:
+                    default = 1 if output_type is int else "temp"
+                self.add_discrete_output(output_name.replace(".", "~"), val=default)
             else:
                 cont_output = True
-                self.add_output(output_name.replace(".", "~"), shape=output_shape)
+                options = {"shape": metadata["shape"]}
+                if default is not None:
+                    options["val"] = default
+                self.add_output(output_name.replace(".", "~"), **options)
 
         if cont_input and cont_output:
             partials = self.plugin.build_partials(
@@ -601,6 +619,7 @@ class UniversalOpenMDAOGroup(om.Group):
         self.options.declare("sub_plugins")
         self.options.declare("work_dir")
         self.options.declare("links")
+        self.options.declare("cycle_solver_options", default={})
 
     def setup(self):
         """Build OpenMDAO subsystems and connections for the wrapped solution group.
@@ -619,6 +638,11 @@ class UniversalOpenMDAOGroup(om.Group):
         work_dir = self.options["work_dir"]
         for step_name, data in uamgroup._execution_steps.items():
             if isinstance(data, dict):
+                # Match the single-point runner's directory for each step.
+                step_work_dir = os.path.join(
+                    os.path.dirname(work_dir),
+                    f"{group_name}.{step_name}",
+                )
                 input_names = set(
                     [
                         group_name + "." + step_name + "." + input_name
@@ -639,11 +663,11 @@ class UniversalOpenMDAOGroup(om.Group):
                 comp.options["plugin"] = sub_plugs[step_name]
                 comp.options["input_names"] = input_names
                 comp.options["output_names"] = output_names
-                # clean the work dir between runs
-                comp.options["work_dir"] = work_dir
-                if os.path.isdir(work_dir):
-                    shutil.rmtree(work_dir)
-                os.makedirs(work_dir)
+                # Clean this step's work directory without deleting sibling outputs.
+                comp.options["work_dir"] = step_work_dir
+                if os.path.isdir(step_work_dir):
+                    shutil.rmtree(step_work_dir)
+                os.makedirs(step_work_dir)
                 comp.options["step_name"] = group_name + "." + step_name
             elif isinstance(data, Group):
                 nested_om_group = self.add_subsystem(
@@ -653,6 +677,7 @@ class UniversalOpenMDAOGroup(om.Group):
                 nested_om_group.options["step_name"] = group_name + "." + step_name
                 nested_om_group.options["work_dir"] = work_dir
                 nested_om_group.options["links"] = data.links
+                nested_om_group.options["cycle_solver_options"] = self.options["cycle_solver_options"]
                 if isinstance(sub_plugs[step_name], dict):
                     nested_om_group.options["sub_plugins"] = sub_plugs[step_name]
                 else:
@@ -672,6 +697,8 @@ class UniversalOpenMDAOGroup(om.Group):
 
         if uamgroup._is_cycle:
             self.nonlinear_solver = CYCLE_SOLVER_NAME_TO_SOLVER[uamgroup.cycle_solver]()
+            for name, value in self.options["cycle_solver_options"].items():
+                self.nonlinear_solver.options[name] = value
 
         approx_totals_dict = uamgroup._approx_totals
         if approx_totals_dict["compute"]:

@@ -49,6 +49,7 @@ class Optimization:
         self.objective_name = ""
         self._mdao_driver_options = {"optimizer": "SLSQP"}
         self._optimizer_options = {}
+        self._cycle_solver_options = {}
         self.driver = "ScipyOptimizeDriver"
 
     def _to_dict(self):
@@ -68,6 +69,7 @@ class Optimization:
             "objective_name": self.objective_name,
             "driver_options": self._mdao_driver_options,
             "optimizer_options": self._optimizer_options,
+            "cycle_solver_options": self._cycle_solver_options,
             "driver": self.driver,
         }
         return save_dict
@@ -108,6 +110,10 @@ class Optimization:
 
         """
         self._mdao_driver_options[name] = value
+
+    def set_cycle_option(self, name, value):
+        """Set an OpenMDAO cycle-solver option for this optimization."""
+        self._cycle_solver_options[name] = value
 
     def add_optimizer_option(self, name, value):
         """Add or overwrite an optimizer-specific option.
@@ -168,6 +174,8 @@ class Optimization:
                 constraint_vals["lower"] = np.array(constraint_vals["lower"])
             if isinstance(constraint_vals["upper"], list):
                 constraint_vals["upper"] = np.array(constraint_vals["upper"])
+            if isinstance(constraint_vals.get("equals"), list):
+                constraint_vals["equals"] = np.array(constraint_vals["equals"])
         for des_var, des_var_vals in data["des_vars"].items():
             if isinstance(des_var_vals["lower"], list):
                 des_var_vals["lower"] = np.array(des_var_vals["lower"])
@@ -186,6 +194,8 @@ class Optimization:
         if data["optimizer_options"]:
             for name, value in data["optimizer_options"].items():
                 obj.add_optimizer_option(name, value)
+        for name, value in data.get("cycle_solver_options", {}).items():
+            obj.set_cycle_option(name, value)
         return obj
 
     def add_design_var(
@@ -267,6 +277,7 @@ class Optimization:
         lower: np.ndarray | float | np.floating | None = None,
         upper: np.ndarray | float | np.floating | None = None,
         indices=None,
+        equals: np.ndarray | float | np.floating | None = None,
     ):
         """Add a constraint to the optimization definition.
 
@@ -278,6 +289,8 @@ class Optimization:
             Lower bound for the constraint.
         upper : np.ndarray | float | np.floating | None, optional
             Upper bound for the constraint.
+        equals : np.ndarray | float | np.floating | None, optional
+            Equality target, used instead of lower and upper bounds.
         indices : list or ndarray, optional
             Indices of an array-valued constrained variable to apply as active
             constraints. If omitted, the full variable is constrained.
@@ -296,14 +309,22 @@ class Optimization:
             bound.
 
         """
-        self.check_upper_lower(
-            name, const_or_dv="constraint", lower=lower, upper=upper, indices=indices
-        )
+        if equals is not None:
+            if lower is not None or upper is not None:
+                raise ValueError("equals cannot be combined with lower or upper bounds")
+            if not is_continuous_type_or_value(equals):
+                raise TypeError("Equality target must be a float or floating point array")
+        else:
+            self.check_upper_lower(
+                name, const_or_dv="constraint", lower=lower, upper=upper, indices=indices
+            )
         self.constraints[name] = {
             "lower": lower,
             "upper": upper,
             "indices": indices,
         }
+        if equals is not None:
+            self.constraints[name]["equals"] = equals
 
     def edit_constraint(
             self,

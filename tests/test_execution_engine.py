@@ -495,6 +495,9 @@ def test_run_solution_populates_results_and_runtime_metadata(engine_setup, monke
 
     engine.run_solution("test_solution")
 
+    step_dir = Path(engine.work_dir) / "test_solution" / "Default_State"
+    assert (step_dir / "stage1").is_dir()
+    assert not (step_dir / "solution.stage1").exists()
     assert checked_states == [{}]
     ts = study.results.get_tradestudy("test_solution", "Default State")
     assert len(ts._results) == 1
@@ -506,6 +509,20 @@ def test_run_solution_populates_results_and_runtime_metadata(engine_setup, monke
     assert "environment" in md
     assert "step_plugin_hashes" in md
     assert "Completion_Time" in md["time_info"]
+
+
+def test_run_solution_checks_git_before_execution(engine_setup, monkeypatch):
+    study, engine, _ = engine_setup
+
+    def fail_git_check():
+        raise RuntimeError("git check failed")
+
+    monkeypatch.setattr(study, "check_git", fail_git_check)
+
+    with pytest.raises(RuntimeError, match="git check failed"):
+        engine.run_solution("test_solution", check_git=True)
+
+    assert not (Path(engine.work_dir) / "test_solution" / "Default_State").exists()
 
 
 def test_run_solution_keeps_results_separate_by_solution(engine_setup, monkeypatch):
@@ -553,6 +570,25 @@ def test_run_tradestudy_parameter_sweep(engine_setup, monkeypatch):
 
     values = [r.outputs["stage2.objective"] for r in ts._results]
     assert values == [pytest.approx(38.0), pytest.approx(40.0)]
+
+
+def test_run_tradestudy_checks_git_before_execution(engine_setup, monkeypatch):
+    study, engine, _ = engine_setup
+    study.add_trade(
+        "sweep", ParameterSweep({"vehicles.exec_vehicle.core.x": [1.0]})
+    )
+
+    def fail_git_check():
+        raise RuntimeError("git check failed")
+
+    monkeypatch.setattr(study, "check_git", fail_git_check)
+
+    with pytest.raises(RuntimeError, match="git check failed"):
+        engine.run_tradestudy(
+            "sweep", solution_name="test_solution", check_git=True
+        )
+
+    assert not (Path(engine.work_dir) / "test_solution" / "sweep").exists()
 
 
 def test_run_tradestudy_without_work_dirs_uses_shared_trade_directory(

@@ -94,7 +94,7 @@ class BasicPost:
             )
         return ax
 
-    def linear_regression(self,var1,var2):
+    def linear_regression(self,x_name,y_name):
         """Fit a linear regression between two trade-study variables.
 
         Parameters
@@ -119,8 +119,12 @@ class BasicPost:
             Standard error of the estimated slope.
 
         """
-        x_values = self.tradestudy.get_variable(var1)
-        y_values = self.tradestudy.get_variable(var2)
+        x_values = self.tradestudy.get_variable(x_name)
+        y_values = self.tradestudy.get_variable(y_name)
+        if not np.all(np.isfinite(y_values)) and np.all(np.isfinite(x_values)):
+            print(f'Not all values are finite, trimming down values')
+            x_values=x_values[np.isfinite(y_values)]
+            y_values=y_values[np.isfinite(y_values)]
         slope, intercept, r_value, p_value, std_err = stats.linregress(x_values, y_values)
         return slope, intercept, r_value, p_value, std_err
 
@@ -655,13 +659,16 @@ class RegressionPCEPost(BasicAleatoryPost):
         """
         super().__init__(tradestudy)
 
-    def generate_surrogate(self, output_name):
+    def generate_surrogate(self, output_name, poly_order):
         """Build and return a polynomial-chaos surrogate for one output variable.
 
         Parameters
         ----------
         output_name : str
             Output variable name used to fit the surrogate.
+        poly_order : int
+            Nonnegative total polynomial order of the surrogate basis.
+            Supply a different order to fit the same samples again.
 
         Returns
         -------
@@ -679,8 +686,14 @@ class RegressionPCEPost(BasicAleatoryPost):
         such as Latin hypercube or Sobol sampling, the resulting holdout
         metrics can be optimistic because both subsets come from the same
         original design rather than independent validation samples.
+        After filtering and splitting, fewer training points than basis terms
+        raises an error. Fewer than three times the basis size emits a warning
+        recommending 2-3x oversampling.
 
         """
+        if isinstance(poly_order, bool) or not isinstance(poly_order, (int, np.integer)) or poly_order < 0:
+            raise ValueError("Polynomial order must be a nonnegative integer.")
+        poly_order = int(poly_order)
         ts = self.tradestudy.executed_tradestudy
         num_samples = len(self.tradestudy._results)
         aleatory_var_to_dist = ts.aleatory_var_to_dist
@@ -763,7 +776,6 @@ class RegressionPCEPost(BasicAleatoryPost):
         product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories, enum)
 
         # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
-        poly_order = ts.poly_order
         basis_size = enum.getBasisSizeFromTotalDegree(poly_order)
         if basis_size != comb(poly_order + len(aleatory_var_to_dist), poly_order):
             raise ValueError(
@@ -773,7 +785,18 @@ class RegressionPCEPost(BasicAleatoryPost):
             raise ValueError(
                 f"Not enough finite samples to fit the surrogate for '{output_name}'. "
                 f"Need at least {basis_size} samples for polynomial order {poly_order}, "
-                f"but only {abscissas.getSize()} remain after filtering."
+                f"but only {abscissas.getSize()} remain after filtering and the holdout split."
+            )
+
+        if abscissas.getSize() < 3 * basis_size:
+            warnings.warn(
+                f"Regression PCE for '{output_name}' is lightly sampled: "
+                f"polynomial order={poly_order}, num_variables={len(aleatory_var_to_dist)}, "
+                f"basis_size={basis_size}, training_samples={abscissas.getSize()}. "
+                f"Consider 2-3x oversampling ({2 * basis_size}-{3 * basis_size} "
+                "training points) after filtering and the holdout split.",
+                RuntimeWarning,
+                stacklevel=2,
             )
 
         # Selects first P elemens of the polynomial chaos basis according to enumeration function

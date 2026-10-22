@@ -187,22 +187,19 @@ class RegressionPCE(BasicAleatory):
         Number of aleatory samples to generate.
     SamplingClass : type
         Sampler class used to generate samples.
-    poly_order : int
-        Total polynomial order of the polynomial chaos basis.
 
     Notes
     -----
-    The workflow checks that the number of samples is at least the number of
-    basis terms required for the requested polynomial order and number of
-    aleatory variables. When a nonzero holdout fraction is used, the basis
-    feasibility check is performed against the effective post-split training
-    sample count. Split-based holdout validation is most defensible for
+    Polynomial order is supplied when fitting a surrogate in post-processing,
+    so the same samples can be used to compare different orders. Sample-count
+    checks are performed on the valid training points at fitting time.
+    Split-based holdout validation is most defensible for
     Monte Carlo sampling; for space-filling samplers such as Latin hypercube
     and Sobol, an independent validation design is usually more rigorous.
 
     """
 
-    def __init__(self, num_samples, SamplingClass,poly_order,
+    def __init__(self, num_samples, SamplingClass,
                  seed=42,hold_out_fraction=0.0,hold_out_seed=None):
         """Initialize a regression PCE workflow.
 
@@ -212,8 +209,6 @@ class RegressionPCE(BasicAleatory):
             Number of aleatory samples to generate.
         SamplingClass : type
             Sampler class used to generate samples.
-        poly_order : int
-            Total polynomial order of the polynomial chaos basis.
         seed : int, optional
             Random seed used to generate the regression sample set.
         hold_out_fraction : float, optional
@@ -230,49 +225,12 @@ class RegressionPCE(BasicAleatory):
 
         """
         super().__init__(num_samples, SamplingClass,seed)
-        self.poly_order = poly_order
         if hold_out_fraction<0.0 or hold_out_fraction>1.0:
             raise ValueError(f'Hold out fraction must be between zero and one')
         self.hold_out_fraction=hold_out_fraction
         if not hold_out_fraction==0.0:
             self.hold_out_seed=hold_out_seed if hold_out_seed is not None else 68
 
-
-    def _check_analysis(self):
-        # check order and number of aleatory vs. num samples
-        # from XIU Polynomial expansion, dimension of space is C(order+number of random vars,number of random vars)
-        # should oversample 2-3x
-        """Validate the regression PCE sample count.
-
-        Raises
-        ------
-        ValueError
-            If ``num_samples`` is smaller than the number of required
-            polynomial basis terms.
-
-        Notes
-        -----
-        The number of basis terms is computed as
-        ``comb(poly_order + num_aleatory, poly_order)`` using the effective
-        training-sample count after any holdout split. A warning is logged
-        when the effective training-sample count is less than three times the
-        number of required basis terms.
-
-        """
-        num_aleatory = len(self.aleatory_var_to_dist)
-        min_terms = comb(self.poly_order + num_aleatory, self.poly_order)
-        num_samples = ceil(self.num_samples * (1 - self.hold_out_fraction))
-        if min_terms > num_samples:
-            raise ValueError(
-                f"Insufficient terms for polynomial chaos expansion of degree {self.poly_order} for {num_aleatory} random variables"
-            )
-        elif min_terms * 3 > num_samples:
-            log.warning(
-                "Regression PCE is lightly sampled: "
-                f"polynomial order={self.poly_order}, num_variables={num_aleatory}, "
-                f"basis_size={min_terms}, num_samples={num_samples}. "
-                "Consider 2-3x oversampling relative to the basis size."
-            )
 
     def _to_dict(self):
         """Serialize the workflow to a dictionary.
@@ -281,12 +239,10 @@ class RegressionPCE(BasicAleatory):
         -------
         dict
             JSON-compatible dictionary containing workflow metadata, the
-            serialized aleatory-variable distributions, and the polynomial
-            order.
+            serialized aleatory-variable distributions, and holdout settings.
 
         """
         data=super()._to_dict()
-        data['polynomial_order']=self.poly_order
         data['hold_out_fraction']=self.hold_out_fraction
         if not self.hold_out_fraction==0.0:
             data['hold_out_seed']=self.hold_out_seed
@@ -310,14 +266,12 @@ class RegressionPCE(BasicAleatory):
         """
         sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
         num_samples = workflow_dict["num_samples"]
-        poly_order = workflow_dict["polynomial_order"]
         seed=workflow_dict['seed']
         hold_out_fraction=workflow_dict['hold_out_fraction']
         hold_out_seed=workflow_dict.get('hold_out_seed', None)
         analysis=cls(num_samples=num_samples,
                      SamplingClass=sampler,
                      seed=seed,
-                     poly_order=poly_order,
                      hold_out_fraction=hold_out_fraction,
                      hold_out_seed=hold_out_seed)
         for name, distribution_data in workflow_dict["aleatory_variables"].items():

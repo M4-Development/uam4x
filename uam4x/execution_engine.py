@@ -468,7 +468,7 @@ class Engine:
             step_name_ind = len(step_name.split("."))
             self.log.debug(f"run single point: {step_name}")
             if self.create_step_work_dirs:
-                work_dir = os.path.join(out_dir, step_name)
+                work_dir = os.path.join(out_dir, step_name.removeprefix("solution."))
                 os.makedirs(work_dir, exist_ok=True)
             else:
                 work_dir = out_dir
@@ -543,13 +543,16 @@ class Engine:
 
         return result
 
-    def run_solution(self,solution_name):
+    def run_solution(self,solution_name,check_git=False):
         """Execute the default single-point analysis.
 
         Parameters
         ----------
         solution_name : str
             Name of the solution to execute.
+        check_git : bool, optional
+            If True, require the configured repository to have no staged,
+            unstaged, or untracked non-ignored files before execution.
 
         Returns
         -------
@@ -561,6 +564,8 @@ class Engine:
         runtime execution metadata is captured before and after execution.
 
         """
+        if check_git:
+            self.study.check_git()
         start_time = time.perf_counter()
         trade_name = "Default State"
         self.log.debug("run solution")
@@ -689,7 +694,8 @@ class Engine:
             plugin_to_checksum=plugin_name_to_hash)
 
     def run_tradestudy(
-        self, trade_name, solution_name, num_processors=None, check=True, create_step_work_dirs=True
+        self, trade_name, solution_name, num_processors=None, check=True, create_step_work_dirs=True,
+        check_git=False
     ):
         """Execute a named analysis.
 
@@ -708,6 +714,9 @@ class Engine:
             If True, create per-state and per-step work directories during
             execution. If False, all states and steps use the shared trade-study
             directory, which is intended for in-memory workflows.
+        check_git : bool, optional
+            If True, require the configured repository to have no staged,
+            unstaged, or untracked non-ignored files before execution.
 
         Returns
         -------
@@ -720,6 +729,8 @@ class Engine:
         into states and executed serially or in parallel.
 
         """
+        if check_git:
+            self.study.check_git()
         self.create_step_work_dirs = create_step_work_dirs
         start_time = time.perf_counter()
         self.log.debug(f"run tradestudy: {trade_name}")
@@ -1192,10 +1203,11 @@ class Engine:
                     f"The constraint: {name} is of type {constraint_type}\n"
                     f"Only floats allowed as constraints"
                 )
+            equals = data.get("equals")
             self.check_upper_lower(
                 constraint_type,
-                data["lower"],
-                data["upper"],
+                equals if equals is not None else data["lower"],
+                None if equals is not None else data["upper"],
                 "Constraint",
                 name,
                 var_data,

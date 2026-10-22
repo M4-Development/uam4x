@@ -203,6 +203,7 @@ def test_group_to_dict_from_dict_roundtrip_nested_group():
     sol.add_link("inner.producer.y", "consumer.y_in")
     sol.add_link("inner.producer.arr_out[0]", "consumer.arr_scalar")
     sol.add_tracked_output("consumer.z")
+    sol.approx_totals(method="fd", step=0.02, form="forward")
 
     data = sol._to_dict()
     rebuilt = Solution._from_dict(data)
@@ -211,6 +212,12 @@ def test_group_to_dict_from_dict_roundtrip_nested_group():
     assert rebuilt.steps["inner"].group_name == "inner"
     assert rebuilt.steps["consumer"]["plugin"] is ConsumerPlugin
     assert rebuilt.tracked_outputs == ["consumer.z"]
+    assert rebuilt._approx_totals == {
+        "compute": True, "method": "fd", "step": 0.02, "form": "forward"
+    }
+
+    del data["approx_totals"]
+    assert Solution._from_dict(data)._approx_totals == {"compute": False}
 
 
 def test_solution_add_remove_tracked_output_and_duplicate_rejection():

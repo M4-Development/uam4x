@@ -97,6 +97,7 @@ def test_to_dict_good():
             'optimizer': 'SLSQP',
         },
         'optimizer_options': {},
+        'cycle_solver_options': {},
         'driver': 'ScipyOptimizeDriver',
     }
 
@@ -269,11 +270,16 @@ def test_optimization_setters_and_get_desvar_names():
     opt.set_driver("pyOptSparseDriver")
     opt.add_driver_option("maxiter", 25)
     opt.add_optimizer_option("tol", 1e-8)
+    opt.set_cycle_option("rtol", 0.01)
+    opt.set_cycle_option("use_aitken", True)
     opt.add_design_var("x", lower=0.0, upper=1.0)
 
     assert opt.driver == "pyOptSparseDriver"
     assert opt._mdao_driver_options["maxiter"] == 25
     assert opt._optimizer_options["tol"] == 1e-8
+    assert opt._cycle_solver_options == {"rtol": 0.01, "use_aitken": True}
+    restored = Optimization._from_dict(opt._to_dict())
+    assert restored._cycle_solver_options == opt._cycle_solver_options
     assert opt.get_desvar_names() == ["x"]
 
 

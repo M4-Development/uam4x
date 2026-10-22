@@ -65,7 +65,6 @@ lognormal, and uniform distributions.
     uq = RegressionPCE(
         num_samples=num_samples,
         SamplingClass=LatinHypercubeSampler,
-        poly_order=5,
         seed=42,
     )
     uq.add_aleatory_variable(
@@ -105,7 +104,7 @@ for ``borehole_calc.flow_rate`` and compares:
     solution_results = study.results.get_solution_result("basic")
     ts = solution_results.get_tradestudy("borehole_problem")
     uq_post = RegressionPCEPost(ts)
-    surrogate_model = uq_post.generate_surrogate("borehole_calc.flow_rate")
+    surrogate_model = uq_post.generate_surrogate("borehole_calc.flow_rate", poly_order=5)
     analytical_mean = float(surrogate_model.analytical_mean)
     analytical_std = float(surrogate_model.analytical_std)
     new_samples, predicted_outputs = surrogate_model.sample(

@@ -53,6 +53,24 @@ class OMOArraySink(Plugin):
         return {"total": float(np.sum(links["values"]))}
 
 
+@register_plugin
+class OMODeclaredDefaults(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("usupt", float, value=7.5)
+        self.declare_input("coordinates", np.ndarray, value=np.array([2.0, 3.0]))
+        self.declare_input("count", int, value=4)
+        self.declare_output("boom_density", float, value=7.5)
+        self.declare_output("positions", np.ndarray, value=np.array([4.0, 5.0]))
+        self.declare_output("label", str, value="ready")
+
+    def run_plugin(self, links, work_dir):
+        return {
+            "boom_density": links["usupt"],
+            "positions": links["coordinates"],
+            "label": "ready",
+        }
+
+
 class _FakeComp:
     def __init__(self):
         self.options = {}
@@ -242,3 +260,70 @@ def test_openmdao_group_assembles_indexed_destination(tmp_path):
     problem.run_model()
 
     assert problem.get_val("array_group~sink~total").item() == pytest.approx(17.0)
+    assert (tmp_path / "array_group.producer").is_dir()
+    assert (tmp_path / "array_group.sink").is_dir()
+
+
+def test_plugin_defaults_initialize_openmdao_variables(tmp_path):
+    plugin = OMODeclaredDefaults()
+    plugin.setup_plugin()
+    problem = omo.om.Problem()
+    comp = problem.model.add_subsystem(
+        "defaults", omo.UniversalOpenmdaoComp(), promotes=["*"]
+    )
+    comp.options["plugin"] = plugin
+    comp.options["input_names"] = {
+        f"defaults.{name}" for name in plugin.plugin_input_names
+    }
+    comp.options["output_names"] = {
+        f"defaults.{name}" for name in plugin.plugin_output_names
+    }
+    comp.options["work_dir"] = str(tmp_path)
+    comp.options["step_name"] = "defaults"
+
+    problem.setup()
+
+    assert problem.get_val("defaults~usupt").item() == pytest.approx(7.5)
+    assert problem.get_val("defaults~boom_density").item() == pytest.approx(7.5)
+    np.testing.assert_array_equal(problem.get_val("defaults~coordinates"), [2.0, 3.0])
+    np.testing.assert_array_equal(problem.get_val("defaults~positions"), [4.0, 5.0])
+    assert problem.get_val("defaults~count") == 4
+    assert problem.get_val("defaults~label") == "ready"
+
+
+def test_cycle_solver_options_applied(tmp_path):
+    group = Group()
+    group._is_cycle = True
+    group.cycle_solver = "NonlinearBlockGS"
+
+    problem = omo.om.Problem()
+    om_group = problem.model.add_subsystem("cycle", omo.UniversalOpenMDAOGroup())
+    om_group.options["group"] = group
+    om_group.options["step_name"] = "cycle"
+    om_group.options["sub_plugins"] = {}
+    om_group.options["work_dir"] = str(tmp_path)
+    om_group.options["links"] = {}
+    om_group.options["cycle_solver_options"] = {"rtol": 0.01, "use_aitken": True}
+
+    problem.setup()
+    assert om_group.nonlinear_solver.options["rtol"] == 0.01
+    assert om_group.nonlinear_solver.options["use_aitken"] is True
+
+
+def test_run_problem_passes_cycle_options_to_group(monkeypatch, tmp_path):
+    study, state, _, out_dir = _build_study_and_state(tmp_path, ["analysis.y"])
+    solution = study.get_solution("test_solution")
+    solution.add_step(Group(), "cycle")
+    solution.sort_steps()
+    plugins = solution.generate_plugins()
+    state["cycle_solver_options"] = {"rtol": 0.01, "use_aitken": True}
+
+    monkeypatch.setattr(omo.om, "Problem", _FakeProblem)
+    monkeypatch.setitem(omo.DRIVER_NAME_TO_DRIVER, "ScipyOptimizeDriver", _FakeDriver)
+    monkeypatch.setattr(omo, "OpenmdaoPreComp", _FakeComp)
+    monkeypatch.setattr(omo, "UniversalOpenmdaoComp", _FakeComp)
+    monkeypatch.setattr(omo, "UniversalOpenMDAOGroup", _FakeComp)
+
+    opt = omo.Optimization(study, solution, state, plugins, out_dir, check_partials=True)
+    problem = opt.run_problem()
+    assert problem.model.subsystems["cycle"].options["cycle_solver_options"] == state["cycle_solver_options"]

@@ -648,7 +648,6 @@ class Group:
             print(
                 f"Cycle detected in group {self.group_name}, using declared step order in that group"
             )
-            self._execution_steps = copy.deepcopy(self.steps)
             self._is_cycle = True
             if not self.cycle_solver:
                 raise ValueError(f"Cycle solver must be selected if cycle is used")
@@ -658,8 +657,11 @@ class Group:
                 raise ValueError(
                     f"The step order must have the same length as the steps"
                 )
-            for name in self.cycle_declared_step_order:
-                self._execution_steps[name] = self.steps[name]
+            if set(self.cycle_declared_step_order) != set(self.steps):
+                raise ValueError('Cycle step order must name each step exactly once')
+            self._execution_steps = {
+                name: self.steps[name] for name in self.cycle_declared_step_order
+            }
         else:
             for name, data in self.steps.items():
                 if name not in list(step_to_location.keys()):
@@ -1079,8 +1081,8 @@ class Solution(Group):
         Returns
         -------
         dict
-            JSON-compatible dictionary containing the serialized group data and
-            tracked outputs.
+            JSON-compatible dictionary containing steps, links, tracked
+            outputs, and approximate-total settings.
 
         """
         self.log.debug(f"write to dict")
@@ -1105,6 +1107,7 @@ class Solution(Group):
             "steps": steps_serialized,
             "links": self.links,
             "tracked_outputs": self.tracked_outputs,
+            "approx_totals": self._approx_totals,
         }
 
     @classmethod
@@ -1155,6 +1158,7 @@ class Solution(Group):
 
         sol.tracked_outputs = data["tracked_outputs"]
         sol.links = data["links"]
+        sol._approx_totals = data.get("approx_totals", sol._approx_totals)
         return sol
 
     def get_all_plugin_names_to_hashes(self) -> dict[str, str]:

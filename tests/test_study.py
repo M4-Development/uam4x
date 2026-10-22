@@ -479,28 +479,93 @@ def test_commit_code_commits_code_before_model_on_new_branch(
         "AutoCommit: Created data for variant demo",
         "AutoCommit: Committed code",
     ]
-    assert _run_git(repo_root, "show", "--format=", "--name-only", "HEAD~1") == "code.py"
+    assert _run_git(
+        repo_root, "show", "--format=", "--name-only", "HEAD~1"
+    ).splitlines() == ["code.py", "untracked.txt"]
     assert _run_git(repo_root, "show", "--format=", "--name-only", "HEAD") == (
         "variants/demo/model.json"
     )
-    assert _run_git(repo_root, "status", "--short") == "?? untracked.txt"
+    assert _run_git(repo_root, "status", "--short") == ""
 
 
-def test_untracked_files_do_not_block_json_autocommit(
+def test_commit_code_commits_untracked_files_without_tracked_changes(
+    initialized_git_repo, demo_study
+):
+    repo_root, _, variant_dir = initialized_git_repo
+    _configure_study_repository(demo_study, repo_root)
+    (repo_root / "untracked.txt").write_text("new code\n")
+
+    demo_study.save_model_to_json(
+        str(variant_dir), commit=True, new_branch=False, commit_code=True
+    )
+
+    subjects = _run_git(repo_root, "log", "-2", "--format=%s").splitlines()
+    assert subjects == [
+        "AutoCommit: Created data for variant demo",
+        "AutoCommit: Committed code",
+    ]
+    assert _run_git(
+        repo_root, "show", "--format=", "--name-only", "HEAD~1"
+    ) == "untracked.txt"
+    assert _run_git(repo_root, "status", "--short") == ""
+
+
+def test_untracked_files_block_json_autocommit_without_commit_code(
     initialized_git_repo, demo_study
 ):
     repo_root, _, variant_dir = initialized_git_repo
     _configure_study_repository(demo_study, repo_root)
     (repo_root / "untracked.txt").write_text("leave me untracked\n")
 
+    with pytest.raises(
+        RuntimeError, match="untracked, non-ignored files.*untracked.txt"
+    ):
+        demo_study.save_model_to_json(
+            str(variant_dir), commit=True, new_branch=False, commit_code=False
+        )
+
+    assert not (variant_dir / "model.json").exists()
+    assert _run_git(repo_root, "rev-list", "--count", "HEAD") == "1"
+    assert _run_git(repo_root, "status", "--short") == "?? untracked.txt"
+
+
+def test_check_git_rejects_untracked_nonignored_files(
+    initialized_git_repo, demo_study
+):
+    repo_root, _, _ = initialized_git_repo
+    _configure_study_repository(demo_study, repo_root)
+    (repo_root / "untracked.txt").write_text("untracked\n")
+
+    with pytest.raises(
+        RuntimeError, match="untracked, non-ignored files.*untracked.txt"
+    ):
+        demo_study.check_git()
+
+
+def test_check_git_allows_ignored_files(initialized_git_repo, demo_study):
+    repo_root, _, _ = initialized_git_repo
+    _configure_study_repository(demo_study, repo_root)
+    git_exclude = repo_root / ".git" / "info" / "exclude"
+    git_exclude.write_text("ignored.txt\n")
+    (repo_root / "ignored.txt").write_text("ignored\n")
+
+    demo_study.check_git()
+
+
+def test_ignored_files_do_not_block_json_autocommit(
+    initialized_git_repo, demo_study
+):
+    repo_root, _, variant_dir = initialized_git_repo
+    _configure_study_repository(demo_study, repo_root)
+    git_exclude = repo_root / ".git" / "info" / "exclude"
+    git_exclude.write_text("ignored.txt\n")
+    (repo_root / "ignored.txt").write_text("ignored\n")
+
     demo_study.save_model_to_json(
         str(variant_dir), commit=True, new_branch=False, commit_code=False
     )
 
-    assert _run_git(repo_root, "log", "-1", "--format=%s") == (
-        "AutoCommit: Created data for variant demo"
-    )
-    assert _run_git(repo_root, "status", "--short") == "?? untracked.txt"
+    assert (variant_dir / "model.json").exists()
 
 
 def test_commit_code_requires_json_commit(demo_study, tmp_path):
