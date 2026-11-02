@@ -4,9 +4,13 @@ tests/test_subsystems.py
 tests/test_solution.py
 tests/test_control.py
 tests/test_study.py
-tests/test_get_param_type.py
-tests/test_registry.py
 tests/test_execution_engine.py
 tests/test_openmdao_optimization.py
-tests/test_results_extra.py
+tests/test_results.py
 tests/test_local_sensitivity.py
+tests/test_UQ.py
+tests/test_post.py
+tests/test_log.py
+tests/test___init__.py
+tests/test_n2_viewer.py
+tests/test_linking.py

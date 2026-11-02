@@ -516,7 +516,7 @@ class Group:
 
         return plugins
 
-    def _recurse_generated_plugins(self, plugins, plugin_dict):
+    def _recurse_generated_plugins(self, plugins: dict[str, Any], plugin_dict: dict[str, Plugin]) -> None:
         """Flatten a nested generated-plugin tree into a single dictionary.
 
         Parameters
@@ -544,7 +544,7 @@ class Group:
             elif isinstance(data, dict):
                 self._recurse_generated_plugins(data, plugin_dict)
 
-    def _get_all_plugin_names_to_data(self, head_dict, group_name):
+    def _get_all_plugin_names_to_data(self, head_dict: dict[str, dict[str, Any]], group_name: str) -> None:
         """Collect fully qualified plugin metadata for this group tree.
 
         Parameters
@@ -671,7 +671,7 @@ class Group:
                 if step != "vehicles":
                     self._execution_steps[step] = self.steps[step]
 
-    def _check_links_to_plugins(self, plugins):
+    def _check_links_to_plugins(self, plugins: dict[str, Any]) -> None:
         """Validate that linked variables are declared by plugin steps.
 
         Parameters
@@ -887,8 +887,8 @@ class Group:
             return self.get_var_data(rest_name, local_plugins)
 
     def _get_global_execution_order_plugins(
-        self, sol_name, plugins, global_name_to_plugin
-    ):
+        self, sol_name: str, plugins: dict[str, Any], global_name_to_plugin: dict[str, Plugin]
+    ) -> None:
         """Collect plugins in global execution order.
 
         Parameters
@@ -921,7 +921,7 @@ class Group:
             else:
                 global_name_to_plugin[sol_name + "." + name] = plugins[name]
 
-    def _build_links(self, base_name):
+    def _build_links(self, base_name: str) -> list[list[str]]:
         """Build fully qualified links for the group tree.
 
         Parameters
@@ -1386,7 +1386,7 @@ class Solution(Group):
             local_plug = plugins[start]
             return self.recurse_plugin_dict(split_name[1:], local_plug)
 
-    def _check_link_types(self, plugins, study):
+    def _check_link_types(self, plugins: dict[str, Any], study) -> None:
         """Validate type compatibility of all declared links.
 
         Parameters
@@ -1498,7 +1498,7 @@ class Solution(Group):
                     all_used_vehicle_params.append(independent)
         return all_used_vehicle_params
 
-    def _check_optimization_discrete(self, plugins):
+    def _check_optimization_discrete(self, plugins: dict[str, Any]) -> None:
         """Validate that optimization plugin links are continuous-valued.
 
         Parameters
@@ -1609,7 +1609,7 @@ class Solution(Group):
                 global_links += step._build_links(child_name)
         return global_links
 
-    def _check_link_indices(self, plugins, study):
+    def _check_link_indices(self, plugins: dict[str, Any], study) -> None:
         """Validate indexed source links against source and destination shapes.
 
         Parameters
@@ -1702,6 +1702,12 @@ class Solution(Group):
 
 
     def check_array_basic(self, var: uam4xVariable, local_plugins: dict[str, Any]) -> tuple[Any, tuple[int, ...]]:
+        """Return the indexed value and shape for a declared array variable.
+
+        Use the declared default value when present; otherwise derive the
+        indexed shape from the declared array shape. Invalid indices raise
+        ValueError.
+        """
         a = self.get_var_value(var.cleaned_name, local_plugins)
         a_shape = self.get_var_shape(var.cleaned_name, local_plugins)
         indexed_val=None

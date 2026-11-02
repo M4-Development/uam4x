@@ -23,6 +23,8 @@ tests/conftest.py
 # Wing ide user-specific
 *.wpu
 *.wpr
+*.openmdao_out
+.coveragerc
 
 
 #Temp files

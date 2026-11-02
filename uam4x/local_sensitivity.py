@@ -1,5 +1,7 @@
 from __future__ import annotations
 import copy
+from typing import Any, Mapping
+
 import numpy as np
 
 
@@ -14,7 +16,7 @@ class LocalSensitivity:
     ----------
     step_size : float, optional
         Default perturbation step size used for variables that do not define
-        their own step size.
+        their own step size. Defaults to ``1e-6``.
 
     Notes
     -----
@@ -23,7 +25,7 @@ class LocalSensitivity:
 
     """
 
-    def __init__(self, step_size=1e-6):
+    def __init__(self, step_size: float = 1e-6) -> None:
         """Initialize a local sensitivity study definition.
 
         Parameters
@@ -36,7 +38,9 @@ class LocalSensitivity:
         self.step_size = step_size
         self.variable_to_sensitivity_data = {}
 
-    def add_perturbation_var(self, name, evaluation_point, step_size=None):
+    def add_perturbation_var(
+        self, name: str, evaluation_point: float, step_size: float | None = None
+    ) -> None:
         """Register a variable for local sensitivity analysis.
 
         Parameters
@@ -60,7 +64,7 @@ class LocalSensitivity:
         }
         self.variable_to_sensitivity_data[name] = data
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, float | bool]]:
         """Generate baseline and perturbed states.
 
         Returns
@@ -103,14 +107,14 @@ class LocalSensitivity:
 
         return states
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, Any]:
         """Serialize the local sensitivity definition to a dictionary.
 
         Returns
         -------
         dict
-            JSON-compatible dictionary containing the global step size and
-            registered sensitivity variables.
+            Dictionary containing the global step size and registered
+            sensitivity variables.
 
         """
         return {
@@ -122,7 +126,7 @@ class LocalSensitivity:
         }
 
     @classmethod
-    def _from_dict(cls, sensitivity_dict):
+    def _from_dict(cls, sensitivity_dict: Mapping[str, Any]) -> LocalSensitivity:
         """Reconstruct a local sensitivity definition from a dictionary.
 
         Parameters

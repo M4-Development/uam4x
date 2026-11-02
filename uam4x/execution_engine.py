@@ -45,7 +45,7 @@ class Engine:
 
     """
 
-    def __init__(self, study: Study, work_dir) -> None:
+    def __init__(self, study: Study, work_dir: str | os.PathLike[str]) -> None:
         """Initialize an execution engine.
 
         Parameters
@@ -68,8 +68,12 @@ class Engine:
         self.create_step_work_dirs = True
 
     def check_partials(
-        self, trade_name, solution_name, form="forward", step=1.0e-6
-    ):
+        self,
+        trade_name: str,
+        solution_name: str,
+        form: str = "forward",
+        step: float = 1.0e-6,
+    ) -> None:
         """Check optimization partial derivatives for one analysis.
 
         Parameters
@@ -146,19 +150,19 @@ class Engine:
 
     def generate_N2(
         self,
-        solution_name,
-        trade_name=None,
-        root_dir=None,
-        outfile=None,
+        solution_name: str,
+        trade_name: str | None = None,
+        root_dir: str | os.PathLike[str] | None = None,
+        outfile: str | os.PathLike[str] | None = None,
         *,
-        show_browser=True,
-        check=True,
-        include_values=False,
-        title=None,
-        path=None,
-        auto_collapse=True,
-        max_visible_rows=120,
-    ):
+        show_browser: bool = True,
+        check: bool = True,
+        include_values: bool = False,
+        title: str | None = None,
+        path: str | None = None,
+        auto_collapse: bool = True,
+        max_visible_rows: int = 120,
+    ) -> Path:
         """Generate a standalone, interactive N² diagram from the uam4x model.
 
         Parameters
@@ -172,11 +176,12 @@ class Engine:
             Root directory in which to write the diagram. The diagram is placed
             beneath a solution-specific subdirectory. The filename is
             ``n2.html`` for the base model or ``<trade_name>N2.html`` for an
-            analysis. Use ``outfile`` when an explicit path is required.
+            analysis. Cannot be used together with ``outfile``.
         outfile : str or path-like, optional
-            Output HTML path. Defaults beneath
-            ``<work_dir>/<solution_name>/``. An explicit path is used exactly
-            as provided.
+            Output HTML path. If omitted along with ``root_dir``, the file is
+            written beneath ``<work_dir>/<solution_name>/`` as ``n2.html`` or
+            ``<safe_trade_name>_n2.html``. An explicit path is used exactly as
+            provided.
         show_browser : bool, optional
             If True, open the generated file in the default browser.
         check : bool, optional
@@ -185,7 +190,7 @@ class Engine:
             If True, include declared/default values in the embedded model data.
             Plugins are never executed to obtain values.
         title : str, optional
-            Diagram title. Defaults to ``"uam4x N² Diagram"``.
+            Diagram title. Defaults to ``"uam4x N² Diagram — <solution_name>"``.
         path : str, optional
             uam4x group or component path to use as the initial diagram root.
             A leading ``"solution."`` is optional.
@@ -278,7 +283,7 @@ class Engine:
             webbrowser.open(output_path.as_uri())
         return output_path
 
-    def _run_state(self,solution, state, trade_work_dir,iteration=None, resort_steps=False,):
+    def _run_state(self,solution, state: dict[str, object], trade_work_dir: str | os.PathLike[str],iteration: int | None=None, resort_steps: bool=False,) -> Result:
         """Execute one analysis state.
 
         Parameters
@@ -341,8 +346,8 @@ class Engine:
 
     @staticmethod
     def _run_state_parallel(
-        study_dict,solution_name, state, iteration=None, trade_work_dir=None, create_step_work_dirs=True
-    ):
+        study_dict: dict[str, object],solution_name: str, state: dict[str, object], iteration: int | None=None, trade_work_dir: str | os.PathLike[str]=None, create_step_work_dirs: bool=True
+    ) -> Result:
         """Execute one analysis state in a worker process.
 
         Parameters
@@ -432,7 +437,7 @@ class Engine:
 
         return opt_result
 
-    def _run_single_point(self, solution,state, plugins, out_dir):
+    def _run_single_point(self, solution,state: dict[str, object], plugins: dict[str, object], out_dir: str | os.PathLike[str]) -> Result:
         """Execute a single-point analysis.
 
         Parameters
@@ -543,7 +548,7 @@ class Engine:
 
         return result
 
-    def run_solution(self,solution_name,check_git=False):
+    def run_solution(self, solution_name: str, check_git: bool = False) -> None:
         """Execute the default single-point analysis.
 
         Parameters
@@ -560,8 +565,10 @@ class Engine:
 
         Notes
         -----
-        Results are stored under the reserved analysis name ``"Default State"`` and
-        runtime execution metadata is captured before and after execution.
+        The existing ``Default_State`` output directory is replaced before the
+        run. Results are stored in ``study.results`` under the reserved analysis
+        name ``"Default State"``. Runtime execution metadata is captured before
+        and after execution.
 
         """
         if check_git:
@@ -620,7 +627,7 @@ class Engine:
         elapsed_time = end_time - start_time
         self.study._add_time_metadata(solution_name=solution.name,trade_name=trade_name,start_or_end='Completion_Time', elapsed_time=elapsed_time)
 
-    def capture_execution_data(self, trade_name,solution):
+    def capture_execution_data(self, trade_name: str,solution) -> None:
         # populate environment at execution time
         """Capture runtime metadata for an analysis.
 
@@ -694,9 +701,14 @@ class Engine:
             plugin_to_checksum=plugin_name_to_hash)
 
     def run_tradestudy(
-        self, trade_name, solution_name, num_processors=None, check=True, create_step_work_dirs=True,
-        check_git=False
-    ):
+        self,
+        trade_name: str,
+        solution_name: str,
+        num_processors: int | None = None,
+        check: bool = True,
+        create_step_work_dirs: bool = True,
+        check_git: bool = False,
+    ) -> None:
         """Execute a named analysis.
 
         Parameters
@@ -707,7 +719,8 @@ class Engine:
             Name of the solution to execute for the analysis.
         num_processors : int, optional
             Number of worker processes to use for state-based analyses. If omitted
-            or set to 1, execution is serial.
+            or set to 0 or 1, execution is serial. Ignored for single-point
+            optimizations.
         check : bool, optional
             If True, perform model validation before execution.
         create_step_work_dirs : bool, optional
@@ -724,9 +737,10 @@ class Engine:
 
         Notes
         -----
-        Optimization analyses run as a single optimization state. State-based
-        analyses, such as parameter sweeps and uncertainty studies, are expanded
-        into states and executed serially or in parallel.
+        The existing output directory for this analysis is replaced before the
+        run, and results are stored in ``study.results``. Optimization analyses
+        run as a single optimization state. State-based analyses, such as parameter
+        sweeps and uncertainty studies, are executed serially or in parallel.
 
         """
         if check_git:
@@ -815,11 +829,11 @@ class Engine:
 
 
     def _run_parameter_sweep(self,solution,
-                             trade_name,
-                             trade_states,
-                             trade_work_dir,
-                             trade_result,
-                             num_processors=None):
+                             trade_name: str,
+                             trade_states: list[dict[str, object]],
+                             trade_work_dir: str | os.PathLike[str],
+                             trade_result: TradestudyResults,
+                             num_processors: int | None=None) -> None:
         """Execute a state-based analysis over multiple states.
 
         Parameters
@@ -835,8 +849,8 @@ class Engine:
         trade_result : TradestudyResults
             Result container populated with each completed state.
         num_processors : int, optional
-            Number of worker processes to use. If omitted or set to 1, execution is
-            serial.
+            Number of worker processes to use. If omitted or set to 0 or 1,
+            execution is serial.
 
         Returns
         -------
@@ -845,12 +859,13 @@ class Engine:
         Raises
         ------
         ValueError
-            If ``num_processors`` is not None and is less than 1.
+            If ``num_processors`` is negative.
 
         Notes
         -----
         Failed plugin states are captured as placeholder :class:`Result` objects
         with a failure message stored in the corresponding state dictionary.
+        Other state execution failures are raised as ``RuntimeError``.
 
         """
         failed_states = []
@@ -984,7 +999,7 @@ class Engine:
 
         solution_results.add_tradestudy(trade_name, trade_result)
 
-    def check_model(self, solution, plugins, state=None):
+    def check_model(self, solution, plugins: dict[str, object], state: dict[str, object]=None) -> None:
         """Perform comprehensive model validation checks.
 
         Validates the model configuration by checking links, types,
@@ -1024,7 +1039,7 @@ class Engine:
             self.check_objective(solution,plugins, state)
             self.check_optimization_discrete(solution,plugins)
 
-    def check_links_to_plugins(self, solution,plugins):
+    def check_links_to_plugins(self, solution,plugins: dict[str, object]) -> None:
         """
         Validate that links match declared plugin I/O.
 
@@ -1046,7 +1061,7 @@ class Engine:
         self.log.debug(f"check links to plugins")
         solution._check_links_to_plugins(plugins)
 
-    def check_link_types(self, solution,plugins):
+    def check_link_types(self, solution,plugins: dict[str, object]) -> None:
         """
         Validate that linked parameters have compatible types.
 
@@ -1068,7 +1083,7 @@ class Engine:
         self.log.debug("check link types")
         solution._check_link_types(plugins, self.study)
 
-    def check_link_indices(self,solution, plugins):
+    def check_link_indices(self,solution, plugins: dict[str, object]) -> None:
         """Validate indexed solution links.
 
         Parameters
@@ -1091,7 +1106,7 @@ class Engine:
         """
         solution._check_link_indices(plugins, self.study)
 
-    def _get_analysis_var_data(self,solution, var_name, plugins):
+    def _get_analysis_var_data(self,solution, var_name: str, plugins: dict[str, object]) -> dict[str, object]:
         """Return type, value, and shape metadata for an analysis variable.
 
         Parameters
@@ -1123,7 +1138,7 @@ class Engine:
             }
         return solution.get_var_data(var_name, plugins)
 
-    def check_desvars(self, solution,plugins, state):
+    def check_desvars(self, solution,plugins: dict[str, object], state: dict[str, object]) -> None:
         """Validate optimization design variables.
 
         Parameters
@@ -1170,7 +1185,7 @@ class Engine:
                 var_data,
             )
 
-    def check_constraints(self, solution,plugins, state):
+    def check_constraints(self, solution,plugins: dict[str, object], state: dict[str, object]) -> None:
         """Validate optimization constraints.
 
         Parameters
@@ -1214,8 +1229,8 @@ class Engine:
             )
 
     def check_upper_lower(
-        self, var_type, data_lower, data_upper, dv_or_const, var_name, var_data
-    ):
+        self, var_type: type, data_lower: object, data_upper: object, dv_or_const: str, var_name: str, var_data: dict[str, object]
+    ) -> None:
         """Validate optimization bound shapes against variable metadata.
 
         Parameters
@@ -1346,7 +1361,7 @@ class Engine:
                         f"and {dv_or_const} lower is {data_lower}\n"
                     )
 
-    def check_objective(self, solution,plugins, state):
+    def check_objective(self, solution,plugins: dict[str, object], state: dict[str, object]) -> None:
         """Validate the optimization objective.
 
         Checks that the objective variable is of a continuous type as required
@@ -1383,7 +1398,7 @@ class Engine:
                 f"Only continuous variables allowed as objectives"
             )
 
-    def check_optimization_discrete(self,solution, plugins):
+    def check_optimization_discrete(self,solution, plugins: dict[str, object]) -> None:
         """Validate that optimization links are continuous.
 
         Checks that all links between optimization components use

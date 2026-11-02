@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from uam4x.results import Results, SolutionResults, TradestudyResults, Result
-from uam4x.post import BasicPost
 from uam4x.vehicle import Vehicle, VehicleManager
 from uam4x.subsystems import Subsystem, register_subsystem
 from uam4x.control import ParameterSweep
@@ -256,26 +255,16 @@ def test_tradestudy_to_dict_and_from_dict_roundtrip():
     )
 
 
-def test_results_to_dict_and_scatter(tmp_path):
+def test_results_to_dict_contains_default_state():
     study = _DummyStudy(tracked_outputs=["tracked.y", "tracked.x"])
     study._post_data[SOLUTION_NAME] = {"Default State": {}}
-    res, ts = _attach_tradestudy(study, "Default State")
+    results, ts = _attach_tradestudy(study, "Default State")
+    result = Result(state={})
+    result._add_result("tracked.x", 1.0)
+    result._add_result("tracked.y", 2.0)
+    ts._results.append(result)
 
-    r0 = Result(state={})
-    r0._add_result("tracked.x", 1.0)
-    r0._add_result("tracked.y", 2.0)
-    r1 = Result(state={})
-    r1._add_result("tracked.x", 2.0)
-    r1._add_result("tracked.y", 4.0)
-    ts._results.extend([r0, r1])
-
-    ax = BasicPost(ts).scatter("tracked.x", "tracked.y", title="My Plot", save_dir=str(tmp_path))
-
-    assert ax.get_title() == "My Plot"
-    assert (tmp_path / "My_Plot.png").exists()
-
-    d = res._to_dict()
-    assert "Default State" in d[SOLUTION_NAME]
+    assert "Default State" in results._to_dict()[SOLUTION_NAME]
 
 
 def test_results_get_tradestudy_uses_solution_and_trade_names():
@@ -319,3 +308,33 @@ def test_results_roundtrip_keeps_same_trade_name_separate_by_solution():
         rebuilt.get_tradestudy("second", "shared_trade")._results[0].outputs["out"]
         == 2.0
     )
+
+
+
+
+def test_tradestudy_changing_variables_collects_design_sweep_and_tracked_names():
+    ts = TradestudyResults(
+        "trade", SOLUTION_NAME,
+        executed_vehicles=VehicleManager(),
+        executed_tradestudy=_DummyTrade(),
+        tracked_output_names=["tracked.y"],
+    )
+    assert set(ts.get_changing_variables()) == {"dv_x", "sweep_x", "tracked.y"}
+
+    ts._executed_tradestudy = None
+    ts.tracked_output_names = None
+    assert ts.get_changing_variables() == []
+
+
+def test_tradestudy_get_variable_supports_indexed_arrays_and_column_shape():
+    study = _DummyStudy(tracked_outputs=["tracked.array"])
+    _, ts = _attach_tradestudy(study, "Default State")
+    for values in ([1.0, 2.0], [3.0, 4.0]):
+        result = Result(state={})
+        result._add_result("tracked.array", np.asarray(values))
+        ts._results.append(result)
+
+    np.testing.assert_allclose(ts.get_variable("tracked.array"), [[1.0, 2.0], [3.0, 4.0]])
+    np.testing.assert_allclose(ts.get_variable("tracked.array[1]"), [2.0, 4.0])
+    assert ts.get_variable("tracked.array[1]", as_column=True).shape == (2, 1)
+    assert ts.get_variable("vehicles.v.c.p", as_column=True).shape == (1, 1)

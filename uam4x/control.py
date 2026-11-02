@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Literal, Union
 import copy
 from uam4x.log import get_log
 from uam4x.utils import log
@@ -52,7 +52,7 @@ class Optimization:
         self._cycle_solver_options = {}
         self.driver = "ScipyOptimizeDriver"
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, Any]:
         """Serialize the optimization definition to a dictionary.
 
         Returns
@@ -74,7 +74,7 @@ class Optimization:
         }
         return save_dict
 
-    def set_driver(self, name):
+    def set_driver(self, name: str) -> None:
         """Set the OpenMDAO driver class name.
 
         Parameters
@@ -94,7 +94,7 @@ class Optimization:
         """
         self.driver = name
 
-    def add_driver_option(self, name, value):
+    def add_driver_option(self, name: str, value: Any) -> None:
         """Add or overwrite an OpenMDAO driver option.
 
         Parameters
@@ -111,11 +111,19 @@ class Optimization:
         """
         self._mdao_driver_options[name] = value
 
-    def set_cycle_option(self, name, value):
-        """Set an OpenMDAO cycle-solver option for this optimization."""
+    def set_cycle_option(self, name: str, value: Any) -> None:
+        """Set an option on the nonlinear solver used for cyclic solution groups.
+
+        Parameters
+        ----------
+        name : str
+            OpenMDAO nonlinear-solver option name.
+        value : object
+            Value assigned to that option when the cyclic group is built.
+        """
         self._cycle_solver_options[name] = value
 
-    def add_optimizer_option(self, name, value):
+    def add_optimizer_option(self, name: str, value: Any) -> None:
         """Add or overwrite an optimizer-specific option.
 
         Parameters
@@ -132,7 +140,7 @@ class Optimization:
         """
         self._optimizer_options[name] = value
 
-    def get_desvar_names(self):
+    def get_desvar_names(self) -> list[str]:
         """Return design-variable names.
 
         Returns
@@ -183,6 +191,9 @@ class Optimization:
                 des_var_vals["upper"] = np.array(des_var_vals["upper"])
             if isinstance(des_var_vals['initial_value'],list):
                 des_var_vals['initial_value']=np.array(des_var_vals['initial_value'])
+            for key in ('ref', 'ref0'):
+                if isinstance(des_var_vals.get(key), list):
+                    des_var_vals[key] = np.array(des_var_vals[key])
 
         obj.des_vars = data["des_vars"]
         obj.constraints = data["constraints"]
@@ -203,39 +214,38 @@ class Optimization:
         name: str,
         lower: np.ndarray | float | np.floating | None = None,
         upper: np.ndarray | float | np.floating | None = None,
-        indices: list | None = None,
-        initial_value: np.ndarray | float | np.floating | None = None
-    ):
-        """Add a design variable to the optimization definition.
+        indices: list[int] | np.ndarray | None = None,
+        initial_value: np.ndarray | float | np.floating | None = None,
+        ref: np.ndarray | float | np.floating | None = None,
+        ref0: np.ndarray | float | np.floating | None = None,
+    ) -> None:
+        """Register a variable for optimization.
 
         Parameters
         ----------
         name : str
-            Design-variable name.
-        lower : np.ndarray | float | np.floating | None, optional
-            Lower bound for the design variable.
-        upper : np.ndarray | float | np.floating | None, optional
-            Upper bound for the design variable.
-        indices : list | None, optional
-            Indices of an array-valued design variable to expose as active design
-            variables. If omitted, the full variable is used.
-
-        Returns
-        -------
-        None
+            Fully qualified design-variable name.
+        lower, upper : float or numpy.ndarray or None, optional
+            Bounds on the active variable entries.
+        indices : list of int or numpy.ndarray or None, optional
+            Array entries to optimize. If omitted, the full variable is used.
+        initial_value : float or numpy.ndarray or None, optional
+            Value assigned before the driver runs. With indices, only the selected
+            entries are replaced. If omitted, the current model value is retained.
+        ref, ref0 : float or numpy.ndarray or None, optional
+            Physical values mapped to one and zero in optimizer space.
 
         Raises
         ------
         TypeError
-            If bound types are inconsistent or if a bound is not continuous-valued.
+            If a bound or scaling value has an unsupported type.
         ValueError
-            If array-shaped bounds have mismatched shapes or if any upper bound is
-            less than the corresponding lower bound.
-
+            If bounds or scaling values have incompatible shapes or invalid values.
         """
         self.check_upper_lower(
             name, "design variable", lower=lower, upper=upper, indices=indices
         )
+        self.check_scaling(name, ref=ref, ref0=ref0)
         self.des_vars[name] = {
             "lower": lower,
               "upper": upper,
@@ -244,22 +254,49 @@ class Optimization:
 
             }
 
+        for key, value in (('ref', ref), ('ref0', ref0)):
+            if value is not None:
+                self.des_vars[name][key] = value
+
     def edit_design_var(
             self,
             name: str,
-            dict_key:str,
-            value: np.ndarray | float | np.floating |list | None = None
-            ):
-        """Edit an existing design variable's lower, upper, or indices value.
+            dict_key: Literal["lower", "upper", "indices", "initial_value", "ref", "ref0"],
+            value: np.ndarray | float | np.floating | list | None = None
+            ) -> None:
+        """Change a registered design variable.
+
+        ``dict_key`` may be ``"lower"``, ``"upper"``, ``"indices"``,
+        ``"initial_value"``, ``"ref"``, or ``"ref0"``. Setting ``"ref"`` or
+        ``"ref0"`` to None restores its default. Bound and scaling changes are
+        validated before they are stored.
+
         Parameters
         ----------
         name : str
-            The name of the design variable to edit.
+            Registered design-variable name.
         dict_key : str
-            The field to update, must be one of 'lower', 'upper', or 'indices'.
-        value : np.ndarray | float | np.floating | list | None, optional
-            The new value to assign to the field."""
+            Field to change.
+        value : object, optional
+            Replacement value.
+
+        Raises
+        ------
+        KeyError
+            If the variable or field does not exist.
+        TypeError or ValueError
+            If a bound or scaling change is invalid.
+        """
         current_desvar = self.des_vars[name]
+        if dict_key in ('ref', 'ref0'):
+            scaling = {key: current_desvar.get(key) for key in ('ref', 'ref0')}
+            scaling[dict_key] = value
+            self.check_scaling(name, **scaling)
+            if value is None:
+                current_desvar.pop(dict_key, None)
+            else:
+                current_desvar[dict_key] = value
+            return
         if dict_key not in current_desvar:
             raise KeyError
         if dict_key == "initial_value":
@@ -271,14 +308,38 @@ class Optimization:
         self.des_vars[name][dict_key] = value
 
 
+    @staticmethod
+    def check_scaling(name: str, ref: np.ndarray | float | np.floating | None=None, ref0: np.ndarray | float | np.floating | None=None) -> None:
+        """Validate finite floating references with a nonzero scaling span.
+
+        Scalars may scale arrays. Two array references must have matching shapes.
+        Either reference may be omitted (ref defaults to one, ref0 to zero),
+        and reversed scaling is allowed. OpenMDAO checks variable/index sizes.
+        """
+        for key, value in (('ref', ref), ('ref0', ref0)):
+            if value is None:
+                continue
+            if isinstance(value, type) or not is_continuous_type_or_value(value):
+                raise TypeError(
+                    f"{key} for {name} must be a float or floating point array."
+                )
+            if not np.all(np.isfinite(value)):
+                raise ValueError(f"{key} for {name} must contain only finite values.")
+        if is_numpy_array(ref) and is_numpy_array(ref0) and ref.shape != ref0.shape:
+            raise ValueError(f"ref and ref0 shapes must match for {name}.")
+        effective_ref = 1.0 if ref is None else ref
+        effective_ref0 = 0.0 if ref0 is None else ref0
+        if np.any(effective_ref == effective_ref0):
+            raise ValueError(f"ref and ref0 must differ at every entry for {name}.")
+
     def add_constraint(
         self,
         name: str,
         lower: np.ndarray | float | np.floating | None = None,
         upper: np.ndarray | float | np.floating | None = None,
-        indices=None,
+        indices: list[int] | np.ndarray | None=None,
         equals: np.ndarray | float | np.floating | None = None,
-    ):
+    ) -> None:
         """Add a constraint to the optimization definition.
 
         Parameters
@@ -329,18 +390,27 @@ class Optimization:
     def edit_constraint(
             self,
             name: str,
-            dict_key:str,
-            value: np.ndarray | float | np.floating |list | None = None
-            ):
-        """Edit an existing constraints's lower, upper, or indices value.
+            dict_key: Literal["lower", "upper", "indices"],
+            value: np.ndarray | float | np.floating | list | None = None
+            ) -> None:
+        """Change a registered constraint's bounds or selected indices.
+
         Parameters
         ----------
         name : str
-            The name of the constraint to edit.
+            Registered constraint name.
         dict_key : str
-            The field to update, must be one of 'lower', 'upper', or 'indices'.
-        value : np.ndarray | float | np.floating | list | None, optional
-            The new value to assign to the field."""
+            Field to change: ``"lower"``, ``"upper"``, or ``"indices"``.
+        value : object, optional
+            Replacement value.
+
+        Raises
+        ------
+        KeyError
+            If the constraint or field does not exist.
+        TypeError or ValueError
+            If the resulting bounds are invalid.
+        """
         current_constraint = self.constraints[name]
         if dict_key not in current_constraint:
             raise KeyError
@@ -352,11 +422,11 @@ class Optimization:
     @staticmethod
     def check_upper_lower(
         name: str,
-        const_or_dv,
+        const_or_dv: str,
         lower: np.ndarray | float | np.floating | None = None,
         upper: np.ndarray | float | np.floating | None = None,
         indices: list | np.ndarray | None = None,
-    ):
+    ) -> None:
 
         # At least one bound must be declared on a constraint
 
@@ -433,7 +503,7 @@ class Optimization:
                         f"The following {const_or_dv} {name} has lower={lower} and upper={upper}."
                     )
 
-    def add_objective(self, name: str):
+    def add_objective(self, name: str) -> None:
         """Set the optimization objective variable.
 
         Parameters
@@ -469,7 +539,7 @@ class ParameterSweep:
     def __init__(
         self,
         param_name_to_value_list: Dict[str, Any],
-        child: Union["ParameterSweep", Optimization] = None,
+        child: ParameterSweep | Optimization | None = None,
     ) -> None:
         """Initialize a parameter sweep definition.
 
@@ -494,7 +564,7 @@ class ParameterSweep:
 
         """
         self.child = child
-        self.length: int = None
+        self.length: int | None = None
         self.param_name_to_value_list = param_name_to_value_list
         self.log = ParameterSweep.log
         self.log.debug("initialize")
@@ -540,7 +610,7 @@ class ParameterSweep:
             raise TypeError("Child must be ParameterSweep or Optimization")
         self.child = child
 
-    def get_optim_child(self):
+    def get_optim_child(self) -> Optimization | None:
         """Return the optimization child at the end of the sweep chain.
 
         Returns
@@ -557,7 +627,7 @@ class ParameterSweep:
         if isinstance(child, Optimization):
             return child
 
-    def get_desvar_names(self):
+    def get_desvar_names(self) -> list[str]:
         # assumes optimization cannot have child
         """Return design-variable names from the terminal optimization child.
 
@@ -574,7 +644,7 @@ class ParameterSweep:
         else:
             return child.get_desvar_names()
 
-    def get_all_param_names(self):
+    def get_all_param_names(self) -> set[str]:
         # assumes optimization cannot have child
         """Return all parameter names across the sweep chain.
 
@@ -634,7 +704,7 @@ class ParameterSweep:
                 states.append(state)
         return states
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, Any]:
         """Serialize the parameter sweep to a dictionary.
 
         Returns
@@ -652,7 +722,7 @@ class ParameterSweep:
         }
 
     @classmethod
-    def _from_dict(cls, data):
+    def _from_dict(cls, data: dict[str, Any]) -> ParameterSweep:
         """Reconstruct a parameter sweep from a dictionary.
 
         Parameters
@@ -701,7 +771,7 @@ class Control:
         title: str = "Default Title",
         author: str = "Default Author",
         description: str = "Default Description",
-        repo_root: str = None,
+        repo_root: str | None = None,
     ) -> None:
         """Initialize a control definition.
 
@@ -771,28 +841,26 @@ class Control:
         author: str = "Default Author",
         description: str = "Default Description",
     ) -> None:
-        """Update study metadata.
+        """Replace the study title, author, and description.
+
+        All three fields are assigned on every call. An omitted argument receives
+        its default value rather than retaining the previous value.
 
         Parameters
         ----------
         title : str, optional
-            Study title.
+            New study title.
         author : str, optional
-            Study author.
+            New study author.
         description : str, optional
-            Study description.
-
-        Returns
-        -------
-        None
-
+            New study description.
         """
         self.title = title
         self.author = author
         self.description = description
 
     def add_tradestudy(
-        self, trade_name: str, trade: Union[ParameterSweep, Optimization,
+        self, trade_name: str, trade: Union[ParameterSweep, Optimization, LocalSensitivity,
                                             BasicAleatory,RegressionPCE,
                                             GaussQuadraturePCE,SobolSensitivity,
                                             BasicEpistemic, BasicMixedIVP,

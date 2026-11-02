@@ -299,6 +299,7 @@ def test_study_capture_environment_existing_trade_branch(monkeypatch):
     assert "time_info" in metadata
 
 
+@pytest.mark.git
 def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkeypatch):
     out = tmp_path / "variant"
     out.mkdir()
@@ -331,6 +332,7 @@ def test_study_save_results_to_json_and_commit_hook(tmp_path, demo_study, monkey
     assert calls["prepare"] == (False, True)
 
 
+@pytest.mark.git
 def test_study_save_results_to_json_commit_uses_current_branch(tmp_path, demo_study, monkeypatch):
     out = tmp_path / "variant"
     out.mkdir()
@@ -362,12 +364,14 @@ def test_study_save_results_to_json_commit_uses_current_branch(tmp_path, demo_st
     assert calls["prepare"] == (False, False)
 
 
+@pytest.mark.git
 def test_study_commit_json_to_branch_errors_no_dir(demo_study):
     demo_study.control.repo_root = "/definitely/not/a/repo"
     with pytest.raises(NotADirectoryError):
         demo_study._commit_json_to_branch(["dummy.json"], "msg")
 
 
+@pytest.mark.git
 def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, monkeypatch):
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -379,6 +383,7 @@ def test_study_commit_json_to_branch_errors_when_no_repo(tmp_path, demo_study, m
         demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
 
 
+@pytest.mark.git
 def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_study, monkeypatch):
     repo_root = tmp_path / "repo2"
     repo_root.mkdir()
@@ -390,6 +395,7 @@ def test_study_commit_json_to_branch_errors_mismatch_repo_path(tmp_path, demo_st
         demo_study._commit_json_to_branch([str(repo_root / "data.json")], "msg")
 
 
+@pytest.mark.git
 def test_study_commit_json_to_branch_detached_head(tmp_path, demo_study, monkeypatch):
     repo_root = tmp_path / "repo3"
     repo_root.mkdir()
@@ -443,6 +449,7 @@ def _configure_study_repository(study, repo_root):
     study.control.author = "Test Author"
 
 
+@pytest.mark.git
 def test_autocommit_rejects_unstaged_tracked_changes_before_writing_model(
     initialized_git_repo, demo_study
 ):
@@ -461,6 +468,7 @@ def test_autocommit_rejects_unstaged_tracked_changes_before_writing_model(
     assert _run_git(repo_root, "rev-list", "--count", "HEAD") == "1"
 
 
+@pytest.mark.git
 def test_commit_code_commits_code_before_model_on_new_branch(
     initialized_git_repo, demo_study
 ):
@@ -488,6 +496,7 @@ def test_commit_code_commits_code_before_model_on_new_branch(
     assert _run_git(repo_root, "status", "--short") == ""
 
 
+@pytest.mark.git
 def test_commit_code_commits_untracked_files_without_tracked_changes(
     initialized_git_repo, demo_study
 ):
@@ -510,6 +519,7 @@ def test_commit_code_commits_untracked_files_without_tracked_changes(
     assert _run_git(repo_root, "status", "--short") == ""
 
 
+@pytest.mark.git
 def test_untracked_files_block_json_autocommit_without_commit_code(
     initialized_git_repo, demo_study
 ):
@@ -529,6 +539,7 @@ def test_untracked_files_block_json_autocommit_without_commit_code(
     assert _run_git(repo_root, "status", "--short") == "?? untracked.txt"
 
 
+@pytest.mark.git
 def test_check_git_rejects_untracked_nonignored_files(
     initialized_git_repo, demo_study
 ):
@@ -542,6 +553,7 @@ def test_check_git_rejects_untracked_nonignored_files(
         demo_study.check_git()
 
 
+@pytest.mark.git
 def test_check_git_allows_ignored_files(initialized_git_repo, demo_study):
     repo_root, _, _ = initialized_git_repo
     _configure_study_repository(demo_study, repo_root)
@@ -552,6 +564,7 @@ def test_check_git_allows_ignored_files(initialized_git_repo, demo_study):
     demo_study.check_git()
 
 
+@pytest.mark.git
 def test_ignored_files_do_not_block_json_autocommit(
     initialized_git_repo, demo_study
 ):
@@ -568,8 +581,184 @@ def test_ignored_files_do_not_block_json_autocommit(
     assert (variant_dir / "model.json").exists()
 
 
+@pytest.mark.git
 def test_commit_code_requires_json_commit(demo_study, tmp_path):
     with pytest.raises(ValueError, match="Cannot commit code"):
         demo_study.save_model_to_json(
             str(tmp_path), commit=False, commit_code=True
         )
+
+
+def test_study_save_to_json_without_results(tmp_path, demo_study):
+    demo_study.save_to_json(str(tmp_path), commit=False)
+    assert (tmp_path / "model.json").exists()
+    assert not (tmp_path / "results.json").exists()
+
+
+def test_study_save_to_json_discard_results_when_loaded_model_changes(
+    tmp_path, demo_study, monkeypatch
+):
+    demo_study.save_model_to_json(str(tmp_path), commit=False)
+    loaded = Study.load_model_from_json(str(tmp_path / "model.json"))
+    study_data = loaded._to_dict()
+    study_data["results"] = {SOLUTION_NAME: {"trade_a": _saved_trade_result(loaded)}}
+    study_data["execution_meta_data"] = {SOLUTION_NAME: {"trade_a": {}}}
+    monkeypatch.setattr(loaded, "_to_dict", lambda: study_data)
+    loaded.save_to_json(str(tmp_path), commit=False)
+    assert (tmp_path / "results.json").exists()
+
+    study_data["control"]["variant_name"] = "changed"
+    changed_dir = tmp_path / "changed"
+    changed_dir.mkdir()
+    loaded.save_to_json(str(changed_dir), commit=False)
+    assert (changed_dir / "model.json").exists()
+    assert not (changed_dir / "results.json").exists()
+
+
+def test_study_save_post_to_json_validation_and_roundtrip(tmp_path, demo_study, monkeypatch):
+    with pytest.raises(ValueError, match="no results exist"):
+        demo_study.save_post_to_json(str(tmp_path), commit=False)
+
+    study_data = demo_study._to_dict()
+    study_data["results"] = {SOLUTION_NAME: {"trade_a": _saved_trade_result(demo_study)}}
+    study_data["execution_meta_data"] = {SOLUTION_NAME: {"trade_a": {}}}
+    monkeypatch.setattr(demo_study, "_to_dict", lambda: study_data)
+    with pytest.raises(ValueError, match="results.json file must exist"):
+        demo_study.save_post_to_json(str(tmp_path), commit=False)
+
+    (tmp_path / "results.json").write_text("{}")
+    with pytest.raises(ValueError, match="model.json file must exist"):
+        demo_study.save_post_to_json(str(tmp_path), commit=False)
+
+    (tmp_path / "model.json").write_text("{}")
+    demo_study._results_dict_hash = "outdated"
+    with pytest.raises(ValueError, match="hash does not match"):
+        demo_study.save_post_to_json(str(tmp_path), commit=False)
+
+    demo_study._results_dict_hash = None
+    demo_study._post_data = {SOLUTION_NAME: {"trade_a": {"score": 12.0}}}
+    demo_study.save_post_to_json(str(tmp_path), commit=False)
+    import json
+    saved = json.loads((tmp_path / "post.json").read_text())
+    assert saved["post_storage"][SOLUTION_NAME]["trade_a"]["score"] == 12.0
+    assert saved["header"]["result_hash"]
+
+
+import os
+
+os.environ.setdefault("UAM4X_DISABLE_REGISTRY_WRITES", "1")
+
+import numpy as np
+import pytest
+
+from uam4x.study import Study
+from uam4x.vehicle import Vehicle
+from uam4x.subsystems import Wing
+from uam4x.solution import Plugin, Group, Solution, register_plugin
+
+
+@register_plugin
+class TypeProbePlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("x_float", float)
+        self.declare_input("x_int", int)
+        self.declare_output("y_float", float)
+        self.declare_output("y_arr", np.ndarray, shape=(2,))
+
+    def run_plugin(self, links, work_dir):
+        return {"y_float": 1.0, "y_arr": np.array([1.0, 2.0])}
+
+
+@pytest.fixture
+def typed_study():
+    study = Study()
+
+    study.add_solution(Solution("test_solution"))
+    wing = Wing("wing")
+    wing.set_parameter("span", 12.5)
+    mode = wing.add_mode("cruise")
+    mode.set_parameter("span", 15.0)
+
+    vehicle = Vehicle("veh")
+    vehicle.add_component(wing)
+    study.add_vehicle(vehicle)
+
+    study.get_solution("test_solution").add_step(TypeProbePlugin, "probe")
+    study.get_solution("test_solution").sort_steps()
+
+    return study
+
+
+
+def test_study_get_param_type_for_component_and_mode(typed_study):
+    s = typed_study
+
+    assert s.get_param_type("vehicles.veh.wing.span") is float
+    assert s.get_param_type("vehicles.veh.wing.cruise.span") is float
+
+
+def test_study_get_param_type_invalid_path_raises(typed_study):
+    with pytest.raises(ValueError, match="Invalid vehicle parameter"):
+        typed_study.get_param_type("vehicles.veh.wing")
+
+
+
+
+def test_remove_trade_result_requires_result_and_metadata(demo_study, tmp_path):
+    demo_study.results.solutions[SOLUTION_NAME] = SimpleNamespace(
+        tradestudies={"trade_a": object()}
+    )
+    with pytest.raises(ValueError, match="both the result and its execution metadata"):
+        demo_study.remove_trade_result(SOLUTION_NAME, "trade_a", str(tmp_path))
+
+
+def test_remove_trade_result_rejects_final_trade(demo_study, tmp_path):
+    demo_study.results.solutions[SOLUTION_NAME] = SimpleNamespace(
+        tradestudies={"trade_a": object()}
+    )
+    demo_study._runtime_meta_data[SOLUTION_NAME] = {"trade_a": {}}
+
+    with pytest.raises(ValueError, match="final trade result"):
+        demo_study.remove_trade_result(SOLUTION_NAME, "trade_a", str(tmp_path))
+    assert "trade_a" in demo_study.results.solutions[SOLUTION_NAME].tradestudies
+
+
+def test_remove_trade_result_updates_remaining_results_and_hash(
+    demo_study, tmp_path, monkeypatch
+):
+    demo_study.results.solutions[SOLUTION_NAME] = SimpleNamespace(
+        tradestudies={"trade_a": object(), "trade_b": object()}
+    )
+    demo_study._runtime_meta_data[SOLUTION_NAME] = {
+        "trade_a": {}, "trade_b": {}
+    }
+    calls = []
+    monkeypatch.setattr(
+        demo_study, "save_results_to_json",
+        lambda variant_dir, **kwargs: calls.append((variant_dir, kwargs)) or "new_hash",
+    )
+
+    demo_study.remove_trade_result(SOLUTION_NAME, "trade_a", str(tmp_path))
+
+    assert list(demo_study.results.solutions[SOLUTION_NAME].tradestudies) == ["trade_b"]
+    assert list(demo_study._runtime_meta_data[SOLUTION_NAME]) == ["trade_b"]
+    assert demo_study._results_dict_hash == "new_hash"
+    assert calls == [(str(tmp_path), {"commit": False, "commit_code": False})]
+
+
+def test_remove_trade_result_removes_empty_solution_container(
+    demo_study, tmp_path, monkeypatch
+):
+    demo_study.results.solutions = {
+        SOLUTION_NAME: SimpleNamespace(tradestudies={"trade_a": object()}),
+        "other": SimpleNamespace(tradestudies={"trade_b": object()}),
+    }
+    demo_study._runtime_meta_data[SOLUTION_NAME] = {"trade_a": {}}
+    demo_study._runtime_meta_data["other"] = {"trade_b": {}}
+    monkeypatch.setattr(demo_study, "save_results_to_json", lambda *args, **kwargs: "hash")
+
+    demo_study.remove_trade_result(SOLUTION_NAME, "trade_a", str(tmp_path))
+
+    assert SOLUTION_NAME not in demo_study.results.solutions
+    assert SOLUTION_NAME not in demo_study._runtime_meta_data
+    assert "other" in demo_study.results.solutions

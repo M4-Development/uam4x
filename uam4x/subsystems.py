@@ -66,13 +66,13 @@ class Parameter:
     def __init__(
         self,
         name: str,
-        default_value,
-        dtype,
-        unit_type: UnitType = None,
-        unit: Enum = None,
+        default_value: object,
+        dtype: type,
+        unit_type: UnitType | None = None,
+        unit: Enum | str | None = None,
         description: str = "",
         comment: str = "",
-    ):
+    ) -> None:
         """Initialize a parameter.
 
         Parameters
@@ -117,7 +117,7 @@ class Parameter:
         self.description = description
         self.comment = comment
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a human-readable string representation of the parameter.
 
         Returns
@@ -131,7 +131,7 @@ class Parameter:
         self.log.debug(f"return string representation")
         return f"{self.name}: {self.value} [{self.unit_type}, {unit_display}] ({self.description})"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a developer-oriented string representation of the parameter.
 
         Returns
@@ -145,7 +145,7 @@ class Parameter:
         return self.__str__()
 
     @property
-    def value(self):
+    def value(self) -> object:
         """Parameter value.
 
         Returns
@@ -157,7 +157,7 @@ class Parameter:
         return self._value
 
     @value.setter
-    def value(self, v):
+    def value(self, v: object) -> None:
         """Set the parameter value.
 
         Parameters
@@ -262,7 +262,7 @@ class _Mode:
 
     log = get_log(log, object_name=f"mode")
 
-    def __init__(self, name: str, component: "Subsystem"):
+    def __init__(self, name: str, component: "Subsystem") -> None:
         """Initialize a mode.
 
         Parameters
@@ -279,7 +279,7 @@ class _Mode:
         self.component = component  # Reference to parent component for inheritance
         self.log = _Mode.log
 
-    def set_parameter(self, name: str, value, comment: str = ""):
+    def set_parameter(self, name: str, value: object, comment: str = "") -> None:
         """Set a parameter override for this mode.
 
         Parameters
@@ -323,7 +323,7 @@ class _Mode:
         self._overrides[name] = value
         self._override_comments[name] = comment
 
-    def get_parameter(self, name: str):
+    def get_parameter(self, name: str) -> object:
         """Return a mode override or inherited subsystem parameter value.
 
         Parameters
@@ -355,7 +355,7 @@ class _Mode:
             f"Parameter '{name}' does not exist in component '{self.component.name}' for mode '{self.name}'"
         )
 
-    def get_parameter_comment(self, name: str):
+    def get_parameter_comment(self, name: str) -> str:
         """Return the comment for a mode override or inherited parameter.
 
         Parameters
@@ -386,7 +386,7 @@ class _Mode:
         self.log.error(message)
         raise AttributeError(message)
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> object:
         """Return an override, inherited parameter, or parent attribute.
 
         Parameters
@@ -421,7 +421,7 @@ class _Mode:
             f"'{self.__class__.__name__}' object has no attribute '{item}'"
         )
 
-    def __setattr__(self, key, value):
+    def __setattr__(self, key: str, value: object) -> None:
         """Assign a mode override or regular attribute.
 
         Parameters
@@ -457,7 +457,7 @@ class _Mode:
             )
 
     @property
-    def parameters(self):
+    def parameters(self) -> dict[str, object]:
         """Return effective parameter values for the mode.
 
         Returns
@@ -505,7 +505,7 @@ class _Mode:
                 )
         return params
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a human-readable string representation of the mode.
 
         Returns
@@ -545,7 +545,7 @@ class Subsystem:
 
     log = get_log(log, object_name=f"component")
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         """Initialize a physical component instance.
 
         Parameters
@@ -578,7 +578,7 @@ class Subsystem:
         setattr(self, "baseline", self)
         self._parent = None
 
-    def setup(self):
+    def setup(self) -> None:
         """Register baseline parameters for the component.
 
         Returns
@@ -596,8 +596,10 @@ class Subsystem:
         )
 
     def add_parameter(
-        self, name: str, default_value, dtype, unit_type=None, unit=None, description=""
-    ):
+        self, name: str, default_value: object, dtype: type,
+        unit_type: UnitType | None = None, unit: Enum | str | None = None,
+        description: str = ""
+    ) -> None:
         """Add a baseline parameter to the component.
 
         Parameters
@@ -614,9 +616,6 @@ class Subsystem:
             Unit label associated with the parameter value.
         description : str, optional
             Human-readable parameter description.
-        comment : str, optional
-            Source, reference, or rationale associated with the current value.
-
         Returns
         -------
         None
@@ -684,7 +683,10 @@ class Subsystem:
         prop = property(getter, setter)
         setattr(self.__class__, name, prop)
 
-    def set_parameter(self, name: str, value, unit=None, comment: str = ""):
+    def set_parameter(
+        self, name: str, value: object, unit: Enum | str | None = None,
+        comment: str = ""
+    ) -> None:
         """Set the value of a baseline parameter.
 
         Parameters
@@ -741,7 +743,7 @@ class Subsystem:
                 f"Parameter '{name}' not defined for {self.__class__.__name__}."
             )
 
-    def add_mode(self, mode_name: str):
+    def add_mode(self, mode_name: str) -> _Mode:
         """Add an operating mode to the component.
 
         Parameters
@@ -780,7 +782,7 @@ class Subsystem:
         setattr(self, mode.name, mode)
         return mode
 
-    def get_parameter(self, param_name: str):
+    def get_parameter(self, param_name: str) -> object:
         """Return the value of a baseline parameter.
 
         Parameters
@@ -809,7 +811,7 @@ class Subsystem:
             )
         return self._parameters[param_name].value
 
-    def get_parameter_comment(self, param_name: str):
+    def get_parameter_comment(self, param_name: str) -> str:
         """Return the comment associated with a baseline parameter value.
 
         Parameters
@@ -838,7 +840,7 @@ class Subsystem:
             raise AttributeError(message)
         return self._parameters[param_name].comment
 
-    def get_parameter_type(self, param_name: str):
+    def get_parameter_type(self, param_name: str) -> type:
         """Return the declared type of a baseline parameter.
 
         Parameters
@@ -867,7 +869,7 @@ class Subsystem:
             )
         return self._parameters[param_name].dtype
 
-    def check_all_parameter_types(self):
+    def check_all_parameter_types(self) -> dict[str, dict[str, bool]]:
         """Validate parameter types for all mode overrides.
 
         Returns
@@ -905,7 +907,7 @@ class Subsystem:
             result[mode_name] = mode_result
         return result
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a human-readable string representation of the component.
 
         Returns
@@ -994,7 +996,7 @@ class Subsystem:
         return {name: param.value for name, param in self._parameters.items()}
 
 
-def register_subsystem(cls):
+def register_subsystem(cls: type[Subsystem]) -> type[Subsystem]:
     """Register a subsystem class for lookup and deserialization.
 
     Parameters
@@ -1019,10 +1021,10 @@ def register_subsystem(cls):
     log.debug(f"register subsystem: {subsystem}")
     # Only register in the registry, don't modify conf.json for built-in subsystems
     # when running subsystems.py directly
-    if cls.__module__ == "__main__":
-        _subsystem_registry[subsystem] = cls
-        _update_consts(subsystem, cls)
-        return cls
+    #if cls.__module__ == "__main__":
+    #    _subsystem_registry[subsystem] = cls
+    #    _update_consts(subsystem, cls)
+    #    return cls
 
     # For external subsystems, update conf.json
     config_path = canonicalize_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conf.json"))
@@ -1047,7 +1049,7 @@ def register_subsystem(cls):
     return cls
 
 
-def _update_consts(subsystem, subsystem_class):
+def _update_consts(subsystem: str, subsystem_class: type[Subsystem]) -> None:
     """Update cached subsystem metadata tables.
 
     Parameters
@@ -1078,7 +1080,7 @@ def _update_consts(subsystem, subsystem_class):
         )
 
 
-def get_subsystem_class(subsystem_class_name):
+def get_subsystem_class(subsystem_class_name: str) -> type[Subsystem]:
     """Return a registered subsystem class by name.
 
     Parameters
@@ -1106,7 +1108,7 @@ def get_subsystem_class(subsystem_class_name):
     return _subsystem_registry[subsystem_class_name]
 
 
-def get_subsystem_names():
+def get_subsystem_names() -> list[str]:
     """Return registered subsystem names.
 
     Returns
@@ -1118,7 +1120,7 @@ def get_subsystem_names():
     return _subsystem_names
 
 
-def get_param_name_and_type_list(subsystem):
+def get_param_name_and_type_list(subsystem: str) -> list[tuple[str, str]]:
     """Return parameter name/type metadata for a subsystem class.
 
     Parameters
@@ -1134,7 +1136,7 @@ def get_param_name_and_type_list(subsystem):
     """
     return _subsystem_to_param_name_type_list[subsystem]
 
-def get_param_type(subsystem, param):
+def get_param_type(subsystem: str, param: str) -> str | None:
     """Return the declared dtype name for one subsystem parameter.
 
     Parameters
@@ -1162,7 +1164,7 @@ def get_param_type(subsystem, param):
 class Wing(Subsystem):
     """Represent a wing component."""
 
-    def setup(self):
+    def setup(self) -> None:
         """Register baseline wing parameters.
 
         Returns
@@ -1197,7 +1199,8 @@ class Wing(Subsystem):
 
 @register_subsystem
 class Rotor(Subsystem):
-    def setup(self):
+    def setup(self) -> None:
+        """Register rotor geometry, blade count, and aerodynamic parameters."""
 
         # Geometric parms
         self.add_parameter("radius",1.0,float, description="rotor radius")
@@ -1277,15 +1280,15 @@ class Rotor(Subsystem):
         #Option 1: Polar
         self.add_parameter("angle",0.0,float,description="angle rotor hub makes with x axis of fuselage")
         self.add_parameter("length",0.0,float,description="distance from fuselage ref and hub")
-        self.add_parameter("L/R",0.0,float,description="distance from fuselage ref" \
+        self.add_parameter("L_per_R",0.0,float,description="distance from fuselage ref" \
         "normalized by rotor radius")
 
         #Option 2: Cartesian
         self.add_parameter("xloc",0.0,float,description="x coordinate of hub wrt fuselage ref")
         self.add_parameter("yloc",0.0,float,description="y coordinate of hub wrt fuselage ref")
-        self.add_parameter("xloc/R",0.0,float,description="x coordinate of hub normalized" \
+        self.add_parameter("xloc_per_R",0.0,float,description="x coordinate of hub normalized" \
         "by rotor radius relative to fuselage ref")
-        self.add_parameter("yloc/R",0.0,float,description="y coordinate of hub normalized" \
+        self.add_parameter("yloc_per_R",0.0,float,description="y coordinate of hub normalized" \
         "by rotor radius relative to fuselage ref")
 
         #Angles:
@@ -1303,7 +1306,7 @@ class Rotor(Subsystem):
 
         #radial location of hinge relative to rotor hub center
         self.add_parameter('e',0.0,float,description="location of hinge relative to hub center")
-        self.add_parameter('e/R',0.0,float,description="location of hinge relative to hub center" \
+        self.add_parameter('e_per_R',0.0,float,description="location of hinge relative to hub center" \
         "normalized by rotor radius")
 
         # rigid body frequencies
@@ -1317,7 +1320,7 @@ class Rotor(Subsystem):
 class RotorBladeRegion(Subsystem):
     """Represent a rotor blade region component."""
 
-    def setup(self):
+    def setup(self) -> None:
         """Register baseline rotor blade region parameters.
 
         Returns
@@ -1430,7 +1433,8 @@ class RotorBladeRegion(Subsystem):
 
 @register_subsystem
 class Rotorcraft(Subsystem):
-    def setup(self):
+    def setup(self) -> None:
+        """Register vehicle-level mass, inertia, and flight parameters."""
         # Mass props
         self.add_parameter("DGW",0.0,float,description="Design Gross Weight of rotorcraft")
 
@@ -1487,7 +1491,8 @@ class Rotorcraft(Subsystem):
 
 @register_subsystem
 class Mission(Subsystem):
-    def setup(self):
+    def setup(self) -> None:
+        """Register mission speed, climb rate, and altitude parameters."""
         self.add_parameter('Vkts',0.0,float,description='horizontal speed')
 
         self.add_parameter('ROC',0.0,float,description='Rate of climb')
@@ -1496,7 +1501,8 @@ class Mission(Subsystem):
 
 @register_subsystem
 class AeroState(Subsystem):
-    def setup(self):
+    def setup(self) -> None:
+        """Register flight-condition, rate, and acceleration parameters."""
 
         #Flight point
         self.add_parameter("mach",0.0,float,description="mach")
@@ -1529,6 +1535,88 @@ class AeroState(Subsystem):
         self.add_parameter("rdot",0.0,float,description="yaw acceleration")
 
         #Control inputs
+
+@register_subsystem
+class Nozzle(Subsystem):
+    '''
+    Store nozzle geometry and inlet/outlet flow values.
+
+    Parameters may hold starting points, specified inputs, or values returned
+    by an external solver such as NPSS. This subsystem does not calculate flow
+    conditions or enforce relationships among its parameters; plugins and
+    analyses define those relationships for their particular models.
+    '''
+    def setup(self) -> None:
+        """Register nozzle geometry and inlet/outlet flow placeholders."""
+
+        #Geometry properties
+        self.add_parameter("Ain",0.0,float,description="Inlet Area")
+        self.add_parameter("Aout",0.0,float,description="Outlet Area")
+
+        self.add_parameter("Din",0.0,float,description="Inlet Diameter")
+        self.add_parameter("Dout",0.0,float,description="Outlet Diameter")
+
+        self.add_parameter("Rin",0.0,float,description="Inlet Radius")
+        self.add_parameter("Rout",0.0,float,description="Outlet Radius")
+
+        #Flow properties
+        self.add_parameter("Tin",0.0,float,description="Inlet Temperature")
+        self.add_parameter("Tout",0.0,float,description="Outlet Temperature")
+
+        self.add_parameter("pin",0.0,float,description="Inlet Pressure")
+        self.add_parameter("pout",0.0,float,description="Outlet Pressure")
+
+        self.add_parameter("Vin",0.0,float,description="Inlet Velocity")
+        self.add_parameter("Vout",0.0,float,description="Outlet Velocity")
+
+        self.add_parameter("rhoin",0.0,float,description="Inlet density")
+        self.add_parameter("rhoout",0.0,float,description="Outlet density")
+
+        self.add_parameter("hin",0.0,float,description="Inlet Enthalpy")
+        self.add_parameter("hout",0.0,float,description="Outlet Enthalpy")
+
+        self.add_parameter('mdot',0.0,float,description="Mass flow rate")
+
+@register_subsystem
+class Diffuser(Subsystem):
+    '''
+    Store diffuser geometry and inlet/outlet flow values.
+
+    Parameters may hold starting points, specified inputs, or values returned
+    by an external solver such as NPSS. This subsystem does not calculate flow
+    conditions or enforce relationships among its parameters; plugins and
+    analyses define those relationships for their particular models.
+    '''
+    def setup(self) -> None:
+        """Register diffuser geometry and inlet/outlet flow placeholders."""
+
+        #Geometry properties
+        self.add_parameter("Ain",0.0,float,description="Inlet Area")
+        self.add_parameter("Aout",0.0,float,description="Outlet Area")
+
+        self.add_parameter("Din",0.0,float,description="Inlet Diameter")
+        self.add_parameter("Dout",0.0,float,description="Outlet Diameter")
+
+        self.add_parameter("Rin",0.0,float,description="Inlet Radius")
+        self.add_parameter("Rout",0.0,float,description="Outlet Radius")
+
+        #Flow properties
+        self.add_parameter("Tin",0.0,float,description="Inlet Temperature")
+        self.add_parameter("Tout",0.0,float,description="Outlet Temperature")
+
+        self.add_parameter("pin",0.0,float,description="Inlet Pressure")
+        self.add_parameter("pout",0.0,float,description="Outlet Pressure")
+
+        self.add_parameter("Vin",0.0,float,description="Inlet Velocity")
+        self.add_parameter("Vout",0.0,float,description="Outlet Velocity")
+
+        self.add_parameter("rhoin",0.0,float,description="Inlet density")
+        self.add_parameter("rhoout",0.0,float,description="Outlet density")
+
+        self.add_parameter("hin",0.0,float,description="Inlet Enthalpy")
+        self.add_parameter("hout",0.0,float,description="Outlet Enthalpy")
+
+        self.add_parameter('mdot',0.0,float,description="Mass flow rate")
 
 
 

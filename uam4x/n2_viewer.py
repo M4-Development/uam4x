@@ -277,6 +277,7 @@ def _strongly_connected_components(
     result: list[list[str]] = []
 
     def visit(node: str) -> None:
+        """Record one component and update its strongly connected component state."""
         nonlocal index
         indices[node] = index
         low_links[node] = index
@@ -330,18 +331,28 @@ def _optimization_sets(state: dict | None) -> tuple[set[str], set[str], set[str]
 
 def build_n2_data(
     study,
-    solution,
-    plugins: dict,
+    solution: Group,
+    plugins: dict[str, Any],
     *,
-    state: dict | None = None,
+    state: dict[str, Any] | None = None,
     trade_name: str | None = None,
     title: str | None = None,
     include_values: bool = False,
     initial_path: str | None = None,
     auto_collapse: bool = True,
     max_visible_rows: int = 120,
-) -> dict:
-    """Build the native, JSON-safe data model consumed by the uam4x N² viewer."""
+) -> dict[str, Any]:
+    """Build the model data used by the standalone N² viewer.
+
+    Read the solution hierarchy, plugin variable declarations, vehicle
+    parameters, and links without executing plugins. Mark tracked outputs
+    and, when a trade state is supplied, its design variables, constraints,
+    and objective.
+
+    ``initial_path`` selects the group or component shown first. A unique
+    short name is accepted; an unknown or ambiguous path raises ValueError.
+    Declared values are included only when ``include_values`` is True.
+    """
     components: list[dict] = []
     variables: list[dict] = []
     dependencies: list[dict] = []
@@ -482,6 +493,7 @@ def build_n2_data(
     system_ids = {tree["id"]}
 
     def collect_system_ids(node: dict) -> None:
+        """Collect this hierarchy node's ID and all descendant IDs."""
         system_ids.add(node["id"])
         for child in node.get("children", []):
             collect_system_ids(child)
@@ -534,8 +546,12 @@ def build_n2_data(
     }
 
 
-def render_n2_html(model_data: dict, outfile) -> Path:
-    """Write a standalone uam4x N² HTML document and return its absolute path."""
+def render_n2_html(model_data: dict[str, Any], outfile: str | Path) -> Path:
+    """Write a standalone N² HTML file and return its absolute path.
+
+    Create the parent directory if needed, embed the model data in the
+    HTML template, and write the file using UTF-8.
+    """
     output_path = Path(outfile).expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(

@@ -656,3 +656,26 @@ def test_bad_component_accesss(demo_vehicle, demo_rotor):
 if __name__ == '__main__':
 
     test_component_duplicate_names()
+
+
+def test_component_cannot_be_attached_to_two_vehicles(demo_wing):
+    first = Vehicle("first")
+    second = Vehicle("second")
+    first.add_component(demo_wing)
+
+    with pytest.raises(ValueError, match="only belong to one vehicle"):
+        second.add_component(demo_wing)
+    assert demo_wing._parent is first
+    assert second.components == []
+
+
+def test_vehicle_manager_append_alias_and_missing_component_removal(demo_wing):
+    manager = VehicleManager()
+    vehicle = Vehicle("v")
+    manager.append(vehicle)
+    assert manager.get_vehicle("v") is vehicle
+
+    vehicle.add_component(demo_wing)
+    with pytest.raises(ValueError):
+        vehicle.remove_component("missing")
+    assert vehicle.get_component(demo_wing.name) is demo_wing

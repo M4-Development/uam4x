@@ -39,6 +39,8 @@ class Optimization:
     ----------
     study : Study
         Study object containing vehicles, solution, and optimization settings.
+    solution : Solution
+        Solution workflow used to build the OpenMDAO model.
     state : dict
         Optimization state dictionary for the current analysis.
     plugins : dict
@@ -55,7 +57,13 @@ class Optimization:
     log = get_log(log, object_name="optimization")
 
     def __init__(
-        self, study: Study,solution:Solution, state, plugins, out_dir, check_partials=False
+        self,
+        study: Study,
+        solution: Solution,
+        state: dict,
+        plugins: dict,
+        out_dir: str | os.PathLike[str],
+        check_partials: bool = False,
     ) -> None:
         """Initialize an OpenMDAO optimization wrapper.
 
@@ -63,6 +71,8 @@ class Optimization:
         ----------
         study : Study
             Study object containing vehicles, solution, and optimization settings.
+        solution : Solution
+            Solution workflow used to build the OpenMDAO model.
         state : dict
             Optimization state dictionary for the current analysis.
         plugins : dict
@@ -83,7 +93,7 @@ class Optimization:
         self.check_partials = check_partials
         self.log = Optimization.log
 
-    def run_problem(self):
+    def run_problem(self) -> "Result | om.Problem":
         """Build, execute, and collect results from an OpenMDAO optimization.
 
         Returns
@@ -205,8 +215,13 @@ class Optimization:
                     lower = dv_type(lower)
                 if upper is not None:
                     upper = dv_type(upper)
+            scaling = {
+                key: data[key] for key in ('ref', 'ref0')
+                if data.get(key) is not None
+            }
             problem.model.add_design_var(
-                name.replace(".", "~"), lower=lower, upper=upper, indices=indices
+                name.replace(".", "~"), lower=lower, upper=upper, indices=indices,
+                **scaling,
             )
 
         # add constraints
@@ -320,14 +335,31 @@ class Optimization:
 
         return result
 
-def qualify_name(name,group_name):
+def qualify_name(name: str, group_name: str | None) -> str:
+    """Convert a UAM4X path to an OpenMDAO variable name.
+
+    Prefix local names with ``group_name`` when given, and replace dotted
+    path separators with OpenMDAO's internal ``~`` separator.
+    """
     if name.startswith('vehicles.'):
         return name.replace(".","~")
     if group_name:
         return f"{group_name}.{name}".replace('.','~')
     return name.replace(".","~")
 
-def organize_links(links, vehicle_val_dict, uamgroup,group_name,plugins,mdao_group):
+def organize_links(
+    links: list[list[str]],
+    vehicle_val_dict: dict,
+    uamgroup: Group,
+    group_name: str | None,
+    plugins: dict,
+    mdao_group: om.Group,
+) -> tuple[dict, dict]:
+    """Connect direct links and collect indexed target links.
+
+    Direct links are connected on ``mdao_group``. Indexed target links are
+    returned as source and target metadata for ``ArrayAdapter`` creation.
+    """
     dependent_ind_names_to_sources={}
     dependent_ind_names_to_data={}
     for independent_name, dependent_name in links:
@@ -389,8 +421,12 @@ def organize_links(links, vehicle_val_dict, uamgroup,group_name,plugins,mdao_gro
 
     return dependent_ind_names_to_sources,dependent_ind_names_to_data
 
-def connect_indexed_variables(dependent_ind_names_to_sources,
-                              dependent_ind_names_to_data,mdao_group):
+def connect_indexed_variables(
+    dependent_ind_names_to_sources: dict,
+    dependent_ind_names_to_data: dict,
+    mdao_group: om.Group,
+) -> None:
+    """Add array adapters and connections for indexed target links."""
     for dependent_name,input_data in dependent_ind_names_to_sources.items():
                     step_name=dependent_name.replace('.','_').replace('~','_')+'_'+'array_helper'
                     # create component
@@ -417,14 +453,14 @@ class OpenmdaoPreComp(om.IndepVarComp):
 
     log = get_log(log, object_name="OpenmdaoPreComp")
 
-    def initialize(self):
+    def initialize(self) -> None:
         """Declare OpenMDAO options for vehicle values and declared types."""
         self.log = get_log(log, object_name="OpenmdaoPreComp")
         self.log.debug("initialize")
         self.options.declare("vehicle_val_dict")
         self.options.declare("vehicle_type_dict")
 
-    def setup(self):
+    def setup(self) -> None:
         """Add OpenMDAO outputs for vehicle parameters.
 
         Notes
@@ -449,7 +485,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
 
     log = get_log(log, object_name="UniversalOpenmdaoComp")
 
-    def initialize(self):
+    def initialize(self) -> None:
         """Declare OpenMDAO options for the wrapped plugin and execution context."""
         self.log = UniversalOpenmdaoComp.log
         self.log.debug("initialize")
@@ -459,7 +495,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
         self.options.declare("work_dir")
         self.options.declare("step_name")
 
-    def setup(self):
+    def setup(self) -> None:
         """Declare OpenMDAO variables and partials for the wrapped plugin.
 
         Notes
@@ -543,7 +579,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                     cols=cols,
                 )
 
-    def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}):
+    def compute(self, inputs, outputs, discrete_inputs={}, discrete_outputs={}) -> None:
         """Execute the wrapped plugin from OpenMDAO-provided inputs.
 
         Notes
@@ -582,7 +618,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
                 else:
                     outputs[name_with_plugin.replace(".", "~")] = value
 
-    def compute_partials(self, inputs, partials, discrete_inputs={}):
+    def compute_partials(self, inputs, partials, discrete_inputs={}) -> None:
         """Populate OpenMDAO partial derivatives from plugin-provided values.
 
         Notes
@@ -612,7 +648,7 @@ class UniversalOpenmdaoComp(om.ExplicitComponent):
 class UniversalOpenMDAOGroup(om.Group):
     """Wrap a UAM4X solution group as an OpenMDAO group."""
 
-    def initialize(self):
+    def initialize(self) -> None:
         """Declare OpenMDAO options for the wrapped solution group."""
         self.options.declare("group")
         self.options.declare("step_name")
@@ -621,7 +657,7 @@ class UniversalOpenMDAOGroup(om.Group):
         self.options.declare("links")
         self.options.declare("cycle_solver_options", default={})
 
-    def setup(self):
+    def setup(self) -> None:
         """Build OpenMDAO subsystems and connections for the wrapped solution group.
 
         Notes
@@ -711,17 +747,20 @@ class UniversalOpenMDAOGroup(om.Group):
 
 
 class ArrayAdapter(om.ExplicitComponent):
+    """Assemble an array output from one or more indexed OpenMDAO inputs."""
 
     #you essentially need to know all of the variables connecting
     # into a particular array at the outset, you need to collect them all
     # then declare them as inputs to that particular output then you just assign
-    def initialize(self):
+    def initialize(self) -> None:
+        """Declare the target array and source-link metadata options."""
         self.options.declare("output_data")
         self.options.declare("input_data")
         self.options.declare("step_name")
         self.options.declare("output_name")
 
-    def setup(self):
+    def setup(self) -> None:
+        """Declare adapter inputs, output shape, and finite-difference partials."""
         step_name=self.options["step_name"]
         for input_name,data in self.options["input_data"].items():
             if data['src_value'] is None:
@@ -735,7 +774,8 @@ class ArrayAdapter(om.ExplicitComponent):
         self.add_output(output_name,val=output_data["value"],shape=output_data["shape"])
 
         self.declare_partials('*','*',method='fd')
-    def compute(self,inputs,outputs,discrete_inputs={},discrete_outputs={}):
+    def compute(self,inputs,outputs,discrete_inputs={},discrete_outputs={}) -> None:
+        """Fill target indices from connected inputs, retaining other values."""
         step_name=self.options["step_name"]
         output_name=self.options["output_name"]
         shape = self.options["output_data"]["shape"]

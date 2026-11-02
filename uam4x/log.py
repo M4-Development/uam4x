@@ -1,10 +1,19 @@
-from cpylog import SimpleLogger, _write
+from __future__ import annotations
+
+import os
 import time
+from typing import TextIO
+
+from cpylog import SimpleLogger, _write
 
 DEV = True
 
 
-def get_log(log=None, filename_log=None, object_name=None):
+def get_log(
+    log: FileLogger | LoggerObjectNameLayer | None = None,
+    filename_log: str | os.PathLike[str] | None = None,
+    object_name: str | None = None,
+) -> LoggerObjectNameLayer:
     """Return a logger with an object-name context layer.
 
     Parameters
@@ -50,7 +59,7 @@ class LoggerObjectNameLayer:
 
     """
 
-    def __init__(self, logger, object_name):
+    def __init__(self, logger: FileLogger, object_name: str | None) -> None:
         """Initialize an object-name logger layer.
 
         Parameters
@@ -66,7 +75,7 @@ class LoggerObjectNameLayer:
             assert isinstance(object_name, str)
         self.object_name = object_name
 
-    def debug(self, msg):
+    def debug(self, msg: str) -> None:
         """Emit a debug message with the current object-name context.
 
         Parameters
@@ -82,7 +91,7 @@ class LoggerObjectNameLayer:
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ("DEBUG", msg)
 
-    def info(self, msg):
+    def info(self, msg: str) -> None:
         """Emit an info message with the current object-name context.
 
         Parameters
@@ -98,7 +107,7 @@ class LoggerObjectNameLayer:
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ("INFO", msg)
 
-    def warning(self, msg):
+    def warning(self, msg: str) -> None:
         """Emit a warning message with the current object-name context.
 
         Parameters
@@ -114,7 +123,7 @@ class LoggerObjectNameLayer:
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ("WARNING", msg)
 
-    def error(self, msg):
+    def error(self, msg: str) -> None:
         """Emit an error message with the current object-name context.
 
         Parameters
@@ -130,7 +139,7 @@ class LoggerObjectNameLayer:
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ("ERROR", msg)
 
-    def exception(self, msg):
+    def exception(self, msg: str) -> None:
         """Emit an exception message with the current object-name context.
 
         Parameters
@@ -146,7 +155,7 @@ class LoggerObjectNameLayer:
         self.root_logger.set_next_actor_name(self.object_name)
         self.root_logger.msg_typ("EXCEPTION", msg)
 
-    def critical(self, msg):
+    def critical(self, msg: str) -> None:
         """Emit a critical message with the current object-name context.
 
         Parameters
@@ -182,8 +191,12 @@ class FileLogger(SimpleLogger):
     }
 
     def __init__(
-        self, filename_log=None, write_to_stdout=True, level="debug", encoding="utf-8"
-    ):
+        self,
+        filename_log: str | os.PathLike[str] | None = None,
+        write_to_stdout: bool = True,
+        level: str = "debug",
+        encoding: str = "utf-8",
+    ) -> None:
         """Initialize a file-backed logger.
 
         Parameters
@@ -221,7 +234,7 @@ class FileLogger(SimpleLogger):
             level=level, encoding=encoding, log_func=self.log_function_handler
         )
 
-    def set_gui_log(self, handler):
+    def set_gui_log(self, handler: object) -> None:
         """Set a GUI log handler for emitted messages.
 
         Parameters
@@ -237,14 +250,14 @@ class FileLogger(SimpleLogger):
         """
         self.gui_log = handler
 
-    def set_next_actor_name(self, actor_name):
+    def set_next_actor_name(self, actor_name: str | None) -> None:
         """Set the object-name context for the next emitted message.
 
         Parameters
         ----------
-        actor_name : str
-            Name of the object that should be attached to the next emitted log
-            message.
+        actor_name : str or None
+            Name of the object to attach to the next emitted log message. Pass
+            ``None`` to emit that message without an actor name.
 
         Notes
         -----
@@ -254,7 +267,7 @@ class FileLogger(SimpleLogger):
         """
         self.next_actor_name = actor_name
 
-    def set_min_console_level(self, new_level):
+    def set_min_console_level(self, new_level: str) -> None:
         """Set the minimum message level written to stdout.
 
         Parameters
@@ -272,7 +285,7 @@ class FileLogger(SimpleLogger):
         assert new_level in self.msg_level_dict
         self.min_console_level = new_level
 
-    def set_min_filelog_level(self, new_level):
+    def set_min_filelog_level(self, new_level: str) -> None:
         """Set the minimum message level written to the log file.
 
         Parameters
@@ -289,7 +302,7 @@ class FileLogger(SimpleLogger):
         assert new_level in self.msg_level_dict
         self.min_filelog_level = new_level
 
-    def set_filename_log(self, filename_log):
+    def set_filename_log(self, filename_log: str | os.PathLike[str]) -> None:
         """Open and attach a log file for subsequent file logging.
 
         Parameters
@@ -313,7 +326,7 @@ class FileLogger(SimpleLogger):
         self.open_file = open_file(self.filename_log)
         self.write_to_file = self.open_file is not None and not self.open_file.closed
 
-    def close_file(self):
+    def close_file(self) -> None:
         """Close the active log file, if one is open.
 
         Returns
@@ -331,7 +344,7 @@ class FileLogger(SimpleLogger):
         self.open_file = None
         self.write_to_file = False
 
-    def log_function_handler(self, typ, filename, lineno, msg):
+    def log_function_handler(self, typ: str, filename: str, lineno: int, msg: str) -> None:
         """Route one log message to capture, stdout, and file outputs.
 
         Parameters
@@ -423,7 +436,7 @@ class FileLogger(SimpleLogger):
             self.gui_log.emit(msg2)
         _write(typ, name, msg2, self.encoding)
 
-    def file_logging(self, typ, filename, lineno, msg):
+    def file_logging(self, typ: str, filename: str, lineno: int, msg: str) -> None:
         """Write one formatted log message to the active log file.
 
         Parameters
@@ -458,7 +471,9 @@ class FileLogger(SimpleLogger):
         self.open_file.write((name + msg2) if typ else msg2)
         self.open_file.flush()
 
-    def begin_log_capture(self, capture_level_min="WARNING", clear_capture_log=True):
+    def begin_log_capture(
+        self, capture_level_min: str = "WARNING", clear_capture_log: bool = True
+    ) -> None:
         """Begin capturing emitted log messages in memory.
 
         Parameters
@@ -491,19 +506,20 @@ class FileLogger(SimpleLogger):
             if clear_capture_log:
                 self.capture_log = []
 
-    def get_capture_log(self):
+    def get_capture_log(self) -> list[tuple[str, str]]:
         """Return the in-memory captured log messages.
 
         Returns
         -------
         list of tuple[str, str]
             Captured ``(severity, message)`` pairs accumulated since capture began
-            or was last cleared.
+            or was last cleared. This is the logger's live capture list; modifying
+            it changes the stored capture history.
 
         """
         return self.capture_log
 
-    def end_log_capture(self):
+    def end_log_capture(self) -> list[tuple[str, str]]:
         """End in-memory log capture and return the captured messages.
 
         Returns
@@ -521,7 +537,7 @@ class FileLogger(SimpleLogger):
         self.do_capture_log = False
         return self.capture_log
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Close the active log file during object cleanup.
 
         Returns
@@ -532,7 +548,7 @@ class FileLogger(SimpleLogger):
         if self.open_file is not None and not self.open_file.closed:
             self.open_file.close()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a developer-oriented string representation of the logger.
 
         Returns
@@ -548,7 +564,7 @@ class FileLogger(SimpleLogger):
         )
 
 
-def open_file(filename_log):
+def open_file(filename_log: str | os.PathLike[str] | None) -> TextIO | None:
     """Open a log file for writing if a filename is provided.
 
     Parameters

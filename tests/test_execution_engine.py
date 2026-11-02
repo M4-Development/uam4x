@@ -511,6 +511,7 @@ def test_run_solution_populates_results_and_runtime_metadata(engine_setup, monke
     assert "Completion_Time" in md["time_info"]
 
 
+@pytest.mark.git
 def test_run_solution_checks_git_before_execution(engine_setup, monkeypatch):
     study, engine, _ = engine_setup
 
@@ -572,6 +573,7 @@ def test_run_tradestudy_parameter_sweep(engine_setup, monkeypatch):
     assert values == [pytest.approx(38.0), pytest.approx(40.0)]
 
 
+@pytest.mark.git
 def test_run_tradestudy_checks_git_before_execution(engine_setup, monkeypatch):
     study, engine, _ = engine_setup
     study.add_trade(
@@ -928,3 +930,169 @@ def test_capture_execution_data_stores_plugin_hashes(engine_setup, monkeypatch):
     assert "stage1" in hashes
     assert "stage2" in hashes
     assert all(len(v) == 64 for v in hashes.values())
+
+
+@pytest.mark.parametrize(
+    "lower, upper, value, shape, expected",
+    [
+        (np.zeros((2, 2)), np.ones((2, 3)), np.zeros((2, 2)), (2, 2),
+         "shapes must match"),
+        (np.zeros((3, 2)), None, np.zeros((2, 2)), (2, 2),
+         "lower has shape"),
+        (None, np.ones((3, 2)), np.zeros((2, 2)), (2, 2),
+         "upper has shape"),
+        (np.zeros((3, 2)), None, None, (2, 2),
+         "lower has shape"),
+        (None, np.ones((3, 2)), None, (2, 2),
+         "upper has shape"),
+    ],
+)
+def test_check_upper_lower_rejects_array_shape_mismatch(
+    engine_setup, lower, upper, value, shape, expected
+):
+    _, engine, _ = engine_setup
+
+    with pytest.raises(ValueError, match=expected):
+        engine.check_upper_lower(
+            np.ndarray, lower, upper, "Constraint", "array_var",
+            {"value": value, "shape": shape},
+        )
+
+
+def test_check_upper_lower_accepts_broadcast_bounds_and_unbounded_array(
+    engine_setup
+):
+    _, engine, _ = engine_setup
+    var_data = {"value": np.zeros((2, 2)), "shape": (2, 2)}
+
+    engine.check_upper_lower(
+        np.ndarray, 0.0, 1.0, "Design Variable", "array_var", var_data
+    )
+    engine.check_upper_lower(
+        np.ndarray, None, None, "Design Variable", "array_var", var_data
+    )
+
+
+def test_check_upper_lower_requires_constraint_bound(engine_setup):
+    _, engine, _ = engine_setup
+
+    with pytest.raises(ValueError, match="does not have at least a lower or upper"):
+        engine.check_upper_lower(
+            float, None, None, "Constraint", "scalar_var",
+            {"value": 1.0, "shape": None},
+        )
+
+
+def test_check_upper_lower_rejects_array_bounds_for_scalar(engine_setup):
+    _, engine, _ = engine_setup
+
+    with pytest.raises(ValueError, match="declared as"):
+        engine.check_upper_lower(
+            float, np.array([0.0]), np.array([1.0]),
+            "Design Variable", "scalar_var",
+            {"value": 0.5, "shape": None},
+        )
+
+
+def _empty_sweep_results(study, name):
+    return TradestudyResults(
+        name,
+        "test_solution",
+        executed_vehicles=study.vehicles,
+        executed_tradestudy=ParameterSweep({"vehicles.exec_vehicle.core.x": [1.0]}),
+        tracked_output_names=study.get_solution("test_solution").tracked_outputs,
+    )
+
+
+def test_parameter_sweep_records_plugin_failure_and_preserves_case_order(
+    engine_setup, monkeypatch, tmp_path
+):
+    from uam4x.custom_errors import PluginException
+
+    study, engine, _ = engine_setup
+    solution = study.get_solution("test_solution")
+    states = [{"x": 1.0}, {"x": 2.0}]
+    trade_result = _empty_sweep_results(study, "partial_failure")
+
+    def run_state(*, state, **kwargs):
+        if state["x"] == 2.0:
+            raise PluginException("failed second point")
+        result = Result(state=state)
+        result._add_result("stage2.objective", 10.0)
+        return result
+
+    monkeypatch.setattr(engine, "_run_state", run_state)
+    engine._run_parameter_sweep(
+        solution, "partial_failure", states, str(tmp_path), trade_result,
+        num_processors=1,
+    )
+
+    assert [result.case_id for result in trade_result._results] == [0, 1]
+    assert trade_result._results[0].outputs["stage2.objective"] == 10.0
+    assert "failed second point" in states[1]["Failure Message"]
+    assert trade_result._results[1].state["Failure Message"] == states[1]["Failure Message"]
+    assert study.results.get_tradestudy("test_solution", "partial_failure") is trade_result
+
+
+def test_parameter_sweep_reraises_unexpected_state_error(
+    engine_setup, monkeypatch, tmp_path
+):
+    study, engine, _ = engine_setup
+    solution = study.get_solution("test_solution")
+
+    def fail_state(**kwargs):
+        raise LookupError("bad input")
+
+    monkeypatch.setattr(engine, "_run_state", fail_state)
+    with pytest.raises(RuntimeError, match="bad input"):
+        engine._run_parameter_sweep(
+            solution, "unexpected", [{"x": 1.0}], str(tmp_path),
+            _empty_sweep_results(study, "unexpected"), num_processors=1,
+        )
+
+
+def test_parameter_sweep_parallel_path_caps_workers_and_keeps_input_order(
+    engine_setup, monkeypatch, tmp_path
+):
+    study, engine, _ = engine_setup
+    submitted = []
+    worker_counts = []
+
+    class ImmediateFuture:
+        def __init__(self, state):
+            self.state = state
+
+        def result(self):
+            return Result(state=self.state)
+
+    class ImmediateExecutor:
+        def __init__(self, max_workers):
+            worker_counts.append(max_workers)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def submit(self, function, **kwargs):
+            submitted.append(kwargs["state"])
+            return ImmediateFuture(kwargs["state"])
+
+    monkeypatch.setattr(
+        execution_engine_module.concurrent.futures,
+        "ProcessPoolExecutor", ImmediateExecutor,
+    )
+    monkeypatch.setattr(execution_engine_module.os, "cpu_count", lambda: 2)
+    states = [{"x": 1.0}, {"x": 2.0}, {"x": 3.0}]
+    trade_result = _empty_sweep_results(study, "parallel")
+
+    engine._run_parameter_sweep(
+        study.get_solution("test_solution"), "parallel", states,
+        str(tmp_path), trade_result, num_processors=4,
+    )
+
+    assert worker_counts == [2]
+    assert submitted == states
+    assert [result.case_id for result in trade_result._results] == [0, 1, 2]
+    assert study.results.get_tradestudy("test_solution", "parallel") is trade_result

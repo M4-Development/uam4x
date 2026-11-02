@@ -367,7 +367,7 @@ def test_parse_simple(value, expected_output):
     # Mixed spacing
     ("[  -1 ,2 ,  3 ]", [-1, 2, 3]),
 ])
-def test_parse_fancy(value, expected_output):
+def test_parse_fancy_nested_and_spaced_lists(value, expected_output):
     assert _parse_fancy(value) == expected_output
 
 @pytest.mark.parametrize("value, expected_output", [
@@ -378,7 +378,7 @@ def test_parse_fancy(value, expected_output):
     ("[10,-5,7]", [10, -5, 7]),
     ("[-1,-2,-3]", [-1, -2, -3]),
 ])
-def test_parse_fancy(value, expected_output):
+def test_parse_fancy_signed_indices(value, expected_output):
     assert _parse_fancy(value) == expected_output
 
 
@@ -983,3 +983,38 @@ def test_get_param_type_raises():
 
 if __name__ == '__main__':
     test_check_and_get_config_good()
+
+
+def test_check_and_get_config_missing_file_with_registry_writes_disabled(tmp_path, monkeypatch):
+    from uam4x.utils import check_and_get_config
+
+    monkeypatch.setenv("UAM4X_DISABLE_REGISTRY_WRITES", "1")
+    config_path = tmp_path / "conf.json"
+    assert check_and_get_config(config_path) == {"PLUGINS": {}, "SUBSYSTEMS": {}}
+    assert not config_path.exists()
+
+
+def test_declare_standard_io_registers_defaults_and_continuous_names():
+    from uam4x.solution import Plugin
+    from uam4x.utils import declare_standard_io
+
+    plugin = Plugin()
+    continuous_inputs, continuous_outputs = declare_standard_io(
+        plugin,
+        {
+            "input_dict": {
+                "speed": {"type": "float", "default_value": 2.5},
+                "count": {"type": "int", "default_value": 3},
+            },
+            "output_dict": {
+                "power": {"type": "float", "default_value": 7.0},
+                "name": {"type": "str", "default_value": "motor"},
+            },
+        },
+    )
+
+    assert continuous_inputs == ["speed"]
+    assert continuous_outputs == ["power"]
+    assert plugin.plugin_input_names["speed"]["value"] == 2.5
+    assert plugin.plugin_output_names["name"]["value"] == "motor"
+    assert declare_standard_io(Plugin(), {}) == ([], [])

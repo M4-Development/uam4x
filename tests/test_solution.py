@@ -610,3 +610,284 @@ def clean_plugin_registry():
     finally:
         _plugin_registry.clear()
         _plugin_registry.update(snapshot)
+
+
+def test_group_plugin_options_can_be_added_edited_and_removed(capsys):
+    group = Group()
+    group.add_step(ProducerPlugin, "producer", {"scale": 2.0})
+
+    group.add_plugin_option("producer", "offset", 1.0)
+    group.add_plugin_option("producer", "scale", 3.0)
+    assert "Overwriting value" in capsys.readouterr().out
+    assert group.steps["producer"]["plugin_options"] == {
+        "scale": 3.0, "offset": 1.0
+    }
+
+    group.edit_step("producer", {"offset": 4.0, "enabled": True})
+    assert group.steps["producer"]["plugin_options"] == {
+        "scale": 3.0, "offset": 4.0, "enabled": True
+    }
+    group.remove_plugin_option("producer", "enabled")
+    assert "enabled" not in group.steps["producer"]["plugin_options"]
+
+    group.edit_step("producer")
+    assert group.steps["producer"]["plugin_options"] == {}
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda group: group.edit_step("missing", {}),
+        lambda group: group.add_plugin_option("missing", "x", 1),
+        lambda group: group.remove_plugin_option("missing", "x"),
+    ],
+)
+def test_group_plugin_option_operations_reject_missing_step(operation):
+    with pytest.raises(KeyError, match="not a step"):
+        operation(Group())
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda group: group.edit_step("subgroup", {}),
+        lambda group: group.add_plugin_option("subgroup", "x", 1),
+        lambda group: group.remove_plugin_option("subgroup", "x"),
+    ],
+)
+def test_group_plugin_option_operations_reject_subgroup(operation):
+    group = Group()
+    group.add_step(Group(), "subgroup")
+
+    with pytest.raises(ValueError, match="Only plugins are editable"):
+        operation(group)
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"method": "cs"}, "other than exact or fd"),
+        ({"step": 0.0}, "greater than zero"),
+        ({"step": "small"}, "real number"),
+        ({"form": "sideways"}, "finite difference forms"),
+        ({"method": "exact", "step": 1e-6}, "does not take in a step"),
+        ({"method": "exact", "form": "forward"}, "does not take in a form"),
+    ],
+)
+def test_plugin_declare_partials_rejects_invalid_configuration(kwargs, message):
+    plugin = ProducerPlugin()
+    plugin.setup_plugin({})
+
+    with pytest.raises(ValueError, match=message):
+        plugin.declare_partials("y", "x", **kwargs)
+    assert plugin.initial_partials == []
+
+
+def test_plugin_exact_wildcard_partials_expand_to_declared_continuous_pairs():
+    plugin = ProducerPlugin()
+    plugin.setup_plugin({})
+    plugin.declare_partials("*", "*", method="exact",
+                            rows=[0], cols=[0])
+
+    partials = plugin.build_partials(
+        ["nested.producer.x"],
+        ["nested.producer.y", "nested.producer.arr_out"],
+        "nested.producer",
+    )
+
+    assert set(partials) == {("y", "x"), ("arr_out", "x")}
+    assert all(data["method"] == "exact" for data in partials.values())
+    assert all(data["rows"] == [0] and data["cols"] == [0]
+               for data in partials.values())
+    assert set(plugin.categorize_partials()["exact"]) == set(partials)
+    assert plugin._declare_partials is True
+
+
+@pytest.mark.parametrize(
+    "input_names, output_names, message",
+    [
+        ([], ["producer.y"], "Inputs and partials do not match"),
+        (["producer.x"], ["producer.arr_out"],
+         "Outputs and partials do not match"),
+    ],
+)
+def test_plugin_build_partials_requires_linked_declared_names(
+    input_names, output_names, message
+):
+    plugin = ProducerPlugin()
+    plugin.setup_plugin({})
+    plugin.declare_partials("y", "x")
+
+    with pytest.raises(ValueError, match=message):
+        plugin.build_partials(input_names, output_names, "producer")
+
+
+@pytest.mark.parametrize("input_type,output_type", [(int, float), (float, int)])
+def test_plugin_wildcard_partials_reject_discrete_variables(
+    input_type, output_type
+):
+    plugin = Plugin()
+    plugin.declare_input("x", input_type)
+    plugin.declare_output("y", output_type)
+    plugin.declare_partials("*", "*")
+
+    with pytest.raises(TypeError, match="not continuous"):
+        plugin.build_partials(["sink.x"], ["sink.y"], "sink")
+
+
+def test_solution_optimization_link_check_accepts_continuous_and_vehicle_links(
+    study_with_solution,
+):
+    study, plugins = study_with_solution
+    study.get_solution("test_solution")._check_optimization_discrete(plugins)
+
+
+def test_solution_optimization_link_check_rejects_discrete_plugin_output(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    solution = study.get_solution("test_solution")
+    solution.add_step(IntSinkPlugin, "first_int")
+    solution.add_step(IntSinkPlugin, "second_int")
+    solution.add_link("vehicles.veh.core.n", "first_int.n_in")
+    solution.add_link("first_int.n_out", "second_int.n_in")
+    plugins = solution.generate_plugins()
+
+    with pytest.raises(TypeError, match="Discrete variables linked between plugins"):
+        solution._check_optimization_discrete(plugins)
+
+
+def test_solution_optimization_link_check_nested_group_rejects_discrete_output(
+    study_with_solution,
+):
+    study, _ = study_with_solution
+    solution = study.get_solution("test_solution")
+    nested = Group()
+    nested.add_step(IntSinkPlugin, "first")
+    nested.add_step(IntSinkPlugin, "second")
+    nested.add_link("first.n_out", "second.n_in")
+    solution.add_step(nested, "nested")
+    plugins = solution.generate_plugins()
+
+    with pytest.raises(TypeError, match="first.n_out"):
+        solution._check_optimization_discrete(plugins)
+
+
+@pytest.mark.parametrize(
+    "name,var_type,value,shape,error,match",
+    [
+        ("x", "float", None, None, TypeError, "Declared type must be a type"),
+        ("bad~name", float, None, None, ValueError, "not allowed in variable names"),
+        ("x", float, None, (2,), ValueError, "only np.ndarray types"),
+        ("x", np.ndarray, None, (2.5,), ValueError, "shape must be declared"),
+        ("x", np.ndarray, np.ones((3,)), (2,), ValueError, "shape must match"),
+        ("x", np.ndarray, None, None, ValueError, "no shape or value"),
+        ("x", np.ndarray, 2.0, None, ValueError, "shape must be declared"),
+    ],
+)
+def test_plugin_check_declared_io_rejects_invalid_metadata(
+    name, var_type, value, shape, error, match
+):
+    with pytest.raises(error, match=match):
+        Plugin.check_declared_IO(name, var_type, value, shape)
+
+
+def test_plugin_check_declared_io_broadcasts_scalar_and_infers_shape():
+    value, shape = Plugin.check_declared_IO("x", np.ndarray, 2.0, 3)
+    assert value == 2.0
+    assert shape == (3,)
+
+    arr = np.array([[1.0, 2.0]])
+    value, shape = Plugin.check_declared_IO("y", np.ndarray, arr, None)
+    assert value is arr
+    assert shape == (1, 2)
+
+
+import os
+
+os.environ.setdefault("UAM4X_DISABLE_REGISTRY_WRITES", "1")
+
+import numpy as np
+import pytest
+
+from uam4x.study import Study
+from uam4x.vehicle import Vehicle
+from uam4x.subsystems import Wing
+from uam4x.solution import Plugin, Group, Solution, register_plugin
+
+
+@register_plugin
+class TypeProbePlugin(Plugin):
+    def setup_plugin(self, plugin_options=None):
+        self.declare_input("x_float", float)
+        self.declare_input("x_int", int)
+        self.declare_output("y_float", float)
+        self.declare_output("y_arr", np.ndarray, shape=(2,))
+
+    def run_plugin(self, links, work_dir):
+        return {"y_float": 1.0, "y_arr": np.array([1.0, 2.0])}
+
+
+@pytest.fixture
+def typed_study():
+    study = Study()
+
+    study.add_solution(Solution("test_solution"))
+    wing = Wing("wing")
+    wing.set_parameter("span", 12.5)
+    mode = wing.add_mode("cruise")
+    mode.set_parameter("span", 15.0)
+
+    vehicle = Vehicle("veh")
+    vehicle.add_component(wing)
+    study.add_vehicle(vehicle)
+
+    study.get_solution("test_solution").add_step(TypeProbePlugin, "probe")
+    study.get_solution("test_solution").sort_steps()
+
+    return study
+
+
+
+def test_solution_get_var_type_for_plugin_io(typed_study):
+    s = typed_study
+    plugins = s.get_solution("test_solution").generate_plugins()
+
+    assert s.get_solution("test_solution").get_var_type("probe.x_float", plugins) is float
+    assert s.get_solution("test_solution").get_var_type("probe.x_int", plugins) is int
+    assert s.get_solution("test_solution").get_var_type("probe.y_float", plugins) is float
+    assert s.get_solution("test_solution").get_var_type("probe.y_arr", plugins) is np.ndarray
+
+
+def test_solution_get_var_type_nested_group(typed_study):
+    s = typed_study
+
+    nested = Group()
+    nested.add_step(TypeProbePlugin, "inner_probe")
+    s.get_solution("test_solution").add_step(nested, "nested")
+    s.get_solution("test_solution").sort_steps()
+
+    plugins = s.get_solution("test_solution").generate_plugins()
+
+    assert s.get_solution("test_solution").get_var_type("nested.inner_probe.x_float", plugins) is float
+    assert s.get_solution("test_solution").get_var_type("nested.inner_probe.y_arr", plugins) is np.ndarray
+
+
+def test_solution_get_var_type_missing_name_raises(typed_study):
+    plugins = typed_study.get_solution("test_solution").generate_plugins()
+
+    with pytest.raises(KeyError, match="not an input/output"):
+        typed_study.get_solution("test_solution").get_var_type("probe.not_declared", plugins)
+
+
+def test_plugin_registration_only_updates_memory_when_writes_disabled(monkeypatch):
+    monkeypatch.setenv("UAM4X_DISABLE_REGISTRY_WRITES", "1")
+
+    @register_plugin
+    class RegistryProbePlugin(Plugin):
+        pass
+
+    try:
+        assert _plugin_registry["RegistryProbePlugin"] is RegistryProbePlugin
+    finally:
+        _plugin_registry.pop("RegistryProbePlugin", None)

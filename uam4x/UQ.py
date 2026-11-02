@@ -7,7 +7,7 @@ from uam4x.utils import log, is_bool, is_integer
 import pandas as pd
 from math import ceil
 
-def gen_csv_states(csv_path,col_order):
+def gen_csv_states(csv_path: str,col_order: list[str]) -> list[dict[str, object]]:
     """Load uncertainty states from a CSV file.
 
     Parameters
@@ -43,10 +43,11 @@ class AleatoryBaseClass:
         Mapping from variable name to distribution object.
 
     """
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize an empty aleatory variable mapping."""
         self.aleatory_var_to_dist={}
 
-    def add_aleatory_variable(self,name,PDFObject):
+    def add_aleatory_variable(self,name: str,PDFObject) -> None:
         """Register one aleatory variable and its distribution.
 
         Parameters
@@ -82,7 +83,7 @@ class BasicAleatory(AleatoryBaseClass):
 
     """
 
-    def __init__(self, num_samples, SamplingClass,seed=42):
+    def __init__(self, num_samples: int, SamplingClass: type[BaseSampler],seed: int=42) -> None:
         """Initialize a basic aleatory workflow.
 
         Parameters
@@ -101,7 +102,7 @@ class BasicAleatory(AleatoryBaseClass):
         self.SamplingClass=SamplingClass
         self.seed=seed
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Generate sampled state dictionaries.
 
         Returns
@@ -126,7 +127,7 @@ class BasicAleatory(AleatoryBaseClass):
             states.append(local_state)
         return states
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
         Returns
@@ -148,7 +149,7 @@ class BasicAleatory(AleatoryBaseClass):
         }
 
     @classmethod
-    def _from_dict(cls, workflow_dict):
+    def _from_dict(cls, workflow_dict: dict[str, object]) -> BasicAleatory:
         """Reconstruct a basic aleatory workflow from a dictionary.
 
         Parameters
@@ -199,8 +200,8 @@ class RegressionPCE(BasicAleatory):
 
     """
 
-    def __init__(self, num_samples, SamplingClass,
-                 seed=42,hold_out_fraction=0.0,hold_out_seed=None):
+    def __init__(self, num_samples: int, SamplingClass: type[BaseSampler],
+                 seed: int=42,hold_out_fraction: float=0.0,hold_out_seed: int | None=None) -> None:
         """Initialize a regression PCE workflow.
 
         Parameters
@@ -232,7 +233,7 @@ class RegressionPCE(BasicAleatory):
             self.hold_out_seed=hold_out_seed if hold_out_seed is not None else 68
 
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
         Returns
@@ -249,7 +250,7 @@ class RegressionPCE(BasicAleatory):
         return data
 
     @classmethod
-    def _from_dict(cls, workflow_dict):
+    def _from_dict(cls, workflow_dict: dict[str, object]) -> RegressionPCE:
         """Reconstruct a regression PCE workflow from a dictionary.
 
         Parameters
@@ -301,7 +302,7 @@ class GaussQuadraturePCE(AleatoryBaseClass):
     raises an error when more than five aleatory variables are configured.
     """
 
-    def __init__(self, poly_order):
+    def __init__(self, poly_order: int) -> None:
         """Initialize a Gauss quadrature PCE workflow.
 
         Parameters
@@ -313,7 +314,7 @@ class GaussQuadraturePCE(AleatoryBaseClass):
         super().__init__()
         self.poly_order = poly_order
 
-    def _check_analysis(self):
+    def _check_analysis(self) -> None:
         """Validate the quadrature workflow dimensionality.
 
         Raises
@@ -328,7 +329,7 @@ class GaussQuadraturePCE(AleatoryBaseClass):
                 "Quadrature based PCE may not be efficient for more than 5 aleatory variables"
             )
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Generate weighted quadrature state dictionaries.
 
         Returns
@@ -377,7 +378,7 @@ class GaussQuadraturePCE(AleatoryBaseClass):
 
         return states
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
         Returns
@@ -396,7 +397,7 @@ class GaussQuadraturePCE(AleatoryBaseClass):
                 "polynomial_order": self.poly_order}
 
     @classmethod
-    def _from_dict(cls, workflow_dict):
+    def _from_dict(cls, workflow_dict: dict[str, object]) -> GaussQuadraturePCE:
         """Reconstruct a Gauss quadrature PCE workflow from a dictionary.
 
         Parameters
@@ -444,7 +445,7 @@ class SobolSensitivity(BasicAleatory):
 
     """
 
-    def __init__(self, num_samples, SamplingClass,seed=42, computeSecondOrder: bool = False):
+    def __init__(self, num_samples: int, SamplingClass: type[BaseSampler],seed: int=42, computeSecondOrder: bool = False) -> None:
         """Initialize a Sobol sensitivity workflow.
 
         Parameters
@@ -464,7 +465,7 @@ class SobolSensitivity(BasicAleatory):
         super().__init__(num_samples, SamplingClass,seed)
         self.computeSecondOrder = computeSecondOrder
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Generate Sobol experiment state dictionaries.
 
         Returns
@@ -536,7 +537,7 @@ class SobolSensitivity(BasicAleatory):
 
         return states
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
         Returns
@@ -552,7 +553,7 @@ class SobolSensitivity(BasicAleatory):
         return data
 
     @classmethod
-    def _from_dict(cls, workflow_dict):
+    def _from_dict(cls, workflow_dict: dict[str, object]) -> SobolSensitivity:
         """Reconstruct a Sobol sensitivity workflow from a dictionary.
 
         Parameters
@@ -596,10 +597,11 @@ class EpistemicBaseClass:
         Mapping from variable name to epistemic uncertainty object.
 
     """
-    def __init__(self):
+    def __init__(self) -> None:
+      """Initialize an empty epistemic interval mapping."""
       self.epistemic_var_to_interval={}
 
-    def add_epistemic_variable(self,name,interval):
+    def add_epistemic_variable(self,name: str,interval: np.ndarray) -> None:
         """Add an epistemic variable to the analysis.
 
         Parameters
@@ -645,7 +647,7 @@ class BasicEpistemic(EpistemicBaseClass):
 
     """
 
-    def __init__(self,num_samples,SamplingClass,seed=42):
+    def __init__(self,num_samples: int,SamplingClass: type[BaseSampler],seed: int=42) -> None:
         """Initialize a basic epistemic workflow.
 
         Parameters
@@ -664,7 +666,7 @@ class BasicEpistemic(EpistemicBaseClass):
         self.SamplingClass=SamplingClass
         self.seed=seed
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Generate sampled epistemic state dictionaries.
 
         Returns
@@ -708,7 +710,7 @@ class BasicEpistemic(EpistemicBaseClass):
 
         return all_states
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
         Returns
@@ -728,7 +730,7 @@ class BasicEpistemic(EpistemicBaseClass):
         }
 
     @classmethod
-    def _from_dict(cls,workflow_dict):
+    def _from_dict(cls,workflow_dict: dict[str, object]) -> BasicEpistemic:
         """Reconstruct a basic epistemic workflow from a dictionary.
 
         Parameters
@@ -768,11 +770,12 @@ class MixedBaseClass:
         object.
 
     """
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize empty aleatory and epistemic variable mappings."""
         self.aleatory_var_to_dist={}
         self.epistemic_var_to_interval={}
 
-    def add_aleatory_variable(self,name,PDFObject):
+    def add_aleatory_variable(self,name: str,PDFObject) -> None:
         """Add an aleatory variable to the mixed analysis.
 
         Parameters
@@ -787,7 +790,7 @@ class MixedBaseClass:
         """
         self.aleatory_var_to_dist[name]=PDFObject
 
-    def add_epistemic_variable(self,name,interval):
+    def add_epistemic_variable(self,name: str,interval: np.ndarray) -> None:
         """Add an epistemic variable to the mixed analysis.
 
         Parameters
@@ -845,8 +848,8 @@ class BasicSOP(MixedBaseClass):
 
     """
 
-    def __init__(self,num_epistemic_samples,EpistemicSamplingClass,
-               num_aleatory_samples,AleatorySamplingClass,seed=42):
+    def __init__(self,num_epistemic_samples: int,EpistemicSamplingClass: type[BaseSampler],
+               num_aleatory_samples: int,AleatorySamplingClass: type[BaseSampler],seed: int=42) -> None:
         """Initialize a second-order probability workflow.
 
         Parameters
@@ -872,7 +875,7 @@ class BasicSOP(MixedBaseClass):
         self.AleatorySamplingClass=AleatorySamplingClass
         self.seed=seed
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Generate nested epistemic-aleatory state dictionaries.
 
         Returns
@@ -978,7 +981,7 @@ class BasicSOP(MixedBaseClass):
 
         return all_states
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
         Returns
@@ -1005,7 +1008,7 @@ class BasicSOP(MixedBaseClass):
         }
 
     @classmethod
-    def _from_dict(cls,data):
+    def _from_dict(cls,data: dict[str, object]) -> BasicSOP:
         """Reconstruct a second-order probability workflow from a dictionary.
 
         Parameters
@@ -1067,8 +1070,8 @@ class BasicMixedIVP(MixedBaseClass):
 
     """
 
-    def __init__(self,num_epistemic_samples,EpistemicSamplingClass,
-               num_aleatory_samples,AleatorySamplingClass,seed=42):
+    def __init__(self,num_epistemic_samples: int,EpistemicSamplingClass: type[BaseSampler],
+               num_aleatory_samples: int,AleatorySamplingClass: type[BaseSampler],seed: int=42) -> None:
         """Initialize a mixed interval-probability workflow.
 
         Parameters
@@ -1094,7 +1097,7 @@ class BasicMixedIVP(MixedBaseClass):
         self.AleatorySamplingClass=AleatorySamplingClass
         self.seed=seed
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Generate nested mixed state dictionaries.
 
         Returns
@@ -1164,7 +1167,7 @@ class BasicMixedIVP(MixedBaseClass):
 
         return all_states
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
         Returns
@@ -1190,7 +1193,7 @@ class BasicMixedIVP(MixedBaseClass):
         }
 
     @classmethod
-    def _from_dict(cls,data):
+    def _from_dict(cls,data: dict[str, object]) -> BasicMixedIVP:
         """Reconstruct a mixed interval-probability workflow from a dictionary.
 
         Parameters
@@ -1258,9 +1261,9 @@ class MixedRegressionPCE(MixedBaseClass):
 
     """
 
-    def __init__(self,SamplingClass,num_samples,
-                 poly_order,seed=42,
-                 hold_out_fraction=0.0,hold_out_seed=None):
+    def __init__(self,SamplingClass: type[BaseSampler],num_samples: int,
+                 poly_order: int,seed: int=42,
+                 hold_out_fraction: float=0.0,hold_out_seed: int | None=None) -> None:
         """Initialize a mixed regression PCE workflow.
 
         Parameters
@@ -1297,7 +1300,7 @@ class MixedRegressionPCE(MixedBaseClass):
         if not hold_out_fraction==0.0:
             self.hold_out_seed=hold_out_seed if hold_out_seed is not None else 68
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Generate sampled mixed state dictionaries.
 
         Returns
@@ -1345,7 +1348,7 @@ class MixedRegressionPCE(MixedBaseClass):
 
         return all_states
 
-    def _check_analysis(self):
+    def _check_analysis(self) -> None:
         """Validate the mixed regression PCE sample count.
 
         Raises
@@ -1382,7 +1385,7 @@ class MixedRegressionPCE(MixedBaseClass):
                 "Consider 2-3x oversampling relative to the basis size."
             )
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
         Returns
@@ -1412,7 +1415,7 @@ class MixedRegressionPCE(MixedBaseClass):
         return data
 
     @classmethod
-    def _from_dict(cls, data):
+    def _from_dict(cls, data: dict[str, object]) -> MixedRegressionPCE:
         """Reconstruct a mixed regression PCE workflow from a dictionary.
 
         Parameters
@@ -1462,12 +1465,14 @@ class CSVPoints:
         Path to the CSV file containing one column per uncertainty variable.
 
     """
-    def __init__(self,csv_file):
+    def __init__(self,csv_file: str) -> None:
+        """Store the CSV path and optional analysis settings."""
         self.csv_file=csv_file
         self.poly_order=None
         self.computeSecondOrder=None
 
-    def add_polynomial_order(self,order):
+    def add_polynomial_order(self,order: int) -> None:
+        """Set a nonnegative integer polynomial order for CSV analysis."""
         if not is_integer(order):
             raise ValueError(
                 "Polynomial order must be an integer value."
@@ -1478,14 +1483,15 @@ class CSVPoints:
             )
         self.poly_order=order
 
-    def set_compute_second_order(self, computeSecondOrder: bool):
+    def set_compute_second_order(self, computeSecondOrder: bool) -> None:
+        """Choose whether to compute second-order Sobol indices."""
         if not is_bool(computeSecondOrder):
             raise ValueError(
                 "computeSecondOrder must be a boolean value."
             )
         self.computeSecondOrder = computeSecondOrder
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the CSV-backed workflow metadata.
 
         Returns
@@ -1509,11 +1515,12 @@ class CSVPoints:
 
 class EpistemicCSVPoints(CSVPoints,EpistemicBaseClass):
     """Load epistemic states directly from a CSV file."""
-    def __init__(self,csv_file):
+    def __init__(self,csv_file: str) -> None:
+        """Initialize a CSV-backed epistemic workflow."""
         EpistemicBaseClass.__init__(self)
         CSVPoints.__init__(self,csv_file)
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Load epistemic state dictionaries from the configured CSV file.
 
         Returns
@@ -1526,14 +1533,16 @@ class EpistemicCSVPoints(CSVPoints,EpistemicBaseClass):
         col_order=list(self.epistemic_var_to_interval.keys())
         return gen_csv_states(csv_path=self.csv_file,col_order=col_order)
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
+        """Serialize CSV settings and registered epistemic intervals."""
         data=super()._to_dict()
         data['epistemic_variables']={name:interval
                                     for name,interval in self.epistemic_var_to_interval.items()}
         return data
 
     @classmethod
-    def _from_dict(cls,data):
+    def _from_dict(cls,data: dict[str, object]) -> EpistemicCSVPoints:
+        """Reconstruct a CSV workflow and its epistemic intervals."""
         csv_file=data['csv_path']
         csv_analysis=cls(csv_file)
         for name,interval in data['epistemic_variables'].items():
@@ -1548,11 +1557,12 @@ class EpistemicCSVPoints(CSVPoints,EpistemicBaseClass):
 class AleatoryCSVPoints(CSVPoints,AleatoryBaseClass):
     """Load aleatory states directly from a CSV file."""
 
-    def __init__(self, csv_file):
+    def __init__(self, csv_file: str) -> None:
+        """Initialize a CSV-backed aleatory workflow."""
         CSVPoints.__init__(self,csv_file)
         AleatoryBaseClass.__init__(self)
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Load aleatory state dictionaries from the configured CSV file.
 
         Returns
@@ -1565,7 +1575,8 @@ class AleatoryCSVPoints(CSVPoints,AleatoryBaseClass):
         col_order=list(self.aleatory_var_to_dist.keys())
         return gen_csv_states(csv_path=self.csv_file,col_order=col_order)
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
+        """Serialize CSV settings and registered aleatory distributions."""
         data=super()._to_dict()
         data['aleatory_variables']={name:dist._to_dict()
                                     for name,dist in self.aleatory_var_to_dist.items()
@@ -1573,7 +1584,8 @@ class AleatoryCSVPoints(CSVPoints,AleatoryBaseClass):
         return data
 
     @classmethod
-    def _from_dict(cls,data):
+    def _from_dict(cls,data: dict[str, object]) -> AleatoryCSVPoints:
+        """Reconstruct a CSV workflow and its aleatory distributions."""
         csv_file=data['csv_path']
         csv_analysis=cls(csv_file)
         for name, distribution_data in data['aleatory_variables'].items():
@@ -1589,11 +1601,12 @@ class AleatoryCSVPoints(CSVPoints,AleatoryBaseClass):
 
 class MixedCSVPoints(CSVPoints,MixedBaseClass):
     """Load mixed aleatory-epistemic states directly from a CSV file."""
-    def __init__(self,csv_file):
+    def __init__(self,csv_file: str) -> None:
+        """Initialize a CSV-backed mixed uncertainty workflow."""
         CSVPoints.__init__(self,csv_file)
         MixedBaseClass.__init__(self)
 
-    def get_states(self):
+    def get_states(self) -> list[dict[str, object]]:
         """Load mixed state dictionaries from the configured CSV file.
 
         Returns
@@ -1606,7 +1619,8 @@ class MixedCSVPoints(CSVPoints,MixedBaseClass):
         col_order=list(list(self.epistemic_var_to_interval.keys())+list(self.aleatory_var_to_dist.keys()))
         return gen_csv_states(csv_path=self.csv_file,col_order=col_order)
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
+        """Serialize CSV settings and both uncertainty variable mappings."""
         data=super()._to_dict()
         data['aleatory_variables']={name:dist._to_dict()
                                     for name,dist in
@@ -1619,7 +1633,8 @@ class MixedCSVPoints(CSVPoints,MixedBaseClass):
         return data
 
     @classmethod
-    def _from_dict(cls,data):
+    def _from_dict(cls,data: dict[str, object]) -> MixedCSVPoints:
+        """Reconstruct a CSV workflow with both uncertainty variable mappings."""
         csv_file=data['csv_path']
         csv_analysis=cls(csv_file)
         for name, distribution_data in data['aleatory_variables'].items():
@@ -1665,7 +1680,7 @@ class MonteCarloSampler(BaseSampler):
     _OT_ResourceMapName = "MonteCarlo"
 
     @staticmethod
-    def sample(aleatory_to_dist, num_samples):
+    def sample(aleatory_to_dist: dict[str, object], num_samples: int) -> tuple[np.ndarray, dict[str, int]]:
         """Sample distributions with an OpenTURNS Monte Carlo experiment.
 
         Parameters
@@ -1707,7 +1722,7 @@ class LatinHypercubeSampler(BaseSampler):
     _OT_ResourceMapName = "LHS"
 
     @staticmethod
-    def sample(aleatory_to_dist, num_samples):
+    def sample(aleatory_to_dist: dict[str, object], num_samples: int) -> tuple[np.ndarray, dict[str, int]]:
         """Sample distributions with an OpenTURNS Latin hypercube experiment.
 
         Parameters
@@ -1751,7 +1766,7 @@ class SobolSampler(BaseSampler):
     _OT_ResourceMapName = "QMC"
 
     @staticmethod
-    def sample(aleatory_to_dist, num_samples):
+    def sample(aleatory_to_dist: dict[str, object], num_samples: int) -> tuple[np.ndarray, dict[str, int]]:
         """Sample distributions with an OpenTURNS Sobol sequence experiment.
 
         Parameters
@@ -1792,7 +1807,7 @@ class HaltonSampler(BaseSampler):
     """Generate low-discrepancy Halton sequence samples."""
 
     @staticmethod
-    def sample(aleatory_to_dist, num_samples):
+    def sample(aleatory_to_dist: dict[str, object], num_samples: int) -> tuple[np.ndarray, dict[str, int]]:
         """Sample distributions with an OpenTURNS Halton sequence experiment.
 
         Parameters
@@ -1842,7 +1857,7 @@ class NormalDistribution:
 
     """
 
-    def __init__(self, mean, std):
+    def __init__(self, mean: float, std: float) -> None:
         """Initialize a normal distribution.
 
         Parameters
@@ -1856,7 +1871,7 @@ class NormalDistribution:
         self.mean = mean
         self.std = std
 
-    def _OT_Dist(self):
+    def _OT_Dist(self) -> ot.Distribution:
         """Create the equivalent OpenTURNS distribution.
 
         Returns
@@ -1868,7 +1883,7 @@ class NormalDistribution:
         """
         return ot.Normal(self.mean, self.std)
 
-    def cast_sample(self, value):
+    def cast_sample(self, value: float) -> float:
         """Convert an OpenTURNS sample value to its physical Python type.
 
         Parameters
@@ -1884,7 +1899,7 @@ class NormalDistribution:
         """
         return float(value)
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the distribution to a dictionary.
 
         Returns
@@ -1897,7 +1912,7 @@ class NormalDistribution:
         return {"name": self.__class__.__name__, "mean": self.mean, "std": self.std}
 
     @classmethod
-    def _from_dict(cls, data):
+    def _from_dict(cls, data: dict[str, object]) -> NormalDistribution:
         """Reconstruct a normal distribution from a dictionary.
 
         Parameters
@@ -1927,7 +1942,7 @@ class UniformDistribution:
 
     """
 
-    def __init__(self, low, high):
+    def __init__(self, low: float, high: float) -> None:
         """Initialize a uniform distribution.
 
         Parameters
@@ -1941,7 +1956,7 @@ class UniformDistribution:
         self.low = low
         self.high = high
 
-    def _OT_Dist(self):
+    def _OT_Dist(self) -> ot.Distribution:
         """Create the equivalent OpenTURNS distribution.
 
         Returns
@@ -1953,7 +1968,7 @@ class UniformDistribution:
         """
         return ot.Uniform(self.low, self.high)
 
-    def cast_sample(self, value):
+    def cast_sample(self, value: float) -> float:
         """Convert an OpenTURNS sample value to its physical Python type.
 
         Parameters
@@ -1969,7 +1984,7 @@ class UniformDistribution:
         """
         return float(value)
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the distribution to a dictionary.
 
         Returns
@@ -1982,7 +1997,7 @@ class UniformDistribution:
         return {"name": self.__class__.__name__, "low": self.low, "high": self.high}
 
     @classmethod
-    def _from_dict(cls, data):
+    def _from_dict(cls, data: dict[str, object]) -> UniformDistribution:
         """Reconstruct a uniform distribution from a dictionary.
 
         Parameters
@@ -2000,14 +2015,15 @@ class UniformDistribution:
         return cls(data["low"], data["high"])
 
 class DiscreteUniformDistribution:
-    def __init__(self, low, high):
-            """Initialize a uniform distribution.
+    """Represent an integer-valued uniform distribution on inclusive bounds."""
+    def __init__(self, low: int, high: int) -> None:
+            """Initialize a discrete uniform distribution.
 
             Parameters
             ----------
-            low : float
+            low : int
                 Lower bound of the uniform distribution.
-            high : float
+            high : int
                 Upper bound of the uniform distribution.
 
             """
@@ -2018,7 +2034,7 @@ class DiscreteUniformDistribution:
             if self.low > self.high:
                 raise ValueError("low must be less than or equal to high")
 
-    def _OT_Dist(self):
+    def _OT_Dist(self) -> ot.Distribution:
         """Create the equivalent OpenTURNS distribution.
         Returns
         -------
@@ -2027,7 +2043,7 @@ class DiscreteUniformDistribution:
         arr=range(self.low, self.high + 1)
         return ot.UserDefined([[i] for i in arr])
 
-    def cast_sample(self, value):
+    def cast_sample(self, value: float) -> int:
         """Convert an OpenTURNS sample value to a supported Python integer.
 
         Parameters
@@ -2061,7 +2077,7 @@ class DiscreteUniformDistribution:
             )
         return int(rounded_value)
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the distribution to a dictionary.
         Returns
         -------
@@ -2071,17 +2087,17 @@ class DiscreteUniformDistribution:
         """
         return {"name": self.__class__.__name__, "low": self.low, "high": self.high}
     @classmethod
-    def _from_dict(cls, data):
-        """Reconstruct a uniform distribution from a dictionary.
+    def _from_dict(cls, data: dict[str, object]) -> DiscreteUniformDistribution:
+        """Reconstruct a discrete uniform distribution from a dictionary.
         Parameters
         ----------
         data : dict
-            Serialized uniform distribution dictionary, typically produced by
+            Serialized discrete uniform distribution dictionary, typically produced by
             :meth:`_to_dict`.
         Returns
         -------
-        UniformDistribution
-            Reconstructed uniform distribution.
+        DiscreteUniformDistribution
+            Reconstructed discrete uniform distribution.
         """
         return cls(data["low"], data["high"])
 class LogNormalDistribution:
@@ -2099,7 +2115,7 @@ class LogNormalDistribution:
 
     """
 
-    def __init__(self, mu_log, sigma_log, gamma=0.0):
+    def __init__(self, mu_log: float, sigma_log: float, gamma: float=0.0) -> None:
         """Initialize a shifted log-normal distribution.
 
         Parameters
@@ -2117,7 +2133,7 @@ class LogNormalDistribution:
         self.sigma_log = sigma_log
         self.gamma = gamma
 
-    def _OT_Dist(self):
+    def _OT_Dist(self) -> ot.Distribution:
         """Create the equivalent OpenTURNS distribution.
 
         Returns
@@ -2129,7 +2145,7 @@ class LogNormalDistribution:
         """
         return ot.LogNormal(self.mu_log, self.sigma_log, self.gamma)
 
-    def cast_sample(self, value):
+    def cast_sample(self, value: float) -> float:
         """Convert an OpenTURNS sample value to its physical Python type.
 
         Parameters
@@ -2145,7 +2161,7 @@ class LogNormalDistribution:
         """
         return float(value)
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the distribution to a dictionary.
 
         Returns
@@ -2163,7 +2179,7 @@ class LogNormalDistribution:
         }
 
     @classmethod
-    def _from_dict(cls, data):
+    def _from_dict(cls, data: dict[str, object]) -> LogNormalDistribution:
         """Reconstruct a log-normal distribution from a dictionary.
 
         Parameters

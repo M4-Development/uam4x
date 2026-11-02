@@ -862,3 +862,18 @@ def test_subsystem_registry():
 if __name__ == "__main__":
     test_Subsystem_set_parameter()
     pass
+
+
+def test_subsystem_registration_only_updates_memory_when_writes_disabled(monkeypatch):
+    from uam4x.subsystems import Subsystem, register_subsystem, _subsystem_registry
+
+    monkeypatch.setenv("UAM4X_DISABLE_REGISTRY_WRITES", "1")
+
+    @register_subsystem
+    class RegistryProbeSubsystem(Subsystem):
+        pass
+
+    try:
+        assert _subsystem_registry["RegistryProbeSubsystem"] is RegistryProbeSubsystem
+    finally:
+        _subsystem_registry.pop("RegistryProbeSubsystem", None)

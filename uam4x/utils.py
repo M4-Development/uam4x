@@ -30,7 +30,7 @@ REVERSE_TYPE_MAP={
     type_:name for name,type_ in TYPE_MAP.items()
 }
 
-def is_main_process():
+def is_main_process() -> bool:
     """Return whether the current process is the Python main process.
 
     Returns
@@ -43,7 +43,7 @@ def is_main_process():
     return mp.current_process().name == "MainProcess"
 
 
-def registry_writes_enabled():
+def registry_writes_enabled() -> bool:
     """Return whether runtime registry writes are enabled.
 
     Returns
@@ -56,7 +56,7 @@ def registry_writes_enabled():
     return os.getenv("UAM4X_DISABLE_REGISTRY_WRITES") != "1"
 
 
-def check_and_get_config(conf_path):
+def check_and_get_config(conf_path: str | os.PathLike[str]) -> dict:
     """Load a UAM4X registry configuration file, creating defaults if needed.
 
     Parameters
@@ -122,7 +122,7 @@ def check_and_get_config(conf_path):
     return _config
 
 
-def is_continuous_type_or_value(val_or_type):
+def is_continuous_type_or_value(val_or_type: object) -> bool:
     # Handle values (e.g 1, 2.0, np.array([0.0,0.0,...]),np.array([0,0,...]))
     """Return whether a value or type is continuous-valued.
 
@@ -152,7 +152,7 @@ def is_continuous_type_or_value(val_or_type):
     return False
 
 
-def is_scalar_type_or_value(val_or_type):
+def is_scalar_type_or_value(val_or_type: object) -> bool:
     """Return whether a value or type is a numeric scalar.
 
     Parameters
@@ -178,7 +178,7 @@ def is_scalar_type_or_value(val_or_type):
     return False
 
 
-def type_string_to_type(type_name: str):
+def type_string_to_type(type_name: str) -> type:
     """Return a Python type from a serialized type name.
 
     Parameters
@@ -201,7 +201,7 @@ def type_string_to_type(type_name: str):
     return TYPE_MAP[type_name.lower()]
 
 
-def convert_numpy_to_python(value):
+def convert_numpy_to_python(value: object) -> object:
     """Convert NumPy scalar and array values to Python-serializable objects.
 
     Parameters
@@ -227,7 +227,7 @@ def convert_numpy_to_python(value):
 
     return value
 
-def convert_numpy_to_python(value):
+def convert_numpy_to_python(value: object) -> object:
     """Convert NumPy scalar and array values to Python-serializable objects.
 
     Parameters
@@ -253,7 +253,7 @@ def convert_numpy_to_python(value):
 
     return value
 
-def check_numpy_shape(shape):
+def check_numpy_shape(shape: object) -> bool:
     # Integer shapes are allowed
     """Return whether a shape specification is valid for a NumPy array.
 
@@ -286,7 +286,7 @@ def check_numpy_shape(shape):
     return False
 
 
-def normalize_shape(shape):
+def normalize_shape(shape: object) -> tuple[int, ...]:
     """Normalize a scalar or tuple shape into tuple form.
 
     Parameters
@@ -309,7 +309,7 @@ def normalize_shape(shape):
 # Nicer type checkers
 
 
-def is_bool(value):
+def is_bool(value: object) -> bool:
     """Return whether a value is boolean-like.
 
     Parameters
@@ -326,7 +326,7 @@ def is_bool(value):
     return isinstance(value, (bool, np.bool_))
 
 
-def is_integer(value):
+def is_integer(value: object) -> bool:
     """Return whether a value is an integer.
 
     Parameters
@@ -343,7 +343,7 @@ def is_integer(value):
     return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
 
 
-def is_float(value):
+def is_float(value: object) -> bool:
     """Return whether a value is a floating-point number.
 
     Parameters
@@ -360,7 +360,7 @@ def is_float(value):
     return isinstance(value, (float, np.floating))
 
 
-def is_tuple(value):
+def is_tuple(value: object) -> bool:
     """Return whether a value is a tuple.
 
     Parameters
@@ -377,7 +377,7 @@ def is_tuple(value):
     return isinstance(value, tuple)
 
 
-def is_numpy_array(value):
+def is_numpy_array(value: object) -> bool:
     """Return whether a value is a NumPy array.
 
     Parameters
@@ -395,7 +395,7 @@ def is_numpy_array(value):
 
 
 # Get type name from a value
-def value_to_type_name(value):
+def value_to_type_name(value: object) -> str:
     """Return a readable type name for a value.
 
     Parameters
@@ -420,7 +420,7 @@ def value_to_type_name(value):
         return None
 
 
-def _canonicalize_state(x):
+def _canonicalize_state(x) -> object:
     """Convert a state object into a deterministic, hashable form.
 
     Parameters
@@ -457,7 +457,7 @@ def _canonicalize_state(x):
     return x
 
 
-def hash_dict(some_dict):
+def hash_dict(some_dict: dict) -> str:
     """Return a deterministic SHA-256 hash for a state dictionary.
 
     Parameters
@@ -490,7 +490,7 @@ def hash_dict(some_dict):
     return hashlib.sha256(data).hexdigest()
 
 
-def _is_valid_square_brackets(string):
+def _is_valid_square_brackets(string: str) -> bool:
     """Validate that square brackets in an index string are balanced.
 
     Parameters
@@ -523,7 +523,7 @@ def _is_valid_square_brackets(string):
         raise ValueError(f"Brackets are inalid in indexing string: {string}")
 
 
-def _is_valid_index(string: str):
+def _is_valid_index(string: str) -> bool:
     """Validate the syntax of a bracketed index expression.
 
     Parameters
@@ -597,7 +597,7 @@ def _is_valid_index(string: str):
     return True
 
 
-def _is_simple(string):
+def _is_simple(string: str) -> bool:
     """Return whether an index fragment is simple integer indexing.
 
     Parameters
@@ -620,7 +620,7 @@ def _is_simple(string):
     return True
 
 
-def _is_slice(string):
+def _is_slice(string: str) -> bool:
     """Return whether an index fragment contains slice notation.
 
     Parameters
@@ -639,7 +639,7 @@ def _is_slice(string):
     return False
 
 
-def _is_fancy(string):
+def _is_fancy(string: str) -> bool:
     """Return whether an index fragment uses nested fancy indexing.
 
     Parameters
@@ -666,7 +666,7 @@ def _is_fancy(string):
     return False
 
 
-def _parse_simple(string):
+def _parse_simple(string: str) -> int | tuple[int, ...]:
     """Parse a simple integer index fragment.
 
     Parameters
@@ -688,7 +688,7 @@ def _parse_simple(string):
     return tuple(indices)
 
 
-def _parse_fancy(string):
+def _parse_fancy(string: str) -> list[int]:
     """Parse a fancy-index fragment into a list of integers.
 
     Parameters
@@ -706,7 +706,7 @@ def _parse_fancy(string):
     return [int(num) for num in indices]
 
 
-def _parse_slice(string):
+def _parse_slice(string: str) -> slice:
     """Parse a slice fragment into a Python ``slice`` object.
 
     Parameters
@@ -761,7 +761,7 @@ def _parse_slice(string):
     return slice(start, stop, step)
 
 
-def _parse_complicated(string):
+def _parse_complicated(string: str) -> object:
     """Parse a multi-part index expression.
 
     Parameters
@@ -820,7 +820,7 @@ def _parse_complicated(string):
     return tuple(full_index)
 
 
-def _parse_index(string):
+def _parse_index(string: str) -> object:
     """Parse a validated bracketed index expression.
 
     Parameters
@@ -849,7 +849,7 @@ def _parse_index(string):
         return _parse_complicated(string)
 
 
-def split_dotted_path_and_indices(dotted_path):
+def split_dotted_path_and_indices(dotted_path: str) -> tuple[str, object]:
     """Split a dotted path and trailing index expression.
 
     Parameters
@@ -878,13 +878,18 @@ def split_dotted_path_and_indices(dotted_path):
 
     return dotted_path, inds
 
-def parse_variable_reference(name):
+def parse_variable_reference(name: str) -> tuple[str, object | None]:
+    """Return a variable path and its optional parsed index.
+
+    Unindexed names return ``(name, None)``. A trailing bracketed index
+    is parsed for NumPy-style access.
+    """
     if "[" in name:
         return split_dotted_path_and_indices(name)
     return name,None
 
 
-def replace_none_with_empty_quotes(value):
+def replace_none_with_empty_quotes(value: object) -> object:
     """Replace None values recursively with empty strings.
 
     Parameters
@@ -911,7 +916,7 @@ def replace_none_with_empty_quotes(value):
     return value
 
 
-def replace_empty_quotes_with_none(value):
+def replace_empty_quotes_with_none(value: object) -> object:
     """Replace empty strings recursively with None.
 
     Parameters
@@ -937,7 +942,7 @@ def replace_empty_quotes_with_none(value):
 
     return value
 
-def _get_class_from_file(class_name, file_path):
+def _get_class_from_file(class_name: str, file_path: str | os.PathLike[str]) -> tuple[type | None, str]:
     """Load a class object from a Python source file.
 
     Parameters
@@ -989,7 +994,7 @@ def _get_class_from_file(class_name, file_path):
         return None, msg
     return cls, ""
 
-def canonicalize_path(path):
+def canonicalize_path(path: str | os.PathLike[str]) -> str:
     """Return a canonicalized absolute path.
 
     Parameters
@@ -1006,7 +1011,12 @@ def canonicalize_path(path):
     return os.path.normcase(os.path.normpath(os.path.realpath(os.path.abspath(path))))
 
 
-def declare_standard_io(plugin, plugin_options):
+def declare_standard_io(plugin, plugin_options: dict) -> tuple[list[str], list[str]]:
+    """Declare configured plugin inputs and outputs.
+
+    Return the names of inputs and outputs whose declared types are
+    continuous-valued.
+    """
     continuous_inputs=[]
     for name, metadata in plugin_options.get("input_dict", {}).items():
         var_type=type_string_to_type(metadata["type"])

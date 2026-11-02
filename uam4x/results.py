@@ -23,7 +23,7 @@ class Results:
 
     """
 
-    def __init__(self, study=None):
+    def __init__(self, study=None) -> None:
         """Initialize a container for study results.
 
         Parameters
@@ -35,7 +35,7 @@ class Results:
         self.solutions = {}
         self.study = study
 
-    def get_solution_result(self, name):
+    def get_solution_result(self, name: str) -> SolutionResults | None:
         """Return one stored solution result container by name.
 
         Parameters
@@ -55,7 +55,7 @@ class Results:
         else:
             return None
 
-    def get_tradestudy(self, solution_name, trade_name)->TradestudyResults:
+    def get_tradestudy(self, solution_name: str, trade_name: str) -> TradestudyResults | None:
         """Return a trade-study result from a named solution.
 
         Parameters
@@ -81,7 +81,7 @@ class Results:
             return None
         return solution_result.get_tradestudy(trade_name)
 
-    def add_solution_result(self, solution_result):
+    def add_solution_result(self, solution_result: SolutionResults) -> None:
         """Attach an analysis result container to this results object.
 
         Parameters
@@ -102,7 +102,7 @@ class Results:
         solution_result.study = self.study
         self.solutions[solution_result.name] = solution_result
 
-    def has_solution_result(self):
+    def has_solution_result(self) -> bool:
         """Return whether any analysis results are stored.
 
         Returns
@@ -117,7 +117,7 @@ class Results:
         else:
             return False
 
-    def get_all_solution_results(self):
+    def get_all_solution_results(self) -> list[str]:
         """Return names of all stored solution result containers.
 
         Returns
@@ -129,7 +129,7 @@ class Results:
         solution_results = list(self.solutions.keys())
         return solution_results
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the results object to a dictionary.
 
         Returns
@@ -145,7 +145,7 @@ class Results:
         return solution_name_to_solution_results
 
     @classmethod
-    def _from_dict(cls, solution_name_to_solution_results, study):
+    def _from_dict(cls, solution_name_to_solution_results: dict[str, object], study) -> Results:
         """Reconstruct a results object from a dictionary.
 
         Parameters
@@ -172,7 +172,7 @@ class Results:
         return res
 
 class SolutionResults:
-    def __init__(self,name='',study=None):
+    def __init__(self,name: str='',study=None) -> None:
         """Initialize the results associated with one solution.
 
         Parameters
@@ -187,7 +187,7 @@ class SolutionResults:
         self.study=study
         self.tradestudies={}
 
-    def get_tradestudy(self, name):
+    def get_tradestudy(self, name: str) -> TradestudyResults:
             """Return one stored analysis result container by name.
 
             Parameters
@@ -242,18 +242,20 @@ class SolutionResults:
                     if vehicle_name not in current_vehicles:
                         reason="is missing from the current model"
                     elif hash_dict(executed_vehicles[vehicle_name])!=hash_dict(current_vehicles[vehicle_name]):
-                        reason="has changed since these results were run"
+                        reason="in the current model differs from the vehicle state saved with these results"
                     else:
                         continue
                     warnings.warn(
-                        f"Results for solution {self.name!r}, trade {name!r}: vehicle {vehicle_name!r} {reason}. Rerun this combination if it depends on that vehicle.",
+                        f"Results for solution {self.name!r}, trade {name!r}: vehicle {vehicle_name!r} {reason}. "
+                        "The saved results retain the vehicle state used for the run and remain accessible. "
+                        "Rerun only if you need results for the current vehicle state.",
                         UserWarning,
                         stacklevel=2,
                     )
                 return ts
             raise ValueError(f'The tradestudy {name} is not a tradestudy associated with the solution {self.name}')
 
-    def add_tradestudy(self, name, trade):
+    def add_tradestudy(self, name: str, trade: TradestudyResults) -> None:
         """Attach an analysis result container to this results object.
 
         Parameters
@@ -270,7 +272,7 @@ class SolutionResults:
         Notes
         -----
         The attached :class:`TradestudyResults` receives a back-reference to this
-        :class:`Results` object.
+        :class:`SolutionResults` object.
 
         """
         if name != trade.trade_name:
@@ -287,7 +289,7 @@ class SolutionResults:
         trade._results_owner = self
         self.tradestudies[name] = trade
 
-    def has_results(self):
+    def has_results(self) -> bool:
         """Return whether any analysis results are stored.
 
         Returns
@@ -302,7 +304,7 @@ class SolutionResults:
         else:
             return False
 
-    def get_all_tradestudies(self):
+    def get_all_tradestudies(self) -> list[str]:
         """Return names of all stored analysis result containers.
 
         Returns
@@ -314,7 +316,7 @@ class SolutionResults:
         tradestudies = list(self.tradestudies.keys())
         return tradestudies
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the results object to a dictionary.
 
         Returns
@@ -330,7 +332,7 @@ class SolutionResults:
         return tradename_to_tradestudy
 
     @classmethod
-    def _from_dict(cls, solution_name,tradename_to_results, study):
+    def _from_dict(cls, solution_name: str,tradename_to_results: dict[str, object], study) -> SolutionResults:
         """Reconstruct a results object from a dictionary.
 
         Parameters
@@ -344,8 +346,8 @@ class SolutionResults:
 
         Returns
         -------
-        Results
-            Reconstructed results object with attached study reference.
+        SolutionResults
+            Reconstructed solution results with attached study reference.
 
         """
 
@@ -366,10 +368,10 @@ class TradestudyResults:
 
     """
 
-    def __init__(self, trade_name,solution_name,
-                 executed_vehicles,
-                 executed_tradestudy,
-                 tracked_output_names):
+    def __init__(self, trade_name: str,solution_name: str,
+                 executed_vehicles: VehicleManager,
+                 executed_tradestudy: object | None,
+                 tracked_output_names: list[str] | None) -> None:
         """Initialize storage for one analysis result set.
 
         Parameters
@@ -397,16 +399,16 @@ class TradestudyResults:
         self._executed_tradestudy=executed_tradestudy
 
     @property
-    def executed_tradestudy(self):
+    def executed_tradestudy(self) -> object | None:
         """Return the trade-study definition used to produce these results."""
         return self._executed_tradestudy
 
     @property
-    def executed_vehicles(self):
+    def executed_vehicles(self) -> VehicleManager:
         """Return the vehicle snapshot used to produce these results."""
         return self._executed_vehicles
 
-    def get_case(self,case_id):
+    def get_case(self, case_id: int) -> Result:
         """Return a result point by case identifier.
 
         Parameters
@@ -460,7 +462,7 @@ class TradestudyResults:
         return study
 
 
-    def get_changing_variables(self):
+    def get_changing_variables(self) -> list[str]:
         """Return variables that can vary across result points.
 
         Returns
@@ -497,7 +499,7 @@ class TradestudyResults:
         return des_vars + tracked + list(param_names)
 
 
-    def get_variable(self, variable_name,*,as_column=False):
+    def get_variable(self, variable_name: str, *, as_column: bool = False) -> np.ndarray:
         """Return one variable across all stored result points.
 
         Parameters
@@ -558,10 +560,19 @@ class TradestudyResults:
         )
         # first check if variable name is in tracked outputs
         tracked_output_names = self.tracked_output_names or []
-        if variable_name in tracked_output_names:
+        tracked_name = variable_name
+        tracked_indices = None
+        if variable_name not in tracked_output_names and "[" in variable_name:
+            base_name, indices = split_dotted_path_and_indices(variable_name)
+            if base_name in tracked_output_names:
+                tracked_name, tracked_indices = base_name, indices
+        if tracked_name in tracked_output_names:
             for result in self._results:
-                if variable_name in result.outputs:
-                    values.append(result.outputs[variable_name])
+                if tracked_name in result.outputs:
+                    value = result.outputs[tracked_name]
+                    values.append(
+                        value[tracked_indices] if tracked_indices is not None else value
+                    )
                 else:
                     values.append(np.nan)
                     # log as missing.
@@ -630,7 +641,7 @@ class TradestudyResults:
                     f"Variable name {variable_name} not found in tracked outputs, trade study sweep variables, or vehicle parameters."
                 ) from exc
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the analysis result set to a dictionary.
 
         Returns
@@ -651,7 +662,7 @@ class TradestudyResults:
             }
 
     @classmethod
-    def _from_dict(cls, trade_name, results_dict,solution_name):
+    def _from_dict(cls, trade_name: str, results_dict: dict[str, object],solution_name: str) -> TradestudyResults:
         """Reconstruct an analysis result set from a dictionary.
 
         Parameters
@@ -710,7 +721,7 @@ class Result:
 
     """
 
-    def __init__(self, state):
+    def __init__(self, state: dict[str, object]) -> None:
         """Initialize one stored evaluation result.
 
         Parameters
@@ -731,7 +742,7 @@ class Result:
         self.convergence_status = None
         self.case_id=0
 
-    def _set_case_id(self,case_id):
+    def _set_case_id(self, case_id: int) -> None:
         """Assign the execution case identifier for this result point.
 
         Parameters
@@ -742,7 +753,7 @@ class Result:
         """
         self.case_id=case_id
 
-    def get_var_val(self,name):
+    def get_var_val(self, name: str) -> object:
         """Return a state or output value by variable name.
 
         Parameters
@@ -773,7 +784,7 @@ class Result:
 
         raise ValueError(f'Variable with name {name} not in result')
 
-    def _add_convergence_status(self, convergence_status):
+    def _add_convergence_status(self, convergence_status: bool) -> None:
         """Store optimization convergence status.
 
         Parameters
@@ -788,7 +799,7 @@ class Result:
         """
         self.convergence_status = convergence_status
 
-    def _add_result(self, result_name, result_value):
+    def _add_result(self, result_name: str, result_value: object) -> None:
         """Store one tracked output value.
 
         Parameters
@@ -805,7 +816,7 @@ class Result:
         """
         self.outputs[result_name] = result_value
 
-    def _add_template_checksum(self, file_path, checksum):
+    def _add_template_checksum(self, file_path, checksum: str) -> None:
         """Store one template checksum for provenance tracking.
 
         Parameters
@@ -822,7 +833,7 @@ class Result:
         """
         self.template_hashes[file_path] = checksum
 
-    def equal_states(self, result_object):
+    def equal_states(self, result_object: Result) -> bool:
         """Return whether two results share the same input state.
 
         Parameters
@@ -838,7 +849,7 @@ class Result:
         """
         return self.state_hash == result_object.state_hash
 
-    def _to_dict(self):
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the result to a dictionary.
 
         Returns
@@ -864,7 +875,7 @@ class Result:
         return d
 
     @classmethod
-    def _from_dict(cls, results_dict):
+    def _from_dict(cls, results_dict: dict[str, object]) -> Result:
         """Reconstruct a result from a dictionary.
 
         Parameters

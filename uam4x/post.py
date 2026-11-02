@@ -31,7 +31,7 @@ class BasicPost:
 
     """
 
-    def __init__(self, tradestudy: Tradestudy):
+    def __init__(self, tradestudy: Tradestudy) -> None:
         """Initialize a basic post-processing helper.
 
         Parameters
@@ -47,7 +47,7 @@ class BasicPost:
         )
 
     def scatter(
-        self, var1, var2, xlabel=None, ylabel=None, title="default_title", save_dir=None
+        self, var1: str, var2: str, xlabel: str | None=None, ylabel: str | None=None, title: str="default_title", save_dir: str | None=None
     ):
         """Plot a scatter chart for two trade-study variables.
 
@@ -94,14 +94,14 @@ class BasicPost:
             )
         return ax
 
-    def linear_regression(self,x_name,y_name):
+    def linear_regression(self,x_name: str,y_name: str) -> tuple[float, float, float, float, float]:
         """Fit a linear regression between two trade-study variables.
 
         Parameters
         ----------
-        var1 : str
+        x_name : str
             Variable name used as the independent variable.
-        var2 : str
+        y_name : str
             Variable name used as the dependent variable.
 
         Returns
@@ -146,7 +146,7 @@ class BasicAleatoryPost:
 
     """
 
-    def __init__(self, tradestudy: Tradestudy):
+    def __init__(self, tradestudy: Tradestudy) -> None:
         """Initialize an aleatory post-processing helper.
 
         Parameters
@@ -161,7 +161,7 @@ class BasicAleatoryPost:
             trade_name=tradestudy.trade_name
         )
 
-    def compute_mean(self, var_name):
+    def compute_mean(self, var_name: str) -> float:
         """Compute the sample mean for a variable across trade-study results.
 
         Parameters
@@ -178,7 +178,7 @@ class BasicAleatoryPost:
         vals = self.tradestudy.get_variable(var_name)
         return np.average(vals)
 
-    def compute_variance(self, var_name, method="sample"):
+    def compute_variance(self, var_name: str, method: str="sample") -> float:
         """Compute the sample or population variance for a variable.
 
         Parameters
@@ -213,7 +213,7 @@ class BasicAleatoryPost:
                 "Expected one of: 's', 'sample', 'p', 'pop', 'population'."
             )
 
-    def compute_std(self, var_name, method="sample"):
+    def compute_std(self, var_name: str, method: str="sample") -> float:
         """Compute the sample or population standard deviation for a variable.
 
         Parameters
@@ -248,7 +248,7 @@ class BasicAleatoryPost:
                 "Expected one of: 's', 'sample', 'p', 'pop', 'population'."
             )
 
-    def compute_skewness(self, var_name, bias=True):
+    def compute_skewness(self, var_name: str, bias: bool=True) -> float:
 
         # uses Fisher-Pearson
         """Compute Fisher-Pearson skewness for a variable.
@@ -269,7 +269,7 @@ class BasicAleatoryPost:
         vals = np.array(self.tradestudy.get_variable(var_name))
         return stats.skew(vals, nan_policy="raise", bias=bias)
 
-    def compute_kurtosis(self, var_name, fisher=True, bias=True):
+    def compute_kurtosis(self, var_name: str, fisher: bool=True, bias: bool=True) -> float:
         # uses fisher or pearson
         """Compute kurtosis for a variable using SciPy conventions.
 
@@ -295,12 +295,12 @@ class BasicAleatoryPost:
 
     def plot_pdf(
         self,
-        var_name,
-        x_axis_title=None,
-        plot_title="",
-        method="histogram",
-        bins=20,
-        save_dir=None,
+        var_name: str,
+        x_axis_title: str | None=None,
+        plot_title: str="",
+        method: str="histogram",
+        bins: int=20,
+        save_dir: str | None=None,
     ):
         """Plot an estimated probability density for a variable.
 
@@ -379,7 +379,7 @@ class BasicAleatoryPost:
 
         return ax
 
-    def plot_cdf(self, var_name, x_axis_title=None, plot_title="", save_dir=None):
+    def plot_cdf(self, var_name: str, x_axis_title: str | None=None, plot_title: str="", save_dir: str | None=None) -> np.ndarray:
         """Plot the empirical cumulative distribution for a variable.
 
         Parameters
@@ -425,7 +425,7 @@ class BasicAleatoryPost:
 
         return np.hstack((quantiles, probabilities))
 
-    def get_cdf_function(self, var_name, method="empirical"):
+    def get_cdf_function(self, var_name: str, method: str="empirical"):
         """Return a callable CDF approximation for a variable.
 
         Parameters
@@ -494,7 +494,7 @@ class BasicAleatoryPost:
             )
         return cdf
 
-    def compute_cdf_value(self, var_name, value, method="empirical"):
+    def compute_cdf_value(self, var_name: str, value: float, method: str="empirical") -> float | np.ndarray:
         """Evaluate the CDF value at a specified point.
 
         Parameters
@@ -530,7 +530,7 @@ class BasicAleatoryPost:
                 f"Unsupported CDF method '{method}'. Expected 'empirical' or 'smooth'."
             )
 
-    def compute_quantile(self, var_name, quantile, method="inverted_cdf"):
+    def compute_quantile(self, var_name: str, quantile: float, method: str="inverted_cdf") -> float:
         """Compute a quantile value for a variable distribution.
 
         Parameters
@@ -583,7 +583,7 @@ class BasicAleatoryPost:
 
         return np.quantile(vals, quantile, method=method)
 
-    def compute_spearman_correlation(self, var_name1, var_name2):
+    def compute_spearman_correlation(self, var_name1: str, var_name2: str) -> tuple[float, float]:
         # NEED TO DETERMINE NAN POLICY
         """Compute Spearman rank correlation between two variables.
 
@@ -609,7 +609,7 @@ class BasicAleatoryPost:
         # SHOULD HANDLE >3 VARS REQUIRES MATRIX
         return significance_res, p_val
 
-    def compute_pearson_correlation(self, var_name1, var_name2):
+    def compute_pearson_correlation(self, var_name1: str, var_name2: str) -> tuple[float, float]:
         # NEED TO DETERMINE NAN POLICY
         """Compute Pearson linear correlation between two variables.
 
@@ -648,7 +648,7 @@ class RegressionPCEPost(BasicAleatoryPost):
 
     """
 
-    def __init__(self, tradestudy: Tradestudy):
+    def __init__(self, tradestudy: Tradestudy) -> None:
         """Initialize a regression PCE post-processing helper.
 
         Parameters
@@ -659,7 +659,7 @@ class RegressionPCEPost(BasicAleatoryPost):
         """
         super().__init__(tradestudy)
 
-    def generate_surrogate(self, output_name, poly_order):
+    def generate_surrogate(self, output_name: str, poly_order: int) -> RegressionSurrogate:
         """Build and return a polynomial-chaos surrogate for one output variable.
 
         Parameters
@@ -714,7 +714,7 @@ class RegressionPCEPost(BasicAleatoryPost):
                 # then take the natural log, X=ln(Y-gamma)
                 x_phys = np.array(self.tradestudy.get_variable(name))
                 z = x_phys - distribution.gamma
-                if np.any(z) <= 0.0:
+                if np.any(z <= 0.0):
                     raise ValueError(
                         f"LogNormal variable '{name}' contains values at or below its "
                         f"shift gamma={distribution.gamma}; cannot apply log transform."
@@ -830,7 +830,7 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
 
     """
 
-    def __init__(self, tradestudy: Tradestudy):
+    def __init__(self, tradestudy: Tradestudy) -> None:
         """Initialize a Gauss quadrature PCE post-processing helper.
 
         Parameters
@@ -841,7 +841,7 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
         """
         super().__init__(tradestudy)
 
-    def generate_surrogate(self, output_name):
+    def generate_surrogate(self, output_name: str) -> AleatorySurrogate:
         """Build and return a polynomial-chaos surrogate for one output variable.
 
         Parameters
@@ -888,7 +888,7 @@ class GaussQuadtraturePCEPost(BasicAleatoryPost):
                 # then take the natural log, X=ln(Y-gamma)
                 x_phys = np.array(self.tradestudy.get_variable(name))
                 z = x_phys - distribution.gamma
-                if np.any(z) <= 0.0:
+                if np.any(z <= 0.0):
                     raise ValueError(
                         f"LogNormal variable '{name}' contains values at or below its "
                         f"shift gamma={distribution.gamma}; cannot apply log transform."
@@ -965,7 +965,7 @@ class AleatorySurrogate:
 
     """
 
-    def __init__(self, aleatory_var_to_dist, result,post_storage):
+    def __init__(self, aleatory_var_to_dist, result,post_storage) -> None:
         """Initialize an aleatory surrogate.
 
         Parameters
@@ -986,8 +986,8 @@ class AleatorySurrogate:
         self.post_storage=post_storage
 
 
-    def get_symbolic_metamodel(self, model_type='physical'):
-        """Return a symbolic expression for the surrogate metamodel.
+    def get_symbolic_metamodel(self, model_type: str='physical') -> tuple[sp.Expr, dict[str, sp.Symbol]]:
+        """Return a symbolic surrogate expression and its variable-symbol map.
 
         Parameters
         ----------
@@ -1018,7 +1018,7 @@ class AleatorySurrogate:
                 "model_type must be either 'physical' or 'probabilistic'."
             )
 
-    def _get_probability_symbolic_metamodel(self):
+    def _get_probability_symbolic_metamodel(self) -> tuple[sp.Expr, dict[str, sp.Symbol]]:
         """Build the symbolic metamodel in probability space.
 
         Returns
@@ -1046,7 +1046,7 @@ class AleatorySurrogate:
             model+=term
         return model, aleatory_to_sympy_map
 
-    def _get_physical_symbolic_metamodel(self):
+    def _get_physical_symbolic_metamodel(self) -> tuple[sp.Expr, dict[str, sp.Symbol]]:
         """Build the symbolic metamodel in physical input variables.
 
         Returns
@@ -1114,7 +1114,7 @@ class AleatorySurrogate:
         return model, aleatory_to_sympy_map
 
 
-    def get_first_order_sobol(self,var_name):
+    def get_first_order_sobol(self,var_name: str) -> float | None:
         """Return the first-order Sobol index for one variable.
 
         Parameters
@@ -1135,7 +1135,7 @@ class AleatorySurrogate:
                 return val
 
 
-    def get_total_order_sobol(self,var_name):
+    def get_total_order_sobol(self,var_name: str) -> float | None:
         """Return the total-order Sobol index for one variable.
 
         Parameters
@@ -1155,7 +1155,7 @@ class AleatorySurrogate:
                 val=self._Chaos_SI.getSobolTotalIndex(i)
                 return val
 
-    def get_interaction_sobol(self,var_names:list):
+    def get_interaction_sobol(self,var_names:list) -> float:
         """Return the grouped Sobol index for a set of variables.
 
         Parameters
@@ -1178,7 +1178,7 @@ class AleatorySurrogate:
         names=tuple(var_names)
         return vals
 
-    def get_total_interaction_sobol(self,var_names:list):
+    def get_total_interaction_sobol(self,var_names:list) -> float:
         """Return the grouped total-order Sobol index for a set of variables.
 
         Parameters
@@ -1202,7 +1202,7 @@ class AleatorySurrogate:
         names=tuple(var_names)
         return vals
 
-    def plot_total_order_sobol(self,plot_title="",save_dir=None):
+    def plot_total_order_sobol(self,plot_title: str="",save_dir: str | None=None) -> None:
         """Plot total-order Sobol indices for all aleatory variables.
 
         Parameters
@@ -1239,7 +1239,7 @@ class AleatorySurrogate:
                 bbox_inches="tight",
             )
 
-    def predict(self, name_to_value_dict):
+    def predict(self, name_to_value_dict: dict[str, float]) -> ot.Point:
         # Note, name_to_value_dict should be PHYSICAL inputs, not
         # probabilistic based inputs
         """Evaluate the surrogate at one dictionary of input variable values.
@@ -1266,7 +1266,7 @@ class AleatorySurrogate:
         return self._ot_res.getMetaModel()(point)
 
     @property
-    def analytical_mean(self):
+    def analytical_mean(self) -> float:
         """Analytical mean of the surrogate output.
 
         Returns
@@ -1280,7 +1280,7 @@ class AleatorySurrogate:
 
 
     @property
-    def analytical_variance(self):
+    def analytical_variance(self) -> float:
         """Analytical variance of the surrogate output.
 
         Returns
@@ -1309,7 +1309,7 @@ class AleatorySurrogate:
         return variance
 
     @property
-    def analytical_std(self):
+    def analytical_std(self) -> float:
         """Analytical standard deviation of the surrogate output.
 
         Returns
@@ -1321,7 +1321,7 @@ class AleatorySurrogate:
         std=np.sqrt(self.analytical_variance)
         return std
 
-    def sample(self, num_samples, method="MC"):
+    def sample(self, num_samples: int, method: str="MC") -> tuple[np.ndarray, np.ndarray]:
         """Generate new surrogate samples using a selected sampling strategy.
 
         Parameters
@@ -1373,7 +1373,7 @@ class AleatorySurrogate:
         self.new_sample_values = np.array(Y)
         return np.array(self.new_sample_points), np.array(self.new_sample_values)
 
-    def plot_cdf(self, xlabel=None,plot_title="",save_dir=None):
+    def plot_cdf(self, xlabel: str | None=None,plot_title: str="",save_dir: str | None=None) -> np.ndarray:
         """Plot a CDF from previously generated surrogate samples.
 
         Parameters
@@ -1423,7 +1423,7 @@ class AleatorySurrogate:
 
         return np.hstack((quantiles, probabilities))
 
-    def plot_pdf(self, bins=20, xlabel=None, plot_title="", save_dir=None):
+    def plot_pdf(self, bins: int=20, xlabel: str | None=None, plot_title: str="", save_dir: str | None=None):
         """Plot a PDF from previously generated surrogate samples.
 
         Parameters
@@ -1485,7 +1485,7 @@ class RegressionSurrogate(AleatorySurrogate):
 
     """
 
-    def __init__(self, aleatory_var_to_dist, result,post_storage,X_test=None,y_test=None):
+    def __init__(self, aleatory_var_to_dist, result,post_storage,X_test=None,y_test=None) -> None:
         """Initialize a regression-fitted aleatory surrogate.
 
         Parameters
@@ -1508,7 +1508,7 @@ class RegressionSurrogate(AleatorySurrogate):
         if y_test is not None:
             self.y_test=y_test
 
-    def get_surrogate_mse(self,X=None,y=None):
+    def get_surrogate_mse(self,X=None,y=None) -> float:
         """Return the mean-squared error for the surrogate.
 
         Parameters
@@ -1570,7 +1570,7 @@ class RegressionSurrogate(AleatorySurrogate):
             mse=mean_squared_error(y_new, evaluated_vals)
         return mse
 
-    def get_surrogate_rmse(self, X=None, y=None):
+    def get_surrogate_rmse(self, X=None, y=None) -> float:
         """Return the root-mean-squared error for the surrogate.
 
         Parameters
@@ -1590,7 +1590,7 @@ class RegressionSurrogate(AleatorySurrogate):
         """
         return np.sqrt(self.get_surrogate_mse(X, y))
 
-    def get_surrogate_nrmse(self, X=None, y=None):
+    def get_surrogate_nrmse(self, X=None, y=None) -> float:
         """Return RMSE normalized by the validation-output standard deviation.
 
         Parameters
@@ -1625,7 +1625,7 @@ class RegressionSurrogate(AleatorySurrogate):
             )
         return rmse / std
 
-    def get_surrogate_r2(self,X=None,y=None):
+    def get_surrogate_r2(self,X=None,y=None) -> float:
         """Return the coefficient of determination for the surrogate.
 
         Parameters
@@ -1687,7 +1687,7 @@ class RegressionSurrogate(AleatorySurrogate):
             r2=r2_score(y_new, evaluated_vals)
         return r2
 
-    def get_surrogate_rel_mse(self,X=None,y=None):
+    def get_surrogate_rel_mse(self,X=None,y=None) -> float:
         """Return MSE normalized by the validation-output standard deviation.
 
         Parameters
@@ -1775,7 +1775,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
         "Martinez": ot.MartinezSensitivityAlgorithm,
     }
 
-    def __init__(self, tradestudy):
+    def __init__(self, tradestudy) -> None:
         """Initialize a Sobol sensitivity post-processing helper.
 
         Parameters
@@ -1786,7 +1786,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
         """
         super().__init__(tradestudy)
 
-    def generate_Sobol_indices(self, output_name, algo="Jansen"):
+    def generate_Sobol_indices(self, output_name: str, algo: str="Jansen") -> tuple[dict[str, object], object]:
         # Output values
         """Compute Sobol indices for one model output.
 
@@ -1865,7 +1865,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
 
         return results, otSobol
 
-    def get_first_order_indices(self, output_name, algo="Jansen"):
+    def get_first_order_indices(self, output_name: str, algo: str="Jansen") -> dict[str, float]:
         """Return first-order Sobol indices for one output.
 
         Parameters
@@ -1884,7 +1884,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
         results, _ = self.generate_Sobol_indices(output_name, algo)
         return results["first_order"]
 
-    def get_second_order_indices(self, output_name, algo="Jansen"):
+    def get_second_order_indices(self, output_name: str, algo: str="Jansen") -> dict[tuple[str, str], float]:
         """Return second-order Sobol indices for one output.
 
         Parameters
@@ -1914,7 +1914,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
 
         return results["second_order"]
 
-    def get_total_order_indices(self, output_name, algo="Jansen"):
+    def get_total_order_indices(self, output_name: str, algo: str="Jansen") -> dict[str, float]:
         """Return total-order Sobol indices for one output.
 
         Parameters
@@ -1933,7 +1933,7 @@ class SobolSensitivityPost(BasicAleatoryPost):
         results, _ = self.generate_Sobol_indices(output_name, algo)
         return results["total_order"]
 
-    def plot_total_order_indices(self,output_name,plot_title="",algo="Jansen",save_dir=None):
+    def plot_total_order_indices(self,output_name: str,plot_title: str="",algo: str="Jansen",save_dir: str | None=None) -> None:
         """Plot total-order Sobol indices for one output.
 
         Parameters
@@ -1984,7 +1984,7 @@ class BasicEpistemicPost:
 
     """
 
-    def __init__(self,tradestudy:Tradestudy):
+    def __init__(self,tradestudy:Tradestudy) -> None:
         """Initialize an epistemic post-processing helper.
 
         Parameters
@@ -1998,7 +1998,7 @@ class BasicEpistemicPost:
             solution_name=tradestudy.solution_name,
             trade_name=tradestudy.trade_name
         )
-    def compute_bounds(self,var_name):
+    def compute_bounds(self,var_name: str) -> dict[str, dict[str, object]]:
         """Compute minimum and maximum observed values for a variable.
 
         Parameters
@@ -2047,7 +2047,7 @@ class BasicMixedPost:
 
     """
 
-    def __init__(self, tradestudy: Tradestudy):
+    def __init__(self, tradestudy: Tradestudy) -> None:
         """Initialize a mixed post-processing helper.
 
         Parameters
@@ -2061,7 +2061,7 @@ class BasicMixedPost:
             solution_name=tradestudy.solution_name,
             trade_name=tradestudy.trade_name
         )
-    def _generate_output_var_data(self,var_name):
+    def _generate_output_var_data(self,var_name: str) -> tuple[dict, dict, dict]:
         """Group output values by epistemic state and compute empirical CDFs.
 
         Parameters
@@ -2117,7 +2117,7 @@ class BasicMixedPost:
         return state_to_cdf,quantiles_data,probabilities_data
 
 
-    def plot_pbox(self,var_name,x_axis_title=None,plot_title="",save_dir=None):
+    def plot_pbox(self,var_name: str,x_axis_title: str | None=None,plot_title: str="",save_dir: str | None=None) -> None:
         """Plot a probability box for one output variable.
 
         Parameters
@@ -2170,7 +2170,7 @@ class BasicMixedPost:
                 bbox_inches="tight",
             )
 
-    def get_plevel_bounds(self,var_name,p_level):
+    def get_plevel_bounds(self,var_name: str,p_level: float) -> tuple[float, float]:
         """Return p-box bounds at one probability level.
 
         Parameters
@@ -2237,7 +2237,7 @@ class BasicMixedPost:
         return (min_quantile,max_quantile)
 
 
-    def plot_horsetails(self,var_name,x_axis_title=None,plot_title="",save_dir=None):
+    def plot_horsetails(self,var_name: str,x_axis_title: str | None=None,plot_title: str="",save_dir: str | None=None) -> None:
         """Plot horsetail empirical CDF curves for one output variable.
 
         Parameters
@@ -2296,7 +2296,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
 
     """
 
-    def __init__(self, tradestudy: Tradestudy):
+    def __init__(self, tradestudy: Tradestudy) -> None:
         """Initialize a mixed regression PCE post-processing helper.
 
         Parameters
@@ -2307,7 +2307,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
         """
         super().__init__(tradestudy)
 
-    def _get_mixed_var_to_dist(self):
+    def _get_mixed_var_to_dist(self) -> dict[str, object]:
         """Build a distribution mapping for all mixed variables.
 
         Returns
@@ -2326,7 +2326,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
             mixed_var_to_dist[name] = distribution
         return mixed_var_to_dist
 
-    def generate_surrogate(self, output_name):
+    def generate_surrogate(self, output_name: str) -> MixedSurrogate:
         """Build and return a mixed polynomial-chaos surrogate.
 
         Parameters
@@ -2372,7 +2372,7 @@ class MixedRegressionPCEPost(BasicMixedPost):
                 # then take the natural log, X=ln(Y-gamma)
                 x_phys = np.array(self.tradestudy.get_variable(name))
                 z = x_phys - distribution.gamma
-                if np.any(z) <= 0.0:
+                if np.any(z <= 0.0):
                     raise ValueError(
                         f"LogNormal variable '{name}' contains values at or below its "
                         f"shift gamma={distribution.gamma}; cannot apply log transform."
@@ -2471,7 +2471,7 @@ class MixedSurrogate:
 
     _META_STATE_NAME="__IVP__STATE__META"
     def __init__(self, all_var_to_dist, result,epistemic_var_to_interval,
-                 aleatory_var_to_dist,post_storage,X_test=None,y_test=None):
+                 aleatory_var_to_dist,post_storage,X_test=None,y_test=None) -> None:
         # NEED TO ADD A VARIABLE NAME TO DISTRIBUTION FOR SPECIAL TRANSFORMS
         # FROM FAKE SPACE BACK TO PHYSICAL INTERNALLY
         """Initialize a mixed surrogate.
@@ -2507,7 +2507,7 @@ class MixedSurrogate:
         if y_test is not None:
             self.y_test=y_test
 
-    def get_surrogate_mse(self,X=None,y=None):
+    def get_surrogate_mse(self,X=None,y=None) -> float:
         """Return the mean-squared error for the surrogate.
 
         Parameters
@@ -2569,7 +2569,7 @@ class MixedSurrogate:
             mse=mean_squared_error(y_new, evaluated_vals)
         return mse
 
-    def get_surrogate_rmse(self, X=None, y=None):
+    def get_surrogate_rmse(self, X=None, y=None) -> float:
         """Return the root-mean-squared error for the mixed surrogate.
 
         Parameters
@@ -2589,7 +2589,7 @@ class MixedSurrogate:
         """
         return np.sqrt(self.get_surrogate_mse(X, y))
 
-    def get_surrogate_nrmse(self, X=None, y=None):
+    def get_surrogate_nrmse(self, X=None, y=None) -> float:
         """Return RMSE normalized by the validation-output standard deviation.
 
         Parameters
@@ -2624,7 +2624,7 @@ class MixedSurrogate:
             )
         return rmse / std
 
-    def get_surrogate_r2(self,X=None,y=None):
+    def get_surrogate_r2(self,X=None,y=None) -> float:
         """Return the coefficient of determination for the surrogate.
 
         Parameters
@@ -2686,7 +2686,7 @@ class MixedSurrogate:
             r2=r2_score(y_new, evaluated_vals)
         return r2
 
-    def get_surrogate_rel_mse(self,X=None,y=None):
+    def get_surrogate_rel_mse(self,X=None,y=None) -> float:
         """Return MSE normalized by the validation-output standard deviation.
 
         Parameters
@@ -2754,8 +2754,8 @@ class MixedSurrogate:
         rel_mse=mse/std
         return rel_mse
 
-    def get_symbolic_metamodel(self,model_type='physical'):
-        """Return a symbolic expression for the surrogate metamodel.
+    def get_symbolic_metamodel(self,model_type: str='physical') -> tuple[sp.Expr, dict[str, sp.Symbol]]:
+        """Return a symbolic surrogate expression and its variable-symbol map.
 
         Parameters
         ----------
@@ -2786,7 +2786,7 @@ class MixedSurrogate:
                 "model_type must be either 'physical' or 'probabilistic'."
             )
 
-    def _get_probability_symbolic_metamodel(self):
+    def _get_probability_symbolic_metamodel(self) -> tuple[sp.Expr, dict[str, sp.Symbol]]:
         """Build the symbolic metamodel in probability space.
 
         Returns
@@ -2817,7 +2817,7 @@ class MixedSurrogate:
 
         return model, all_var_to_sympy_map
 
-    def _get_physical_symbolic_metamodel(self):
+    def _get_physical_symbolic_metamodel(self) -> tuple[sp.Expr, dict[str, sp.Symbol]]:
         """Build the symbolic metamodel in physical input variables.
 
         Returns
@@ -2882,7 +2882,7 @@ class MixedSurrogate:
         return model, all_var_to_sympy_map
 
 
-    def predict(self, name_to_value_dict):
+    def predict(self, name_to_value_dict: dict[str, float]) -> ot.Point:
         # Note, name_to_value_dict should be PHYSICAL inputs, not
         # probabilistic based inputs
         """Evaluate the surrogate at one dictionary of input variable values.
@@ -2909,8 +2909,8 @@ class MixedSurrogate:
         return self._ot_res.getMetaModel()(point)
 
 
-    def sample(self, num_epistemic_samples,
-                num_aleatory_samples,method="MC"):
+    def sample(self, num_epistemic_samples: int,
+                num_aleatory_samples: int,method: str="MC") -> tuple[np.ndarray, np.ndarray]:
         """Generate nested mixed surrogate samples.
 
         Parameters
@@ -3014,7 +3014,7 @@ class MixedSurrogate:
         return np.array(self.new_sample_points), np.array(self.new_sample_values)
 
 
-    def _aggregate_predicted_vals(self):
+    def _aggregate_predicted_vals(self) -> tuple[dict, dict, dict]:
         """Aggregate sampled surrogate outputs by epistemic sample.
 
         Returns
@@ -3052,7 +3052,7 @@ class MixedSurrogate:
 
         return meta_to_cdf,quantiles_data,probabilities_data
 
-    def plot_horsetails(self,xlabel=None,plot_title="", save_dir=None):
+    def plot_horsetails(self,xlabel: str | None=None,plot_title: str="", save_dir: str | None=None) -> None:
         """Plot horsetail empirical CDF curves for surrogate samples.
 
         Parameters
@@ -3096,7 +3096,7 @@ class MixedSurrogate:
                 f"{save_dir}/{plot_title.replace(' ','_')}.png", dpi=300, bbox_inches="tight"
             )
 
-    def plot_pbox(self, xlabel=None, plot_title="", save_dir=None):
+    def plot_pbox(self, xlabel: str | None=None, plot_title: str="", save_dir: str | None=None) -> None:
         """Plot a probability box for surrogate samples.
 
         Parameters
@@ -3148,7 +3148,7 @@ class MixedSurrogate:
                 bbox_inches="tight",
             )
 
-    def get_plevel_bounds(self,p_level):
+    def get_plevel_bounds(self,p_level: float) -> tuple[float, float]:
         """Return surrogate p-box bounds at one probability level.
 
         Parameters
@@ -3212,7 +3212,7 @@ class MixedSurrogate:
 
         return (min_quantile,max_quantile)
 
-    def get_first_order_sobol(self,var_name):
+    def get_first_order_sobol(self,var_name: str) -> float | None:
         """Return the first-order Sobol index for one mixed variable.
 
         Parameters
@@ -3231,7 +3231,7 @@ class MixedSurrogate:
             if var_name==name:
                 return self._Chaos_SI.getSobolIndex(i)
 
-    def get_total_order_sobol(self,var_name):
+    def get_total_order_sobol(self,var_name: str) -> float | None:
         """Return the total-order Sobol index for one mixed variable.
 
         Parameters
@@ -3250,7 +3250,7 @@ class MixedSurrogate:
             if var_name==name:
                 return self._Chaos_SI.getSobolTotalIndex(i)
 
-    def get_interaction_sobol(self,var_names:list):
+    def get_interaction_sobol(self,var_names:list) -> float:
         """Return the grouped Sobol index for a set of mixed variables.
 
         Parameters
@@ -3272,7 +3272,7 @@ class MixedSurrogate:
 
         return self._Chaos_SI.getSobolGroupedIndex(inds)
 
-    def get_total_interaction_sobol(self,var_names:list):
+    def get_total_interaction_sobol(self,var_names:list) -> float:
         """Return the grouped total-order Sobol index for mixed variables.
 
         Parameters
@@ -3294,7 +3294,7 @@ class MixedSurrogate:
 
         return self._Chaos_SI.getSobolGroupedTotalIndex(inds)
 
-    def plot_total_order_sobol(self,plot_title="",save_dir=None):
+    def plot_total_order_sobol(self,plot_title: str="",save_dir: str | None=None) -> None:
         """Plot total-order Sobol indices for all mixed variables.
 
         Parameters
@@ -3346,7 +3346,7 @@ class LocalSensitivityPost:
 
     """
 
-    def __init__(self, tradestudy: Tradestudy):
+    def __init__(self, tradestudy: Tradestudy) -> None:
         """Initialize a local sensitivity post-processing helper.
 
         Parameters
@@ -3357,7 +3357,7 @@ class LocalSensitivityPost:
         """
         self.tradestudy = tradestudy
 
-    def compute_sensitivity(self, output_name, method="forward"):
+    def compute_sensitivity(self, output_name: str, method: str="forward") -> tuple[dict[str, object], dict[str, object]]:
         """Compute local sensitivities for one output variable.
 
         Parameters

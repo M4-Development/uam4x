@@ -327,3 +327,57 @@ def test_run_problem_passes_cycle_options_to_group(monkeypatch, tmp_path):
     opt = omo.Optimization(study, solution, state, plugins, out_dir, check_partials=True)
     problem = opt.run_problem()
     assert problem.model.subsystems["cycle"].options["cycle_solver_options"] == state["cycle_solver_options"]
+
+
+@pytest.mark.parametrize("scaling", [
+    {}, {"ref": 5.}, {"ref0": -5.}, {"ref": 5., "ref0": -5.},
+])
+def test_design_variable_scaling_in_openmdao(tmp_path, monkeypatch, scaling):
+    monkeypatch.setenv("OPENMDAO_REPORTS", "0")
+    study, state, plugins, out_dir = _build_study_and_state(tmp_path, ["analysis.y"])
+    state["des_vars"]["vehicles.v.core.x"].update(scaling)
+    state["constraints"] = {}
+    state["optimizer_options"] = {}
+    monkeypatch.chdir(tmp_path)
+    solution = study.get_solution("test_solution")
+    solution.approx_totals(method="fd")
+    opt = omo.Optimization(study, solution, state, plugins, out_dir, check_partials=True)
+    problem = opt.run_problem()
+    try:
+        name = "vehicles~v~core~x"
+        physical = problem.get_val(name).item()
+        scaled = problem.driver.get_design_var_values()[name].item()
+        ref, ref0 = scaling.get("ref", 1.), scaling.get("ref0", 0.)
+        assert scaled == pytest.approx((physical - ref0) / (ref - ref0))
+        assert 0. <= physical <= 5.
+    finally:
+        problem.cleanup()
+
+
+def test_wrapped_plugin_exact_partials_are_mapped_to_openmdao_names():
+    class ExactPlugin(Plugin):
+        def setup_plugin(self, plugin_options=None):
+            self.declare_input("x", float)
+            self.declare_output("y", float)
+            self.declare_partials("y", "x", method="exact")
+
+        def compute_partials(self, links):
+            return {("y", "x"): 3.0}
+
+    plugin = ExactPlugin()
+    plugin.setup_plugin()
+    plugin._declare_partials = True
+    component = omo.UniversalOpenmdaoComp()
+    component.plugin = plugin
+    component.step_name = "nested.analysis"
+    component.input_names = {"nested.analysis.x"}
+    component.output_names = {"nested.analysis.y"}
+    component.plugin_dict = {"x": 2.0}
+    partials = {}
+
+    component.compute_partials({}, partials)
+    assert partials == {("nested~analysis~y", "nested~analysis~x"): 3.0}
+
+    component.output_names = {"nested.analysis.other"}
+    with pytest.raises(ValueError, match="Missing links"):
+        component.compute_partials({}, {})

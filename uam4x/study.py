@@ -50,7 +50,7 @@ class Study:
 
     log = get_log(log, object_name="study")
 
-    def __init__(self, log_dir=None) -> None:
+    def __init__(self, log_dir: str | os.PathLike[str] | None=None) -> None:
         """Initialize a study.
 
         Parameters
@@ -102,7 +102,7 @@ class Study:
         self.log.debug(f"add trade: {trade_name}")
         self.control.add_tradestudy(trade_name, trade)
 
-    def add_vehicle(self, vehicle) -> None:
+    def add_vehicle(self, vehicle: Vehicle) -> None:
         """Add a vehicle definition to the study.
 
         Parameters
@@ -123,7 +123,7 @@ class Study:
         self.log.debug(f"add vehicle: {vehicle.name}")
         return self.vehicles.add_vehicle(vehicle)
 
-    def get_vehicle(self, vehicle_name: str):
+    def get_vehicle(self, vehicle_name: str) -> Vehicle:
         """Return a vehicle definition by name.
 
         Parameters
@@ -145,14 +145,22 @@ class Study:
         self.log.debug(f"get vehicle: {vehicle_name}")
         return self.vehicles.get_vehicle(vehicle_name)
 
-    def add_solution(self,solution:Solution):
+    def add_solution(self, solution: Solution) -> None:
+        """Register a solution with the study's solution manager.
+
+        Raises ValueError if a solution with the same name already exists.
+        """
         self.solutions.add_solution(solution)
 
-    def get_solution(self,solution_name:str):
+    def get_solution(self, solution_name: str) -> Solution:
+        """Return the solution registered under ``solution_name``.
+
+        Raises ValueError if the solution name is unknown.
+        """
         return self.solutions.get_solution(solution_name)
 
 
-    def get_value(self, dotted_path: str):
+    def get_value(self, dotted_path: str) -> object:
            """Retrieve a study value from a dotted path.
 
            Parameters
@@ -181,7 +189,7 @@ class Study:
                value = value[inds]
            return value
 
-    def set_value(self, dotted_path: str, value):
+    def set_value(self, dotted_path: str, value: object) -> None:
         """Set a vehicle parameter value from a dotted path.
 
         Parameters
@@ -219,7 +227,7 @@ class Study:
         # Will need to add array based logic back in (indexed strings)
         attrgetter(comp)(self).set_parameter(param, value)
 
-    def get_param_type(self, dotted_path: str):
+    def get_param_type(self, dotted_path: str) -> type:
         """Return the declared type of a vehicle parameter.
 
         Parameters
@@ -264,7 +272,7 @@ class Study:
 
         return param_type
 
-    def get_all_vehicle_param_names(self):
+    def get_all_vehicle_param_names(self) -> list[str]:
         """Return all available vehicle parameter paths.
 
         Returns
@@ -303,7 +311,7 @@ class Study:
 
         return vehicle_names
 
-    def get_comp_type(self, vehicle, component):
+    def get_comp_type(self, vehicle: str, component: str) -> str:
         """Return the component class name for one vehicle/component pair.
 
         Parameters
@@ -327,7 +335,7 @@ class Study:
         component_type_dict = self.get_component_classes_dict()
         return component_type_dict[(vehicle, component)]
 
-    def get_component_classes_dict(self):
+    def get_component_classes_dict(self) -> dict[tuple[str, str], str]:
         """Return component class names for all vehicles in the study.
 
         Returns
@@ -345,7 +353,7 @@ class Study:
 
         return result
 
-    def get_component_paths(self):
+    def get_component_paths(self) -> list[str]:
         """Return all component and component-mode dotted paths.
 
         Returns
@@ -370,7 +378,7 @@ class Study:
 
     #------------------High level study API (Loading, saving, etc.)
 
-    def save_to_json(self,variant_dir:str,commit=False,commit_code=False):
+    def save_to_json(self, variant_dir: str, commit: bool = False, commit_code: bool = False) -> None:
            """Write study model data and, when available, results data to JSON files.
 
            Parameters
@@ -456,8 +464,10 @@ class Study:
                self._commit_json_to_branch(written,commit_message=msg)
 
 
-    def save_model_to_json(self, variant_dir: str, commit=False,
-                           new_branch=False, commit_code=False):
+    def save_model_to_json(
+        self, variant_dir: str, commit: bool = False,
+        new_branch: bool = False, commit_code: bool = False
+    ) -> str:
         """Write model configuration data to ``model.json``.
 
         Parameters
@@ -475,7 +485,8 @@ class Study:
 
         Returns
         -------
-        None
+        str
+            Path to the written ``model.json`` file.
 
         """
         if not commit and new_branch:
@@ -507,8 +518,10 @@ class Study:
 
         return model_path
 
-    def save_results_to_json(self, variant_path: str, commit=False,
-                             commit_code=False):
+    def save_results_to_json(
+        self, variant_path: str, commit: bool = False,
+        commit_code: bool = False
+    ) -> str:
         """Write current study results to ``results.json``.
 
         Parameters
@@ -524,7 +537,8 @@ class Study:
 
         Returns
         -------
-        None
+        str
+            Hash of the serialized results data.
 
         Raises
         ------
@@ -592,7 +606,10 @@ class Study:
 
         return results_hash
 
-    def save_post_to_json(self,variant_path,commit=False,commit_code=False):
+    def save_post_to_json(
+        self, variant_path: str, commit: bool = False,
+        commit_code: bool = False
+    ) -> None:
         """Write post-processing data to ``post.json``.
 
         Parameters
@@ -818,10 +835,15 @@ class Study:
         self._runtime_meta_data =  defaultdict(dict, result_data["execution_meta_data"])
         self._results_dict_hash=results_hash
 
-    def remove_trade_result(self,solution_name,trade_name,variant_dir,
-                            commit=False,
-                            commit_code=False):
+    def remove_trade_result(
+        self, solution_name: str, trade_name: str, variant_dir: str,
+        commit: bool = False, commit_code: bool = False
+    ) -> None:
+        """Remove one stored analysis result and save the remaining results.
 
+        The matching execution metadata is removed as well. The final stored
+        analysis cannot be removed through this method.
+        """
         trades=self.results.solutions[solution_name].tradestudies
         meta=self._runtime_meta_data[solution_name]
         if trade_name not in trades or trade_name not in meta:
@@ -877,7 +899,7 @@ class Study:
         return study_dict
 
     @classmethod
-    def _from_dict(cls, data: dict, work_dir=None) -> "Study":
+    def _from_dict(cls, data: dict, work_dir: str | os.PathLike[str] | None=None) -> "Study":
         """Reconstruct a study from a dictionary.
 
         Parameters
@@ -917,7 +939,7 @@ class Study:
 
         return study
 
-    def _save_to_json(self,data, json_path: str, commit=False, commit_message=""):
+    def _save_to_json(self,data, json_path: str, commit: bool=False, commit_message: str="") -> None:
         """Write serializable data to a JSON file.
 
         Parameters
@@ -939,7 +961,7 @@ class Study:
 
 
     @staticmethod
-    def _generate_header_dict(control_dict,model_hash,results_hash):
+    def _generate_header_dict(control_dict: dict,model_hash: str,results_hash: str) -> dict:
         """Build header metadata for serialized results or post-processing data.
 
         Parameters
@@ -971,7 +993,7 @@ class Study:
 
 
     @staticmethod
-    def _update_control(model_dict,model_hash):
+    def _update_control(model_dict: dict,model_hash: str) -> dict:
         """Insert the model hash into serialized control data.
         Parameters
         ----------
@@ -995,13 +1017,15 @@ class Study:
                 new_control_dict["model_hash"]=model_hash
         return new_control_dict
 
-    def _get_post_data(self,solution_name,trade_name):
+    def _get_post_data(self, solution_name: str, trade_name: str) -> dict:
+        """Return mutable post-processing storage for a solution and analysis."""
         solution_post_data=self._post_data.setdefault(solution_name,{})
         return solution_post_data.setdefault(trade_name,{})
 
     #-------------------Run time encapsulated stuff
 
-    def _get_runtime_metadata(self,solution_name,trade_name):
+    def _get_runtime_metadata(self, solution_name: str, trade_name: str) -> dict:
+        """Return mutable runtime metadata for a solution and analysis."""
         #i assume this is something like: if its there leave it
         #if its not, make a key dict pair in the base dict
         solution_metadata=self._runtime_meta_data.setdefault(solution_name,{})
@@ -1010,7 +1034,7 @@ class Study:
         return solution_metadata.setdefault(trade_name,{})
 
 
-    def _add_runtime_plugin_checksums(self, solution_name, trade_name, plugin_to_checksum):
+    def _add_runtime_plugin_checksums(self, solution_name: str, trade_name: str, plugin_to_checksum: dict[str, str]) -> None:
         """Store plugin checksum metadata for a trade execution.
 
         Parameters
@@ -1031,8 +1055,8 @@ class Study:
         trade_meta_dict["step_plugin_hashes"] = plugin_to_checksum
 
     def _add_runtime_external_executable_data(
-        self, solution_name,trade_name, external_executable_to_data
-    ):
+        self, solution_name: str,trade_name: str, external_executable_to_data: dict[str, object]
+    ) -> None:
         """Store external executable metadata for a trade execution.
 
         Parameters
@@ -1054,7 +1078,7 @@ class Study:
             "step_external_executable_data"
         ] = external_executable_to_data
 
-    def _capture_environment(self, solution_name,trade_name):
+    def _capture_environment(self, solution_name: str,trade_name: str) -> None:
         """Capture runtime environment metadata for a trade execution.
 
         Parameters
@@ -1102,7 +1126,15 @@ class Study:
             trade_name=trade_name,
             start_or_end='Start_Time')
 
-    def _add_time_metadata(self,solution_name, trade_name,start_or_end:str,elapsed_time=None):
+    def _add_time_metadata(
+        self, solution_name: str, trade_name: str, start_or_end: str,
+        elapsed_time: float | None = None
+    ) -> None:
+        """Record a start or completion timestamp for an analysis.
+
+        ``start_or_end`` must be ``"Start_Time"`` or
+        ``"Completion_Time"``. Completion also records elapsed seconds.
+        """
         trade_dict=self._get_runtime_metadata(
             solution_name=solution_name,
             trade_name=trade_name)
@@ -1135,7 +1167,7 @@ class Study:
 
     #-------------------Git autocommit stuff
 
-    def _get_repository_for_autocommit(self):
+    def _get_repository_for_autocommit(self) -> pygit2.Repository:
         """Return the configured repository after validating its state."""
         path = Path(self.control.repo_root)
         if not path.is_dir():
@@ -1168,7 +1200,12 @@ class Study:
         return repo
 
     @staticmethod
-    def _git_diff_returncode(repo, staged=False):
+    def _git_diff_returncode(repo: pygit2.Repository, staged: bool=False) -> int:
+        """Return whether tracked files differ from the index or HEAD.
+
+        Return 0 for no changes and 1 for changes. Other Git exit codes
+        raise RuntimeError.
+        """
         command = ["git", "diff"]
         if staged:
             command.append("--staged")
@@ -1179,7 +1216,8 @@ class Study:
         return result.returncode
 
     @staticmethod
-    def _get_untracked_nonignored_files(repo):
+    def _get_untracked_nonignored_files(repo: pygit2.Repository) -> list[str]:
+        """List untracked repository files that are not ignored by Git."""
         result = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard", "-z"],
             cwd=repo.workdir,
@@ -1191,7 +1229,8 @@ class Study:
 
         return [path for path in result.stdout.split("\0") if path]
 
-    def _checkout_new_autocommit_branch(self, repo):
+    def _checkout_new_autocommit_branch(self, repo: pygit2.Repository) -> None:
+        """Create and check out the next available AutoCommit branch."""
         parent_commit = repo[repo.head.target]
         increment = 1
         for branch_name in repo.branches.local:
@@ -1203,7 +1242,7 @@ class Study:
         repo.branches.local.create(new_branch_name, parent_commit)
         repo.checkout(f"refs/heads/{new_branch_name}")
 
-    def _prepare_repository_for_autocommit(self, new_branch, commit_code):
+    def _prepare_repository_for_autocommit(self, new_branch: bool, commit_code: bool) -> None:
         """Validate the worktree, optionally branch, and commit code changes."""
         repo = self._get_repository_for_autocommit()
         staged_changes = self._git_diff_returncode(repo, staged=True)
@@ -1256,7 +1295,7 @@ class Study:
             "HEAD", author, committer, "AutoCommit: Committed code", tree, [parent]
         )
 
-    def check_git(self):
+    def check_git(self) -> None:
         """Verify that the configured repository has no uncommitted files.
 
         Ignored files are excluded from this check. Staged changes, unstaged
@@ -1285,8 +1324,8 @@ class Study:
                 f"or remove them before execution: {paths}"
             )
 
-    def _commit_json_to_branch(self, json_paths,
-                               commit_message):
+    def _commit_json_to_branch(self, json_paths: list[str],
+                               commit_message: str) -> None:
         """Commit generated JSON artifacts to the configured git repository.
 
         Parameters
@@ -1384,7 +1423,7 @@ class Variants:
 
     log = get_log(log, object_name="variants")
 
-    def __init__(self, dir: str,git_dir=None) -> None:
+    def __init__(self, dir: str,git_dir: str | os.PathLike[str] | None=None) -> None:
         """Initialize a variant manager.
 
         Parameters
@@ -1436,7 +1475,7 @@ class Variants:
         """
         self.repo_dir = os.path.abspath(os.path.expanduser(repo_dir))
 
-    def add_variant(self, name, func_list: list,options:dict=None):
+    def add_variant(self, name: str, func_list: list, options: dict | None = None) -> None:
         """Register a named study variant.
 
         Parameters
@@ -1458,7 +1497,7 @@ class Variants:
         self.log.debug(f"add variant {name}")
         self.variants[name] = (func_list, options)
 
-    def generate_variants(self, commit=False, commit_code=False):
+    def generate_variants(self, commit: bool = False, commit_code: bool = False) -> list[Study]:
         """Generate, save, and return all configured study variants.
 
         Parameters
@@ -1520,7 +1559,15 @@ class Variants:
             studies.append(study)
         return studies
 
-    def generate_variant(self,variant_name,variant_dir,commit=False,commit_code=False):
+    def generate_variant(
+        self, variant_name: str, variant_dir: str,
+        commit: bool = False, commit_code: bool = False
+    ) -> Study:
+        """Build and save one configured study variant.
+
+        Apply the variant's configuration functions to a new study, set its
+        repository and variant metadata, then write ``model.json``.
+        """
         self.log.debug(f"generate variant {variant_name}")
 
         studies = []

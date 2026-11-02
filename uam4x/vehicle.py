@@ -6,7 +6,7 @@ from uam4x.utils import log
 from collections import Counter
 
 
-def copy_vehicles(vehicle_manager:VehicleManager):
+def copy_vehicles(vehicle_manager: VehicleManager) -> VehicleManager:
     """Return a deep, serialization-safe copy of a vehicle manager.
 
     Parameters
@@ -42,13 +42,13 @@ class VehicleManager:
 
     log = get_log(log, object_name="vehicle manager")
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize an empty vehicle manager."""
         self.log = VehicleManager.log
         self.log.debug("initialize")
         self._vehicles = []
 
-    def add_vehicle(self, vehicle):
+    def add_vehicle(self, vehicle: Vehicle) -> None:
         """Add a vehicle to the manager.
 
         Parameters
@@ -75,7 +75,7 @@ class VehicleManager:
                 )
         self._vehicles.append(vehicle)
 
-    def get_vehicle(self, name):
+    def get_vehicle(self, name: str) -> Vehicle:
         """Return a vehicle by name.
 
         Parameters
@@ -102,7 +102,7 @@ class VehicleManager:
         self.log.error(f"Vehicle with name {name} not found in vehicle manager")
         raise ValueError(f"Vehicle with name {name} not found in vehicle manager")
 
-    def append(self, vehicle):
+    def append(self, vehicle: Vehicle) -> None:
         """Append a vehicle to the manager.
 
         Parameters
@@ -121,7 +121,7 @@ class VehicleManager:
         """
         return self.add_vehicle(vehicle)
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> Vehicle:
         # Allow attribute access to components by their name
         """Return a vehicle by attribute-style access.
 
@@ -165,7 +165,7 @@ class VehicleManager:
         """
         return iter(self._vehicles)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return the number of stored vehicles.
 
         Returns
@@ -176,7 +176,7 @@ class VehicleManager:
         """
         return len(self._vehicles)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a developer-oriented string representation.
 
         Returns
@@ -207,7 +207,7 @@ class Vehicle:
 
     log = get_log(log, object_name="vehicle")
 
-    def __init__(self, name, components=None):
+    def __init__(self, name: str, components: list[Subsystem] | None = None) -> None:
         """Initialize a vehicle.
 
         Parameters
@@ -231,7 +231,7 @@ class Vehicle:
         self.log.debug(f"initialize")
 
     @staticmethod
-    def check_component_names(components_list):
+    def check_component_names(components_list: list[Subsystem]) -> None:
         """Validate that component names are unique.
 
         Parameters
@@ -259,7 +259,7 @@ class Vehicle:
             raise NameError(msg)
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Vehicle name.
 
         Returns
@@ -271,7 +271,7 @@ class Vehicle:
         return self._name
 
     @name.setter
-    def name(self, value):
+    def name(self, value: str) -> None:
         """Set the vehicle name.
 
         Parameters
@@ -300,7 +300,7 @@ class Vehicle:
         self._name = value
 
     @property
-    def components(self):
+    def components(self) -> list[Subsystem]:
         """Return the attached subsystem components.
 
         Returns
@@ -311,7 +311,7 @@ class Vehicle:
         """
         return self._components
 
-    def add_component(self, component):
+    def add_component(self, component: Subsystem) -> None:
         """Add a subsystem component to the vehicle.
 
         Parameters
@@ -348,7 +348,7 @@ class Vehicle:
         self.log.debug("add component")
         component._parent = self
 
-    def remove_component(self, component):
+    def remove_component(self, component: Subsystem | str) -> None:
         """Remove a subsystem component from the vehicle.
 
         Parameters
@@ -375,7 +375,7 @@ class Vehicle:
         self._components.remove(component)
         component._parent = None
 
-    def get_component(self, name):
+    def get_component(self, name: str) -> Subsystem:
         """Return a component by name.
 
         Parameters
@@ -403,7 +403,7 @@ class Vehicle:
             f"Component with name {name} not found in vehicle {self._name}"
         )
 
-    def get_component_names(self):
+    def get_component_names(self) -> list[str]:
         """Return component names.
 
         Returns
@@ -415,7 +415,7 @@ class Vehicle:
         self.log.debug("get component names")
         return [comp.name for comp in self._components]
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> Subsystem:
         # Allow attribute access to components by their name
         """Return a component by attribute-style access.
 
@@ -446,7 +446,7 @@ class Vehicle:
             f"'{self.__class__.__name__}' object has no attribute '{item}'"
         )
 
-    def check_all_parameter_types(self):
+    def check_all_parameter_types(self) -> tuple[bool, dict[str, dict[str, dict[str, bool]]]]:
         """Validate parameter types for all attached components.
 
         Returns
@@ -478,7 +478,7 @@ class Vehicle:
         )
         return all_ok, result
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a human-readable string representation of the vehicle.
 
         Returns
@@ -494,7 +494,7 @@ class Vehicle:
         )
         return f"Vehicle(name={self._name}, components=[{comp_info}])"
 
-    def _to_dict(self) -> dict:
+    def _to_dict(self) -> dict[str, object]:
         """Serialize the vehicle to a dictionary.
 
         Returns
@@ -511,7 +511,7 @@ class Vehicle:
         }
 
     @classmethod
-    def _from_dict(cls, data: dict) -> "Vehicle":
+    def _from_dict(cls, data: dict[str, object]) -> "Vehicle":
         """Reconstruct a vehicle from a dictionary.
 
         Parameters

@@ -647,3 +647,137 @@ def test_Control_from_dict_unknown_type_raises():
 
     with pytest.raises(ValueError, match="Unknown trade study type"):
         Control._from_dict(bad_control_dict)
+
+
+@pytest.mark.parametrize("array_values", [False, True])
+def test_design_var_scaling_json_roundtrip(array_values):
+    import json
+
+    ref = np.array([850., 15.]) if array_values else 850.
+    ref0 = np.array([500., 2.]) if array_values else 500.
+    opt = Optimization()
+    opt.add_design_var("x", ref=ref, ref0=ref0)
+    serialized = json.loads(json.dumps(
+        opt._to_dict(), default=lambda value: value.tolist()))
+    restored = Optimization._from_dict(serialized)
+    np.testing.assert_equal(restored.des_vars["x"]["ref"], ref)
+    np.testing.assert_equal(restored.des_vars["x"]["ref0"], ref0)
+    if array_values:
+        assert isinstance(restored.des_vars["x"]["ref"], np.ndarray)
+        assert isinstance(restored.des_vars["x"]["ref0"], np.ndarray)
+
+
+def test_edit_scaling_on_legacy_design_variable():
+    opt = Optimization()
+    opt.add_design_var("x", lower=500., upper=850.)
+    restored = Optimization._from_dict(opt._to_dict())
+    restored.edit_design_var("x", "ref", 850.)
+    restored.edit_design_var("x", "ref0", 500.)
+    restored.edit_design_var("x", "upper", 900.)
+    assert restored.des_vars["x"]["ref"] == 850.
+    assert restored.des_vars["x"]["ref0"] == 500.
+    restored.edit_design_var("x", "ref", None)
+    restored.edit_design_var("x", "ref0", None)
+    assert "ref" not in restored.des_vars["x"]
+    assert "ref0" not in restored.des_vars["x"]
+
+
+@pytest.mark.parametrize("scaling, error", [
+    ({"ref": 1}, TypeError),
+    ({"ref0": True}, TypeError),
+    ({"ref": float}, TypeError),
+    ({"ref": [2.]}, TypeError),
+    ({"ref": np.array([2])}, TypeError),
+    ({"ref": float("nan")}, ValueError),
+    ({"ref0": float("inf")}, ValueError),
+    ({"ref": np.array([2., float("inf")])}, ValueError),
+    ({"ref": np.ones(2), "ref0": np.zeros(3)}, ValueError),
+    ({"ref": 0.}, ValueError),
+    ({"ref0": 1.}, ValueError),
+    ({"ref": 2., "ref0": 2.}, ValueError),
+    ({"ref": np.array([2., 3.]), "ref0": np.array([1., 3.])}, ValueError),
+    ({"ref": np.array([2., 3.]), "ref0": 2.}, ValueError),
+])
+def test_invalid_design_variable_scaling(scaling, error):
+    opt = Optimization()
+    with pytest.raises(error):
+        opt.add_design_var("x", **scaling)
+    assert "x" not in opt.des_vars
+
+
+@pytest.mark.parametrize("scaling", [
+    {"ref": -2., "ref0": 3.},
+    {"ref": np.float64(2.), "ref0": 0.},
+    {"ref": np.array([2., 3.]), "ref0": 0.},
+    {"ref": 4., "ref0": np.array([2., 3.])},
+    {"ref": np.array([2., -3.]), "ref0": np.array([0., 1.])},
+])
+def test_valid_design_variable_scaling(scaling):
+    opt = Optimization()
+    opt.add_design_var("x", **scaling)
+    for key, value in scaling.items():
+        np.testing.assert_equal(opt.des_vars["x"][key], value)
+
+
+@pytest.mark.parametrize("key, value, error", [
+    ("ref", 500., ValueError),
+    ("ref0", 850., ValueError),
+    ("ref", float("inf"), ValueError),
+    ("ref0", "zero", TypeError),
+])
+def test_invalid_scaling_edit_preserves_previous_value(key, value, error):
+    opt = Optimization()
+    opt.add_design_var("x", ref=850., ref0=500.)
+    previous = opt.des_vars["x"].copy()
+    with pytest.raises(error):
+        opt.edit_design_var("x", key, value)
+    assert opt.des_vars["x"] == previous
+
+
+def test_reset_scaling_checks_effective_defaults():
+    opt = Optimization()
+    opt.add_design_var("x", ref=2., ref0=1.)
+    with pytest.raises(ValueError):
+        opt.edit_design_var("x", "ref", None)
+    assert opt.des_vars["x"]["ref"] == 2.
+
+
+import pytest
+
+from uam4x.control import Optimization
+
+
+def test_equality_constraint_survives_serialization():
+    optimization = Optimization()
+    optimization.add_constraint("boom_density_consistency.residual", equals=0.0)
+
+    restored = Optimization._from_dict(optimization._to_dict())
+    constraint = restored.constraints["boom_density_consistency.residual"]
+    assert constraint["equals"] == 0.0
+    assert constraint["lower"] is None
+    assert constraint["upper"] is None
+
+
+def test_equality_constraint_cannot_have_bounds():
+    optimization = Optimization()
+
+    with pytest.raises(ValueError, match="equals cannot be combined"):
+        optimization.add_constraint("residual", lower=0.0, equals=0.0)
+
+
+def test_edit_constraint_updates_bounds_and_rejects_invalid_edits():
+    opt = Optimization()
+    opt.add_constraint("c", lower=0.0, upper=10.0, indices=[0])
+    opt.edit_constraint("c", "upper", 5.0)
+    assert opt.constraints["c"]["upper"] == 5.0
+
+    with pytest.raises(KeyError):
+        opt.edit_constraint("c", "unknown", 1.0)
+    with pytest.raises(ValueError, match="upper bounds must be greater"):
+        opt.edit_constraint("c", "lower", 6.0)
+    assert opt.constraints["c"]["lower"] == 0.0
+
+
+def test_equality_constraint_rejects_discrete_target():
+    with pytest.raises(TypeError, match="Equality target must be"):
+        Optimization().add_constraint("c", equals=1)
