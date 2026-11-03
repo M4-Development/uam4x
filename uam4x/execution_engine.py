@@ -708,6 +708,7 @@ class Engine:
         check: bool = True,
         create_step_work_dirs: bool = True,
         check_git: bool = False,
+        print_log_info:bool=True
     ) -> None:
         """Execute a named analysis.
 
@@ -745,6 +746,10 @@ class Engine:
         """
         if check_git:
             self.study.check_git()
+        if print_log_info:
+            self.log.root_logger.set_min_console_level("INFO")
+        else:
+            self.log.root_logger.set_min_console_level("WARNING")
         self.create_step_work_dirs = create_step_work_dirs
         start_time = time.perf_counter()
         self.log.debug(f"run tradestudy: {trade_name}")

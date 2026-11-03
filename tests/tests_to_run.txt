@@ -14,3 +14,4 @@ tests/test_log.py
 tests/test___init__.py
 tests/test_n2_viewer.py
 tests/test_linking.py
+tests/uq_testing

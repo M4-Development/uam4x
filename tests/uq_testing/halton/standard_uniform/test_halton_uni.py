@@ -24,7 +24,8 @@ def test_halton_uniform():
     framework.generate_variants()
     study=Study.load_study_from_directory(study_dir)
     engine=Engine(study,os.path.join(study_dir,'work'))
-    engine.run_tradestudy('standard_uniform', solution_name="basic", create_step_work_dirs=False)
+    engine.run_tradestudy('standard_uniform', solution_name="basic", create_step_work_dirs=False,
+                          print_log_info=False)
     study.save_results_to_json(study_dir)
     study=Study.load_study_from_directory(study_dir)
     #start asserting things
