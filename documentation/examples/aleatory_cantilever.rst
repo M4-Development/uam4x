@@ -15,7 +15,7 @@ Run
 
 .. code-block:: bash
 
-    cd uam4x_examples/aleatory_cantilever
+    cd uam4x_ex/aleatory_cantilever
     python branching_script.py
     python run_analysis.py
     python post_analysis.py
@@ -36,29 +36,6 @@ The subsystem stores beam geometry, loading, and material strength.
             self.add_parameter("bending_moment", 1000.0, float)
             self.add_parameter("yield_strength", 1000.0, float)
 
-The plugin computes the beam failure margin ``g_val`` from those inputs.
-
-.. code-block:: python
-
-    @register_plugin
-    class CalculateBeamFailure(Plugin):
-        def setup_plugin(self, plugin_options):
-            self.declare_input("height", float, 1.0)
-            self.declare_input("width", float, 1.0)
-            self.declare_input("axial_load", float, 1.0)
-            self.declare_input("bending_moment", float, 1.0)
-            self.declare_input("yield_strength", float, 1.0)
-            self.declare_output("g_val", float, 1.0)
-
-        def run_plugin(self, links, work_dir):
-            g_val = 1 - 4 * links["bending_moment"] / (
-                links["height"] ** 2 * links["width"] * links["yield_strength"]
-            ) - (
-                links["axial_load"]
-                / (links["height"] * links["width"] * links["yield_strength"])
-            ) ** 2
-            return {"g_val": g_val}
-
 ``branching_script.py``
 -----------------------
 
@@ -78,19 +55,27 @@ deterministic values.
         beam.set_parameter("yield_strength", 1000.0)
         study.add_vehicle(veh1)
 
-The solution adds the beam-failure plugin and tracks ``calculate_failure.g_val``.
+The solution uses an expression plugin for the beam failure margin. It
+links all five beam inputs and tracks ``calculate_failure.g_val``.
 
 .. code-block:: python
 
-    from uam4x.solution import Solution
-
     def setup_solution(study: Study):
         solution = Solution("basic")
-        solution.add_step(CalculateBeamFailure, "calculate_failure")
-        solution.add_link(
-            "vehicles.vehicle1.beam1.height", "calculate_failure.height"
+        failure = ExpressionPluginGenerator("calculate_failure", solution=solution)
+        for name in ("height", "width", "axial_load", "bending_moment", "yield_strength"):
+            failure.add_float_input(name)
+        failure.add_float_output(
+            "g_val",
+            expr=(
+                "1-4*bending_moment/(height**2*width*yield_strength)"
+                "-(axial_load/(height*width*yield_strength))**2"
+            ),
+            tracked=True,
         )
-        solution.add_tracked_output("calculate_failure.g_val")
+        failure.add_to_study()
+        for name in ("height", "width", "axial_load", "bending_moment", "yield_strength"):
+            solution.add_link(f"vehicles.vehicle1.beam1.{name}", failure.input(name))
         study.add_solution(solution)
 
 The trade-study setup defines three aleatory analyses: two regression-PCE

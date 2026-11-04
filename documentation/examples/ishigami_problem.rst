@@ -10,7 +10,7 @@ Run
 
 .. code-block:: bash
 
-    cd uam4x_examples/ishigami_problem
+    cd uam4x_ex/ishigami_problem
     python branching_script.py
     python run_analysis.py
     python run_basic_post.py
@@ -19,8 +19,8 @@ Run
 ``custom.py``
 -------------
 
-The subsystem stores Ishigami parameters and inputs. The plugin computes the
-scalar response ``g``.
+The subsystem stores Ishigami parameters and inputs. The solution uses an
+expression plugin to compute the scalar response ``g``.
 
 .. code-block:: python
 
@@ -33,21 +33,27 @@ scalar response ``g``.
             self.add_parameter("X2", 0.0, float)
             self.add_parameter("X3", 0.0, float)
 
-    @register_plugin
-    class IshigamiAnalysis(Plugin):
-        def run_plugin(self, links, work_dir):
-            g = (
-                np.sin(links["X1"])
-                + links["a"] * np.sin(links["X2"]) ** 2
-                + links["b"] * links["X3"] ** 4 * np.sin(links["X1"])
-            )
-            return {"g": g}
-
 ``branching_script.py``
 -----------------------
 
 The model contains a single Ishigami subsystem on one vehicle. The solution
-links all five inputs into the analysis step and tracks ``ishigami_calc.g``.
+links all five inputs into the expression plugin and tracks
+``ishigami_calc.g``.
+
+.. code-block:: python
+
+    ishigami = ExpressionPluginGenerator("ishigami_calc", solution=solution)
+    for name in ("a", "b", "X1", "X2", "X3"):
+        ishigami.add_float_input(name)
+    ishigami.add_float_output(
+        "g", expr="sin(X1)+a*sin(X2)**2+b*X3**4*sin(X1)", tracked=True
+    )
+    ishigami.add_to_study()
+    for name in ("a", "b", "X1", "X2", "X3"):
+        solution.add_link(
+            f"vehicles.ishigami_vehicle.ishigami_base.{name}",
+            ishigami.input(name),
+        )
 
 Two UQ trade studies are configured:
 
@@ -103,7 +109,7 @@ surrogate, and compare them against the same analytical reference values.
     solution_results = study.results.get_solution_result("basic")
     uq_trade = solution_results.get_tradestudy("pce_ishigami_problem")
     uq_post = RegressionPCEPost(uq_trade)
-    surrogate = uq_post.generate_surrogate("ishigami_calc.g")
+    surrogate = uq_post.generate_surrogate("ishigami_calc.g", poly_order=7)
     s1 = surrogate.get_first_order_sobol(
         "vehicles.ishigami_vehicle.ishigami_base.X1"
     )

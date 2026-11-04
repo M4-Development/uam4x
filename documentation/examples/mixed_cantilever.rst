@@ -72,7 +72,9 @@ The trade-study setup adds:
 - ``m4_samples`` using ``MixedCSVPoints``
 
 The first two use aleatory variables for moment and modulus plus an epistemic
-interval on thickness factor ``T``.
+interval on thickness factor ``T``. Polynomial order is chosen when fitting the
+mixed regression surrogate, so either saved sample set can be fitted at a
+supported order.
 
 ``run_analysis.py``
 -------------------
@@ -114,7 +116,7 @@ predictions against the ``m4_ref`` reference files.
     solution_results = study.results.get_solution_result("basic")
     trade = solution_results.get_tradestudy("pce_cantilever_problem")
     post = MixedRegressionPCEPost(trade)
-    surrogate = post.generate_surrogate("cantilever_deflection.g")
+    surrogate = post.generate_surrogate("cantilever_deflection.g", poly_order=2)
     surrogate.sample(50, 1000)
     surrogate.plot_pbox(save_dir=study_dir)
     surrogate.plot_horsetails(save_dir=study_dir)
@@ -128,7 +130,7 @@ predictions against the ``m4_ref`` reference files.
     solution_results = study.results.get_solution_result("basic")
     trade = solution_results.get_tradestudy("m4_samples")
     post = MixedRegressionPCEPost(trade)
-    surrogate = post.generate_surrogate("cantilever_deflection.g")
+    surrogate = post.generate_surrogate("cantilever_deflection.g", poly_order=2)
     prediction = surrogate.predict({
         "vehicles.base.cantilever_base.M": 2500.0,
         "vehicles.base.cantilever_base.Y": 2400.0,

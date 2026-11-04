@@ -107,19 +107,14 @@ class Group:
         Parameters
         ----------
         independent : str
-            Source variable name.
+            Source variable name. May include an array index or slice.
         dependent : str
-            Destination variable name.
+            Destination variable name. May include an array index or slice;
+            the source value is assigned to that part of the destination array.
 
         Returns
         -------
         None
-
-        Raises
-        ------
-        ValueError
-            If ``dependent`` includes bracketed indices. Only independent
-            variables may use indexed access.
 
         Notes
         -----

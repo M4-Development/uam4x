@@ -206,7 +206,7 @@ def test_sop_updates_aleatory_distribution_for_each_outer_sample():
 
 def test_mixed_regression_samples_integer_and_float_values():
     analysis = MixedRegressionPCE(
-        EndpointSampler, num_samples=2, poly_order=1, seed=9
+        EndpointSampler, num_samples=2, seed=9
     )
     analysis.add_epistemic_variable("count", np.array([1, 3]))
     analysis.add_aleatory_variable("fraction", UniformDistribution(0.25, 0.75))
@@ -293,7 +293,7 @@ def test_regression_pce_rejects_invalid_holdout_fraction(holdout):
     with pytest.raises(ValueError, match="Hold out fraction"):
         RegressionPCE(8, MonteCarloSampler, hold_out_fraction=holdout)
     with pytest.raises(ValueError, match="Hold out fraction"):
-        MixedRegressionPCE(MonteCarloSampler, 8, 1,
+        MixedRegressionPCE(MonteCarloSampler, 8,
                            hold_out_fraction=holdout)
 
 
@@ -332,29 +332,39 @@ def test_mixed_workflow_roundtrips_preserve_both_variable_kinds():
         )
 
 
-def test_mixed_regression_roundtrip_and_basis_size_validation():
+def test_mixed_regression_roundtrip_rejects_polynomial_order():
     analysis = MixedRegressionPCE(
-        MonteCarloSampler, num_samples=8, poly_order=1, seed=19,
+        MonteCarloSampler, num_samples=8, seed=19,
         hold_out_fraction=0.25, hold_out_seed=93
     )
     analysis.add_aleatory_variable("a", UniformDistribution(0.0, 1.0))
     analysis.add_epistemic_variable("e", np.array([1, 3]))
 
-    restored = MixedRegressionPCE._from_dict(analysis._to_dict())
+    serialized = analysis._to_dict()
+    assert "polynomial_order" not in serialized
+    restored = MixedRegressionPCE._from_dict(serialized)
 
+    assert restored.num_samples == analysis.num_samples
+    assert restored.seed == analysis.seed
     assert restored.hold_out_seed == 93
     assert restored.hold_out_fraction == 0.25
     assert restored.SamplingClass is MonteCarloSampler
-    np.testing.assert_array_equal(restored.epistemic_var_to_interval["e"], [1, 3])
-    restored._check_analysis()
-
-    too_small = MixedRegressionPCE(
-        MonteCarloSampler, num_samples=2, poly_order=1
+    assert restored.aleatory_var_to_dist["a"]._to_dict() == (
+        analysis.aleatory_var_to_dist["a"]._to_dict()
     )
-    too_small.add_aleatory_variable("a", UniformDistribution(0.0, 1.0))
-    too_small.add_epistemic_variable("e", np.array([1, 3]))
-    with pytest.raises(ValueError, match="Insufficient terms"):
-        too_small._check_analysis()
+    np.testing.assert_array_equal(restored.epistemic_var_to_interval["e"], [1, 3])
+    original_states = analysis.get_states()
+    restored_states = restored.get_states()
+    for name in ("a", "e"):
+        np.testing.assert_array_equal(
+            [state[name] for state in restored_states],
+            [state[name] for state in original_states],
+        )
+
+    with pytest.raises(ValueError, match="polynomial_order"):
+        MixedRegressionPCE._from_dict({**serialized, "polynomial_order": 1})
+    with pytest.raises(TypeError):
+        MixedRegressionPCE(MonteCarloSampler, 8, 1)
 
 
 @pytest.mark.parametrize(
@@ -384,7 +394,7 @@ def test_sobol_design_row_count_and_roundtrip(
     assert restored._to_dict() == analysis._to_dict()
 
 
-def test_regression_samples_roundtrip_without_order_and_read_legacy_order():
+def test_regression_samples_roundtrip_rejects_polynomial_order():
     from uam4x.UQ import RegressionPCE
 
     trade = RegressionPCE(10, LatinHypercubeSampler)
@@ -392,8 +402,11 @@ def test_regression_samples_roundtrip_without_order_and_read_legacy_order():
     data = trade._to_dict()
     assert "polynomial_order" not in data
     restored = RegressionPCE._from_dict(data)
-    assert restored.get_states() == trade.get_states()
-    data["polynomial_order"] = 4
-    legacy = RegressionPCE._from_dict(data)
-    assert legacy.get_states() == trade.get_states()
-    assert "polynomial_order" not in legacy._to_dict()
+    np.testing.assert_array_equal(
+        [state["x"] for state in restored.get_states()],
+        [state["x"] for state in trade.get_states()],
+    )
+    with pytest.raises(ValueError, match="polynomial_order"):
+        RegressionPCE._from_dict({**data, "polynomial_order": 4})
+    with pytest.raises(TypeError):
+        RegressionPCE(10, LatinHypercubeSampler, 4)

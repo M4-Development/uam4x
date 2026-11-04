@@ -201,7 +201,8 @@ class RegressionPCE(BasicAleatory):
     """
 
     def __init__(self, num_samples: int, SamplingClass: type[BaseSampler],
-                 seed: int=42,hold_out_fraction: float=0.0,hold_out_seed: int | None=None) -> None:
+                 *, seed: int=42,hold_out_fraction: float=0.0,
+                 hold_out_seed: int | None=None) -> None:
         """Initialize a regression PCE workflow.
 
         Parameters
@@ -265,6 +266,11 @@ class RegressionPCE(BasicAleatory):
             Reconstructed regression PCE workflow.
 
         """
+        if "polynomial_order" in workflow_dict:
+            raise ValueError(
+                "RegressionPCE no longer accepts polynomial_order; pass "
+                "poly_order to RegressionPCEPost.generate_surrogate()."
+            )
         sampler = sampler_name_to_class_registry[workflow_dict["sampler"]]
         num_samples = workflow_dict["num_samples"]
         seed=workflow_dict['seed']
@@ -1244,26 +1250,22 @@ class MixedRegressionPCE(MixedBaseClass):
         Sampler class used to generate samples.
     num_samples : int
         Number of mixed samples to generate.
-    poly_order : int
-        Total polynomial order of the polynomial chaos basis.
 
     Notes
     -----
     Epistemic intervals are sampled as uniform distributions over their lower
-    and upper bounds. The workflow checks that the number of samples is at
-    least the number of basis terms required for the requested polynomial order
-    and total number of mixed variables. When a nonzero holdout fraction is
-    used, the basis feasibility check is performed against the effective
-    post-split training sample count. Split-based holdout validation is most
-    defensible for Monte Carlo sampling; for space-filling samplers such as
-    Latin hypercube and Sobol, an independent validation design is usually
-    more rigorous.
+    and upper bounds. Polynomial order is selected when fitting a surrogate in
+    post-processing, so the same samples can be used with different orders.
+    Sample-count checks are performed on valid training points at fitting time.
+    Split-based holdout validation is most defensible for Monte Carlo sampling;
+    for space-filling samplers such as Latin hypercube and Sobol, an independent
+    validation design is usually more rigorous.
 
     """
 
     def __init__(self,SamplingClass: type[BaseSampler],num_samples: int,
-                 poly_order: int,seed: int=42,
-                 hold_out_fraction: float=0.0,hold_out_seed: int | None=None) -> None:
+                 *, seed: int=42,hold_out_fraction: float=0.0,
+                 hold_out_seed: int | None=None) -> None:
         """Initialize a mixed regression PCE workflow.
 
         Parameters
@@ -1272,8 +1274,6 @@ class MixedRegressionPCE(MixedBaseClass):
             Sampler class used to generate samples.
         num_samples : int
             Number of mixed samples to generate.
-        poly_order : int
-            Total polynomial order of the polynomial chaos basis.
         seed : int, optional
             Random seed used to generate the mixed sample set.
         hold_out_fraction : float, optional
@@ -1292,7 +1292,6 @@ class MixedRegressionPCE(MixedBaseClass):
         super().__init__()
         self.SamplingClass=SamplingClass
         self.num_samples=num_samples
-        self.poly_order = poly_order
         self.seed=seed
         if hold_out_fraction<0.0 or hold_out_fraction>1.0:
             raise ValueError(f'Hold out fraction must be between zero and one')
@@ -1348,43 +1347,6 @@ class MixedRegressionPCE(MixedBaseClass):
 
         return all_states
 
-    def _check_analysis(self) -> None:
-        """Validate the mixed regression PCE sample count.
-
-        Raises
-        ------
-        ValueError
-            If ``num_samples`` is smaller than the number of required
-            polynomial basis terms.
-
-        Notes
-        -----
-        The number of basis terms is computed as
-        ``comb(poly_order + num_vars, poly_order)``, where ``num_vars`` is the
-        total number of aleatory and epistemic variables, using the effective
-        training-sample count after any holdout split. A warning is logged
-        when the effective training-sample count is less than three times the
-        number of required basis terms.
-
-        """
-        num_vars = len(self.aleatory_var_to_dist) + len(
-            self.epistemic_var_to_interval
-        )
-        min_terms = comb(self.poly_order + num_vars, self.poly_order)
-        num_samples=ceil(self.num_samples*(1-self.hold_out_fraction))
-        if min_terms > num_samples:
-            raise ValueError(
-                f"Insufficient terms for polynomial chaos expansion of degree {self.poly_order} "
-                f"for {num_vars} mixed variables"
-            )
-        elif min_terms * 3 > num_samples:
-            log.warning(
-                "Mixed regression PCE is lightly sampled: "
-                f"polynomial order={self.poly_order}, num_variables={num_vars}, "
-                f"basis_size={min_terms}, num_samples={num_samples}. "
-                "Consider 2-3x oversampling relative to the basis size."
-            )
-
     def _to_dict(self) -> dict[str, object]:
         """Serialize the workflow to a dictionary.
 
@@ -1392,8 +1354,8 @@ class MixedRegressionPCE(MixedBaseClass):
         -------
         dict
             JSON-compatible dictionary containing workflow metadata, serialized
-            aleatory distributions, serialized epistemic intervals, and the
-            polynomial order.
+            aleatory distributions, serialized epistemic intervals, and holdout
+            settings.
 
         """
         data={
@@ -1406,7 +1368,6 @@ class MixedRegressionPCE(MixedBaseClass):
 
             "epistemic_variables":{name:interval
                                    for name,interval in self.epistemic_var_to_interval.items()},
-            "polynomial_order":self.poly_order,
             "hold_out_fraction":self.hold_out_fraction,
 
         }
@@ -1430,15 +1391,18 @@ class MixedRegressionPCE(MixedBaseClass):
             Reconstructed mixed regression PCE workflow.
 
         """
+        if "polynomial_order" in data:
+            raise ValueError(
+                "MixedRegressionPCE no longer accepts polynomial_order; pass "
+                "poly_order to MixedRegressionPCEPost.generate_surrogate()."
+            )
         sampler = sampler_name_to_class_registry[data["sampler"]]
         num_samples = data["num_samples"]
-        poly_order = data["polynomial_order"]
         seed=data['seed']
-        hold_out_fraction=data['hold_out_fraction']
+        hold_out_fraction=data.get('hold_out_fraction', 0.0)
         hold_out_seed=data.get('hold_out_seed', None)
         mixed_analysis=cls(SamplingClass=sampler,
                            num_samples=num_samples,
-                             poly_order=poly_order,
                              seed=seed,
                              hold_out_fraction=hold_out_fraction,
                              hold_out_seed=hold_out_seed)

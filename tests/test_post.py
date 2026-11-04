@@ -15,7 +15,8 @@ from uam4x.post import (
 )
 from uam4x.UQ import (
     RegressionPCE, LatinHypercubeSampler, UniformDistribution,
-    GaussQuadraturePCE, LogNormalDistribution, MixedRegressionPCE,
+    GaussQuadraturePCE, LogNormalDistribution, MixedCSVPoints,
+    MixedRegressionPCE,
 )
 
 SOLUTION_NAME = "test_solution"
@@ -270,7 +271,7 @@ def test_pce_rejects_lognormal_values_at_or_below_shift(
         workflow = GaussQuadraturePCE(poly_order=1)
     else:
         workflow = MixedRegressionPCE(
-            LatinHypercubeSampler, num_samples=2, poly_order=1
+            LatinHypercubeSampler, num_samples=2
         )
     workflow.add_aleatory_variable(
         "x", LogNormalDistribution(0.0, 0.25, gamma=1.0)
@@ -293,10 +294,10 @@ def test_pce_rejects_lognormal_values_at_or_below_shift(
     post = post_type(results)
 
     with pytest.raises(ValueError, match="at or below its shift"):
-        if post_type is RegressionPCEPost:
-            post.generate_surrogate("y", poly_order=1)
-        else:
+        if post_type is GaussQuadtraturePCEPost:
             post.generate_surrogate("y")
+        else:
+            post.generate_surrogate("y", poly_order=1)
 
 
 def test_quadratic_surrogate_predicts_and_reports_analytical_moments():
@@ -368,9 +369,9 @@ def test_surrogate_plots_require_samples_and_render_after_sampling(tmp_path):
         plt.close("all")
 
 
-def make_mixed_linear_surrogate(num_samples=40):
+def make_mixed_linear_post(num_samples=40):
     workflow = MixedRegressionPCE(
-        LatinHypercubeSampler, num_samples=num_samples, poly_order=1, seed=17
+        LatinHypercubeSampler, num_samples=num_samples, seed=17
     )
     workflow.add_epistemic_variable("e", np.array([0.0, 1.0]))
     workflow.add_aleatory_variable("a", UniformDistribution(-1.0, 1.0))
@@ -381,12 +382,57 @@ def make_mixed_linear_surrogate(num_samples=40):
     results = SimpleNamespace(
         executed_tradestudy=workflow,
         _results=[None] * num_samples,
+        values=values,
         get_variable=values.__getitem__,
         solution_name="basic",
         trade_name="mixed_linear",
         study=SimpleNamespace(_get_post_data=lambda **kwargs: {}),
     )
-    return MixedRegressionPCEPost(results).generate_surrogate("y")
+    return MixedRegressionPCEPost(results)
+
+
+def make_mixed_linear_surrogate(num_samples=40):
+    return make_mixed_linear_post(num_samples).generate_surrogate("y", poly_order=1)
+
+
+def test_mixed_regression_fits_multiple_orders_and_validates_order():
+    post = make_mixed_linear_post()
+    for order in (1, 2):
+        surrogate = post.generate_surrogate("y", poly_order=order)
+        assert surrogate.predict({"e": 0.4, "a": 0.2})[0] == pytest.approx(
+            2.4, abs=1e-8
+        )
+    for invalid_order in (-1, 1.5, True):
+        with pytest.raises(ValueError, match="Polynomial order"):
+            post.generate_surrogate("y", poly_order=invalid_order)
+
+
+def test_mixed_regression_checks_valid_training_count_after_filtering():
+    post = make_mixed_linear_post(num_samples=6)
+    post.tradestudy.values["y"][:4] = np.nan
+    with pytest.warns(RuntimeWarning, match="Dropping 4"):
+        with pytest.raises(ValueError, match="Need at least 3 samples"):
+            post.generate_surrogate("y", poly_order=1)
+
+
+def test_mixed_regression_checks_training_count_after_holdout():
+    post = make_mixed_linear_post(num_samples=4)
+    post.tradestudy.executed_tradestudy.hold_out_fraction = 0.5
+    post.tradestudy.executed_tradestudy.hold_out_seed = 5
+    with pytest.raises(ValueError, match="Need at least 3 samples"):
+        post.generate_surrogate("y", poly_order=1)
+
+
+def test_mixed_csv_results_fit_without_holdout_configuration():
+    post = make_mixed_linear_post()
+    workflow = MixedCSVPoints("unused.csv")
+    workflow.add_epistemic_variable("e", np.array([0.0, 1.0]))
+    workflow.add_aleatory_variable("a", UniformDistribution(-1.0, 1.0))
+    post.tradestudy.executed_tradestudy = workflow
+    surrogate = post.generate_surrogate("y", poly_order=1)
+    assert surrogate.predict({"e": 0.4, "a": 0.2})[0] == pytest.approx(
+        2.4, abs=1e-8
+    )
 
 
 def test_mixed_linear_surrogate_predicts_and_validates_external_points():

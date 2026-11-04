@@ -2326,13 +2326,16 @@ class MixedRegressionPCEPost(BasicMixedPost):
             mixed_var_to_dist[name] = distribution
         return mixed_var_to_dist
 
-    def generate_surrogate(self, output_name: str) -> MixedSurrogate:
+    def generate_surrogate(self, output_name: str, poly_order: int) -> MixedSurrogate:
         """Build and return a mixed polynomial-chaos surrogate.
 
         Parameters
         ----------
         output_name : str
             Output variable name used to fit the surrogate.
+        poly_order : int
+            Nonnegative total polynomial order of the surrogate basis. Supply a
+            different order to fit the same results again.
 
         Returns
         -------
@@ -2349,9 +2352,13 @@ class MixedRegressionPCEPost(BasicMixedPost):
         standard random train/test split. For structured space-filling designs
         such as Latin hypercube or Sobol sampling, the resulting holdout
         metrics can be optimistic because both subsets come from the same
-        original design rather than independent validation samples.
+        original design rather than independent validation samples. Failed or
+        non-finite points are removed before splitting and checking basis size.
 
         """
+        if isinstance(poly_order, bool) or not isinstance(poly_order, (int, np.integer)) or poly_order < 0:
+            raise ValueError("Polynomial order must be a nonnegative integer.")
+        poly_order = int(poly_order)
         ts = self.tradestudy.executed_tradestudy
         num_samples = len(self.tradestudy._results)
         all_var_to_dist = self._get_mixed_var_to_dist()
@@ -2389,15 +2396,30 @@ class MixedRegressionPCEPost(BasicMixedPost):
             joint_list.append(ot_dist)
 
         outputs=np.array(self.tradestudy.get_variable(output_name))[:, None]
+        finite_mask = np.isfinite(abscissas).all(axis=1) & np.isfinite(outputs).all(axis=1)
+        num_invalid = int((~finite_mask).sum())
+        if num_invalid:
+            warnings.warn(
+                f"Dropping {num_invalid} non-finite sample(s) before fitting the "
+                f"mixed surrogate for '{output_name}'.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            abscissas = abscissas[finite_mask]
+            outputs = outputs[finite_mask]
+        if abscissas.shape[0] == 0:
+            raise ValueError(
+                f"No finite samples are available to fit the mixed surrogate for '{output_name}'."
+            )
+
         X_test=None
         y_test=None
-        # Handle hold out case
-        if ts.hold_out_fraction > 0.0:
-            X_train,X_test,y_train,y_test = train_test_split(abscissas,
-                                                        outputs,
-                                                        test_size=ts.hold_out_fraction,
-                                                        random_state=ts.hold_out_seed)
-
+        hold_out_fraction = getattr(ts, "hold_out_fraction", 0.0)
+        if hold_out_fraction > 0.0:
+            X_train,X_test,y_train,y_test = train_test_split(
+                abscissas, outputs, test_size=hold_out_fraction,
+                random_state=getattr(ts, "hold_out_seed", 68),
+            )
             abscissas = ot.Sample(X_train)
             outputs = ot.Sample(y_train)
         else:
@@ -2416,12 +2438,28 @@ class MixedRegressionPCEPost(BasicMixedPost):
         # Basis built from distributions (Normal-->Hermite, Uniform-->Legendre)
         product_basis = ot.OrthogonalProductPolynomialFactory(poly_factories, enum)
 
-        # size of the basis is equal to C(degree of poly+num of aleatory, degree of poly)
-        poly_order = ts.poly_order
+        # Include both aleatory and epistemic variables in the total-degree basis.
         basis_size = enum.getBasisSizeFromTotalDegree(poly_order)
         if basis_size != comb(poly_order + len(all_var_to_dist), poly_order):
             raise ValueError(
-                f"Unexpected basis size {basis_size} for poly order {poly_order} and num aleatory {len(all_var_to_dist)}"
+                f"Unexpected basis size {basis_size} for poly order {poly_order} "
+                f"and {len(all_var_to_dist)} mixed variables"
+            )
+        if abscissas.getSize() < basis_size:
+            raise ValueError(
+                f"Not enough finite samples to fit the mixed surrogate for '{output_name}'. "
+                f"Need at least {basis_size} samples for polynomial order {poly_order}, "
+                f"but only {abscissas.getSize()} remain after filtering and the holdout split."
+            )
+        if abscissas.getSize() < 3 * basis_size:
+            warnings.warn(
+                f"Mixed regression PCE for '{output_name}' is lightly sampled: "
+                f"polynomial order={poly_order}, num_variables={len(all_var_to_dist)}, "
+                f"basis_size={basis_size}, training_samples={abscissas.getSize()}. "
+                f"Consider 2-3x oversampling ({2 * basis_size}-{3 * basis_size} "
+                "training points) after filtering and the holdout split.",
+                RuntimeWarning,
+                stacklevel=2,
             )
 
         # Selects first P elemens of the polynomial chaos basis according to enumeration function
