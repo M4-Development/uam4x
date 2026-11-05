@@ -55,3 +55,15 @@ def test_package_init_loads_configured_classes_and_reports_missing(monkeypatch):
     assert len(warnings) == 4
     assert any("MissingSubsystem" in message for message in warnings)
     assert any("MissingPlugin" in message for message in warnings)
+
+
+def test_package_init_skips_saved_registry_for_documentation(monkeypatch):
+    def fail_if_loaded(path):
+        raise AssertionError("saved registry should not be read during docs builds")
+
+    monkeypatch.setenv("UAM4X_DISABLE_REGISTRY_LOAD", "1")
+    monkeypatch.setattr(utils_module, "check_and_get_config", fail_if_loaded)
+
+    namespace = runpy.run_path(uam4x.__file__, run_name="uam4x_docs_init")
+
+    assert namespace["_config"] == {"SUBSYSTEMS": {}, "PLUGINS": {}}

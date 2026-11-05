@@ -1,165 +1,37 @@
-Aleatory Cantilever
+Aleatory cantilever
 ===================
 
-The ``aleatory_cantilever`` example demonstrates aleatory uncertainty
-propagation and polynomial-chaos surrogate construction for a simple
-cantilever-beam failure model. It compares three UQ workflows on the same
-response:
+This example estimates uncertainty in a cantilever failure function. The
+``BeamProblem`` subsystem in ``custom.py`` holds the beam parameters.
+``branching_script.py`` uses ``ExpressionPluginGenerator`` to calculate and
+track ``calculate_failure.g_val`` in the ``basic`` solution. It creates the
+``nipc_uq`` variant with three trade studies:
 
-- regression PCE built from Latin hypercube samples
-- regression PCE built from Monte Carlo samples with a holdout split
-- Gauss quadrature PCE
+* ``lhs_pce_analysis``: regression PCE with Latin hypercube samples.
+* ``mc_pce_analysis``: regression PCE with Monte Carlo samples.
+* ``quad_pce_analysis``: fifth-order Gaussian quadrature PCE.
 
-Run
----
+The uncertain inputs are bending moment and yield strength. Run from the
+``uam4x`` project directory, in this order:
 
 .. code-block:: bash
 
-    cd uam4x_ex/aleatory_cantilever
-    python branching_script.py
-    python run_analysis.py
-    python post_analysis.py
+   python examples/aleatory_cantilever/branching_script.py
+   python examples/aleatory_cantilever/run_analysis.py
+   python examples/aleatory_cantilever/post_analysis.py
 
-``custom.py``
--------------
+``run_analysis.py`` executes all three trades and saves their results under
+``examples/aleatory_cantilever/variants/nipc_uq/``. ``post_analysis.py`` fits
+surrogates, compares their moments and prediction errors with the bundled
+``m4uq_ref`` data, and writes ``m4uq_surrogate_comparison.xlsx`` in the variant
+directory. The report needs the ``xlsxwriter`` package.
 
-The subsystem stores beam geometry, loading, and material strength.
-
-.. code-block:: python
-
-    @register_subsystem
-    class BeamProblem(Subsystem):
-        def setup(self):
-            self.add_parameter("width", 1.3, float)
-            self.add_parameter("height", 2.0, float)
-            self.add_parameter("axial_load", 500.0, float)
-            self.add_parameter("bending_moment", 1000.0, float)
-            self.add_parameter("yield_strength", 1000.0, float)
-
-``branching_script.py``
+Expression plugin setup
 -----------------------
 
-The model creates one vehicle with one beam component and assigns baseline
-deterministic values.
+The current ``setup_solution`` function declares the failure expression,
+tracks ``g_val``, and links the beam parameters to generator inputs:
 
-.. code-block:: python
-
-    def setup_model(study: Study):
-        veh1 = Vehicle("vehicle1")
-        beam = BeamProblem("beam1")
-        veh1.add_component(beam)
-        beam.set_parameter("width", 1.3)
-        beam.set_parameter("height", 2.0)
-        beam.set_parameter("axial_load", 500.0)
-        beam.set_parameter("bending_moment", 1000.0)
-        beam.set_parameter("yield_strength", 1000.0)
-        study.add_vehicle(veh1)
-
-The solution uses an expression plugin for the beam failure margin. It
-links all five beam inputs and tracks ``calculate_failure.g_val``.
-
-.. code-block:: python
-
-    def setup_solution(study: Study):
-        solution = Solution("basic")
-        failure = ExpressionPluginGenerator("calculate_failure", solution=solution)
-        for name in ("height", "width", "axial_load", "bending_moment", "yield_strength"):
-            failure.add_float_input(name)
-        failure.add_float_output(
-            "g_val",
-            expr=(
-                "1-4*bending_moment/(height**2*width*yield_strength)"
-                "-(axial_load/(height*width*yield_strength))**2"
-            ),
-            tracked=True,
-        )
-        failure.add_to_study()
-        for name in ("height", "width", "axial_load", "bending_moment", "yield_strength"):
-            solution.add_link(f"vehicles.vehicle1.beam1.{name}", failure.input(name))
-        study.add_solution(solution)
-
-The trade-study setup defines three aleatory analyses: two regression-PCE
-studies and one Gauss quadrature PCE study.
-
-.. code-block:: python
-
-    def setup_tradestudy(study: Study):
-        lhs_reg_pce_analysis = RegressionPCE(
-            42, LatinHypercubeSampler, seed=0
-        )
-        lhs_reg_pce_analysis.add_aleatory_variable(
-            "vehicles.vehicle1.beam1.bending_moment",
-            NormalDistribution(mean=2500.0, std=200.0),
-        )
-        lhs_reg_pce_analysis.add_aleatory_variable(
-            "vehicles.vehicle1.beam1.yield_strength",
-            UniformDistribution(low=2000.0, high=2800.0),
-        )
-        study.control.add_tradestudy("lhs_pce_analysis", lhs_reg_pce_analysis)
-
-``run_analysis.py``
--------------------
-
-The analysis script loads the generated variant and runs all three UQ trade
-studies before saving results back to the variant directory.
-
-.. code-block:: python
-
-    if __name__ == "__main__":
-        save_path = os.path.join(THIS_DIR, "variants", "nipc_uq")
-        study = Study.load_study_from_directory(save_path)
-        engine = Engine(study, os.path.join(save_path, "work"))
-        engine.run_tradestudy("lhs_pce_analysis", solution_name="basic", num_processors=1)
-        engine.run_tradestudy("mc_pce_analysis", solution_name="basic", num_processors=1)
-        engine.run_tradestudy("quad_pce_analysis", solution_name="basic", num_processors=1)
-        study.save_results_to_json(save_path)
-
-``post_analysis.py``
---------------------
-
-The post-processing script builds regression and quadrature surrogates,
-computes moments, evaluates surrogate quality metrics, and compares uam4x
-results against the reference ``m4uq_ref`` data set.
-
-For example, it constructs post-processing helpers from completed trade
-studies, generates surrogates for ``calculate_failure.g_val``, and queries
-analytical moments directly from those surrogate objects.
-
-.. code-block:: python
-
-    solution_results = study.results.get_solution_result("basic")
-    lhs_nipc_ts = solution_results.get_tradestudy("lhs_pce_analysis")
-    lhs_nipc_post = RegressionPCEPost(lhs_nipc_ts)
-    lhs_nipc_surrogate = lhs_nipc_post.generate_surrogate("calculate_failure.g_val", poly_order=5)
-    lhs_mean = float(lhs_nipc_surrogate.analytical_mean)
-    lhs_std = float(lhs_nipc_surrogate.analytical_std)
-
-    quad_ts = solution_results.get_tradestudy("quad_pce_analysis")
-    quad_nipc_post = GaussQuadtraturePCEPost(quad_ts)
-    quad_nipc_surrogate = quad_nipc_post.generate_surrogate("calculate_failure.g_val")
-    quad_mean = float(quad_nipc_surrogate.analytical_mean)
-    quad_std = float(quad_nipc_surrogate.analytical_std)
-
-It also demonstrates surrogate validation against an independent test set by
-assembling ``X_test`` and ``y_test`` from a second trade study and calling the
-surrogate metric helpers.
-
-.. code-block:: python
-
-    mc_nipc_ts = solution_results.get_tradestudy("mc_pce_analysis")
-    x1 = np.array(mc_nipc_ts.get_variable(
-        "vehicles.vehicle1.beam1.bending_moment"
-    ))[:, None]
-    x2 = np.array(mc_nipc_ts.get_variable(
-        "vehicles.vehicle1.beam1.yield_strength"
-    ))[:, None]
-    X_test = np.hstack((x1, x2))
-    y_test = np.array(mc_nipc_ts.get_variable("calculate_failure.g_val"))
-
-    lhs_nipc_surrogate.get_surrogate_mse(X_test, y_test)
-    lhs_nipc_surrogate.get_surrogate_r2(X_test, y_test)
-    lhs_nipc_surrogate.get_surrogate_rel_mse(X_test, y_test)
-
-The remainder of the script evaluates predictions on reference sample points
-and reports confidence-interval and correlation comparisons against the
-``m4uq_ref`` data set.
+.. literalinclude:: ../../examples/aleatory_cantilever/branching_script.py
+   :language: python
+   :pyobject: setup_solution

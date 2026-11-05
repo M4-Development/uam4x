@@ -1,139 +1,46 @@
 Installation
 ============
 
-Prerequisites
--------------
+UAM4X requires Python 3.11 or newer. From a checkout of the ``uam4x``
+project, create and activate an environment, then run:
 
-uam4x requires Python 3.11 or higher. The following packages are required
-(as defined in ``setup.py``):
+.. code-block:: bash
 
-* ``numpy>=2.2.6``
-* ``pytest>=8.4.2``
-* ``openmdao>=3.39.0``
-* ``cpylog``
-* ``pytest-cov``
-* ``pytest``
-* ``pytest-html``
-* ``pygit2``
-* ``matplotlib>=3.10.0``
-* ``openturns==1.26.0``
-* ``scipy>=1.16.1``
-* ``tzdata==2025.2``
-* ``sympy==1.14.0``
-* ``pandas==2.3.1``
+   python -m pip install -e .
 
-Installation Procedure
+The project installation includes the framework and the public
+``uam4x_general``, ``uam4x_ndarc``, ``uam4x_openvsp``, and ``uam4x_ixgen``
+plugin packages in ``plugins/``. Their code is in this repository; a separate
+public plugin checkout is unnecessary. CAMRAD II and M4SS are private packages
+and must be installed separately when needed. See :doc:`plugins/index`.
+
+Check the core and general plugin imports in the active environment:
+
+.. code-block:: bash
+
+   python -c "import uam4x, uam4x_general; print('UAM4X imports OK')"
+
+External analysis software
+--------------------------
+
+The Python installation does not install NDARC, IXGEN, or OpenVSP.
+Examples that use them also need the corresponding executable or Python
+binding, local input files, and executable paths configured in their scripts.
+The OpenVSP plugin imports its Python bindings and Pillow at module import time,
+so these are also needed when an example imports the plugin while creating a
+study. NDARC and IXGEN
+examples require ``rcotools``. See the individual :doc:`examples` pages
+before running these.
+
+Build the documentation
 -----------------------
 
-1. Clone the repository:
-
-   .. code-block:: bash
-
-      # Using https:
-      git clone https://github.com/M4-Development/uam4x.git
-      cd uam4x
-
-      # Using SSH:
-      git clone git@github.com:M4-Development/uam4x.git
-      cd uam4x
-
-
-2. Install Anaconda (if needed) and create a conda environment (recommended):
-
-   Download Anaconda: https://www.anaconda.com/download
-
-   .. code-block:: bash
-
-      conda create -n uam4x python=3.11
-      conda activate uam4x
-
-3. Install uam4x in development mode (this installs all required packages from ``setup.py``):
-
-   .. code-block:: bash
-
-      pip install -e .
-
-Verification
-------------
-
-To verify the installation, run:
-
-.. code-block:: python
-
-   import uam4x
-   print("uam4x version:", uam4x.__version__)
-
-Optional Dependencies
----------------------
-
-For documentation generation:
+From the ``uam4x`` project directory:
 
 .. code-block:: bash
 
-   pip install -r requirements-docs.txt
+   python -m pip install -r documentation/requirements.txt
+   sphinx-build -M html documentation documentation/_build
 
-For the GUI:
-
-The uam4x GUI requires Python 3.11.
-
-The GUI depends on the following packages:
-
-* ``wxpython``
-* ``numpy``
-* ``uam4x``
-* ``openvsp``
-* ``rcotools``
-* ``uam4x_openvsp``
-
-Install those dependencies in your active environment before installing the
-GUI wheel.
-
-To install the GUI itself, use the wheel file provided for your platform:
-
-.. code-block:: bash
-
-   pip install path/to/uam4x_gui-<version>-<platform>.whl
-
-The GUI wheel is platform dependent, so install the wheel that matches your
-operating system and Python environment.
-
-For plugin packages (from ``uam4x_plugins``):
-
-Some plugins require additional external software and licenses. Install only the
-plugin package(s) you need.
-
-.. code-block:: bash
-
-   git clone https://github.com/M4-Development/uam4x_plugins.git
-   cd uam4x_plugins
-   pip install -r requirements.txt
-
-To install only the OpenVSP plugin package:
-
-.. code-block:: bash
-
-   cd uam4x_plugins/openvsp
-   pip install -e .
-
-Troubleshooting
----------------
-
-Common installation issues:
-
-1. **wxPython installation fails**: Use conda instead of pip:
-
-   .. code-block:: bash
-
-      conda install wxpython
-
-2. **wxPython installation help Linux**: Ensure you have the necessary system dependencies:
-
-   Follow instructions at: https://wxpython.org/blog/2017-08-17-builds-for-linux-with-pip/index.html
-
-3. **OpenMDAO conflicts**: Ensure you're using a compatible version:
-
-   .. code-block:: bash
-
-      pip install openmdao>=3.39.0
-
-4. **Import errors**: Make sure the uam4x package is in your Python path.
+Open ``documentation/_build/html/index.html``. API pages mock optional solver
+bindings during the documentation build; building pages does not run solvers.

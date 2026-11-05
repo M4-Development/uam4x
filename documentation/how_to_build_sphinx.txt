@@ -1,4 +1,7 @@
-pip install sphinx
-pip install sphinx-rtd-theme
-in uam4x directory run:
-sphinx-build . html
+From the uam4x/documentation directory, in an active Python environment:
+
+python -m pip install -e ..
+python -m pip install -r requirements.txt
+sphinx-build -M html . _build
+
+Open _build/html/index.html in a browser.

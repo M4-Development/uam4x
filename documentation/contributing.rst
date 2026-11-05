@@ -21,13 +21,13 @@ Development Setup
       python -m venv uam4x_dev
       source uam4x_dev/bin/activate  # On Windows: uam4x_dev\Scripts\activate
       pip install -e .
-      pip install -r requirements-dev.txt
 
-4. Install pre-commit hooks:
+4. Install documentation dependencies when editing the unified Sphinx source:
 
    .. code-block:: bash
 
-      pre-commit install
+      python -m pip install -r documentation/requirements.txt
+      sphinx-build -M html documentation documentation/_build
 
 Code Style
 ----------

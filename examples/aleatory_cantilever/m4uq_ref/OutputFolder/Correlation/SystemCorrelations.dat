@@ -1,0 +1,9 @@
+Simple Correlation (Pearson) between input and output
+    Output Variable 0:
+	RV0=	-4.912016116168480551e-01
+	RV1=	7.318799058863603157e-01
+
+Simple Rank-Correlation (Spearman) between input and output
+    Output Variable 0:
+	RV0=	-4.830240661210598585e-01
+	RV1=	7.424844015882019477e-01

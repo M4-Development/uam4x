@@ -1,0 +1,3 @@
+# Public plugins are installed by the main uam4x package.
+# From the uam4x project root: python -m pip install -e .
+# Install private CAMRAD II and M4SS packages separately when needed.

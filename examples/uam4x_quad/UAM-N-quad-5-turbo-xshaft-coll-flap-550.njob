@@ -1,0 +1,817 @@
+&JOB
+	INIT_input = 0,
+	INIT_data = 0,
+	ACT_error = 1,
+	ACT_version = 0,
+	OPEN_status = 1,
+&END
+
+&DEFN action='ident', created='11:14:00 26-Jan-2023', title='UAM-N-quad-5-turbo-xshaft-coll-flap-550', &END
+
+&DEFN action='configuration', &END
+&VALUE
+config='multicopter',nrotor=4,rotate=1,-1,-1,1,ang_multicopter=45.,-45.,135.,-135.,
+&END
+
+&DEFN quant='Cases', &END
+&VALUE
+	title = 'UAM-N-quad-5-turbo-xshaft-coll-flap-550fps',
+	subtitle1 = 'Near term technology (Generation N), Quadrotor, 5 occupant',
+	subtitle2 = 'Turboshaft, cross-shafted with gearboxes',
+	subtitle3 = 'Collective-controlled, flapping rotor, 500 ft/s tip speed',
+	TASK_Size = 1,
+	TASK_Mission = 0,
+	TASK_Perf = 0,
+	TASK_Map_engine = 0,
+	TASK_Map_aero = 0,
+	WRITE_input = 2,
+	WRITE_flight = 1,
+	OUT_design = 1,
+	FILE_design = 'Output/UAM-N-quad-5-turbo-xshaft-coll-flap-550.design',
+	OUT_perf = 1,
+	FILE_perf = 'Output/UAM-N-quad-5-turbo-xshaft-coll-flap-550.perf',
+	OUT_geometry = 0,
+	FILE_geometry = 'Output/Geometry.geom',
+	OUT_aircraft = 1,
+	FILE_aircraft = 'Output/UAM-N-quad-5-turbo-xshaft-coll-flap-550.acd',
+	OUT_solution = 1,
+	FILE_solution = 'Output/UAM-N-quad-5-turbo-xshaft-coll-flap-550.soln',
+	OUT_sketch = 0,
+	FILE_sketch = 'Output/Sketch.dxf',
+	FILE_engine = 'Output/Engine.eng',
+	FILE_aero = 'Output/Aero.aero',
+OUT_error = 0,
+	FILE_error = 'Output/Error.err',
+	Units = 1,
+&END
+
+ !@ # NASA Urban Air Mobility Quadrotor Reference Vehicle, as updated in the year 2023
+ !@ For more information, see:
+ !@ Silva et al., "Updated  Urban Air Mobility Reference Vehicles for Technology Development Incorporating Recent Technology, Policy, and Economic Developments," NASA/TP-2023-XXXXXX
+ !@ This AIDEN project is intended to be distributed publicly, for the following objectives:
+ !@ 1. To document the reference vehicle inputs and outputs used in sizing
+ !@ 2. To document excursions and variants of the reference vehicle. 
+ !@ 3. To serve as an example of an AIDEN project which exercises many of the available features in AIDEN
+ !@
+ !@ The vehicle inputs and outputs are in U.S. customary units: length = feet, force = pound-force. See NDARC manuals.
+ !@
+ !@ ## Project contents
+ !@ 1. NDARC inputs for quadrotor sizing
+ !@     * Baseline aircraft is 5 occupant, turboshaft, cross-shafted, collective-controlled, flapping rotor, 550 ft/s tip speed 
+ !@         - Design mission 1 sizes DGW, installed power, xmsn, fuel tank for 2-hop UAM mission with 5 occupants
+ !@         - Design condition 1 sizes WMTO for the lifting capability at maximum power at 6,000 ft/ISA hover out of ground effect (HOGE)
+ !@         - Design Condition 2 sizes engine for 500 ft/min cruise climb capability at 10,000 ft/ISA to ensure adequate margin at high altitude for maneuver
+ !@         - Excursions: vary design rotor tip speed: 375 ft/s, 400 ft/s, 450 ft/s 500 ft/s, 600 ft/s, 650 ft/s, 700 ft/s
+ !@         - Variant: battery powered, gearbox, cross-shafted, collective-controlled, flapping, 550 ft/s
+ !@             + Excursion: Advanced technology, battery powered, direct-drive, cross-shafted, collective-controlled flapping, 550 ft/s
+ !@             + Excursion: battery powered, direct-drive, cross-shafted, collective-controlled flapping, 550 ft/s
+ !@         - Variant: battery powered not cross-shafted, gearbox, collective controlled, flapping, 550 ft/s
+ !@             + Excursion: battery powered not cross-shafted, direct-drive, collective-controlled, flapping, 550 ft/s
+ !@             + Excursion: battery powered not cross-shafted, direct-drive, rpm-controlled, flapping, 550 ft/s hover
+ !@             + Excursion: battery powered not cross-shafted, direct-drive, rpm-controlled, stiff rotor, 550 ft/s hover
+ !@         - Variant: turboelectric (electric parallel) powered cross-shafted, gearbox, collective controlled, flapping, 550 ft/s
+ !@             + Excursion: turboelectric (electric parallel) powered not cross-shafted, direct-drive, collective-controlled, flapping, 550 ft/s
+ !@     * Use of linked copies and reference copies to build variants and excursions
+ !@     * Use of Aircraft Supercomponents to build and examine the aircraft before loading into jobs
+ !@         - Propulsion system topology easier to understand, such as the single propulsion for cross shafted, and the separate electrical systems for not cross-shafted electric
+ !@         - Trim settings easier to understand, such as difference between collective control (rotor T matrix populated) versus rpm control (propulsion T matrix populated)
+ !@     * OpenVSP update via Python Script Event "ALPINE3_gen" using a template quad-5-turbo-xshaft.vsp3 in the folder [AIDEN Workspace]/UAM-quad-update_2023/resources
+ !@ 2. NDARC inputs for off-design runs of sized aircraft
+ !@     * Noise certification for Federal Aviation Regulations Part 36H
+ !@     * Speed sweeps for power: Weight Empty, Design Gross Weight, Maximum Takeoff Weight
+ !@     * Best effort speeds vs altitude at DGW: VBE, VLRC, VMCP
+ !@ 
+ !@ The following is an example of how to include a graphic in the report. In this case, the graphic is in the resources folder, 
+ !@ but was not drag-and-dropped into AIDEN, so AIDEN does not have an entty in the project tree view. The graphic is presented at 1/2 size.
+ !@ 
+ !@ <img src="./resources/UAM-N-5-quad-turbo-xshaft-coll-flap-550_4view.png" width="1377" height="925">
+ !@ 
+ !@ Graphics may be generated automatically by some event (such as a plotter event) and linked in the same way: TODO
+ !@ 
+  
+&DEFN action='ident', title='Sizing-solution',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Solution', &END
+&VALUE
+     trace_case=2,
+     trace_size=2,
+     relax_trim=.5,	deriv_trim=2,	toler_trim=.0002,	niter_trim = 60,
+     maxinc_fly = 0.1,
+     maxinc_tank = 0.2,
+     niter_param=10,
+     relax_xmsn = 0.2,
+trace_size = 2
+&END
+
+&DEFN action='ident', title='quad-turbo-xshaft',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Aircraft', &END
+&VALUE title='Quad-5-turbo-xshaft',
+     DGW=4000.,	SDGW=4000.,	WMTO=4000.,	nz_ult=4.0,	dSDGW=0.,	fSDGW=1.,
+     altitude=6000.,	SET_atmos='std',                   ! 6k/ISA
+     FIX_drag=0,	FIX_DL=0,                              ! FIX_drag=1 DoQ, 2 CD, 3 kDrag; FIX_DL=1 DoQV, 2 kDL
+     INPUT_geom=2,	KIND_scale=1,	kScale=1,               ! scaled geometry (x/R,y/R,z/R)
+        KIND_Ref=3,                                    ! fuselage reference
+     !
+     ncontrol=4,	IDENT_control='coll','latcyc','lngcyc','pedal',
+     nRotor=4,	nTail=0, 
+    !TODO: Update after performing massprop in OpenVSP:
+    !kx=##, ky=##, kz=##,     
+&END
+
+&DEFN action='ident', title='5-occupant-systems',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Systems', &END
+&VALUE
+     title='Quadcopter Systems 5 occupant',
+     SET_Wpayload=2,	Upass=200.,        ! Payload is 200 lb/occupant, inclusive of baggage
+     SET_Wcrew=1,	Wcrew=0.,             ! Assume that onboard pilot weighs same as any passenger which they displace
+     Wtrap=10.,                        ! Some small amount of trapped fluids in gearboxes and fuel lines. 10 lb for turboshaft and 5 gearbox cross-shafted, less for all-electric
+     SET_Wvib=1,	Wvib=0.,	fWvib=0.03,    ! Flapping blade
+     SET_Wcont=1,	Wcont=0.,	fWcont=0.05, ! Component weights within data base
+     Wfc_afcs=40.,                     ! Fly-by-wire computers (20 lb) and associated supplemental sensors for fault-tolerant control (5 lb per rotor) = 20 lb + nrotor * 5 lb/rotor
+     fRWfc_nb=1.,	fRWhyd=0.,	KIND_WRWfc=1,	xRWfc_red=1., ! Collective control
+     MODEL_FWfc=0,	MODEL_CVfc=0,        ! No fixed wing or conversion systems in a quadrotor
+     Winstrument=10.,                  ! Airspeed probes, inertial measurement systems, global positioning systems
+     WMEQ=40.,                         ! Electronics and sensors for sense and avoid, data/voice links
+     Welectrical=60.0,                 ! In-flight entertainment, external lighting = 10 lb * Npass + 10 lb
+     Wenviron=75.,                     ! Environmental control = Npass * 15 lb/occupant
+     SET_Wfurnish=1,	Wfurnish=150.,     ! Seats at 25 lb, insulation, carpet, handles, etc. 5 lb = Npass * (25 lb/occupant + 5 lb/occupant)
+     MODEL_DI=1,	kDeIce_elec=4*0.15,	kDeIce_rotor=4*0.15,	kDeIce_air=0.006,
+     SET_fold=0,                       ! No folding on the ground for storage. Folding could potentially save nearly a diameter in width and length.
+&END
+
+&DEFN action='ident', title='FY2023',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Cost', &END
+&VALUE
+     title = 'Costs in FY2023 dollars',
+     notes = 'Basic assumptions for a production volume similar to R22. TODO: No assumed crew cost',
+     Npass=5,
+     MODEL_inf=2,	year_inf=2023,	inflation=100.,	IntRate=5.,
+     FuelPrice=4.62, ! $4.62/gal
+     rFCE=5000.,	rMEP=5000.,
+     year_proc=2023,	Nprod=1000,	Nlot=200,	Nprod_eng=1000,
+     EnergyPrice=0.029, 
+     EnergyCredit=0.0, rBatt=38.1,  
+     KCREW=0., TECH_COST_AF=1.0, 
+&END
+
+&DEFN action='ident', title='Turboshaft',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Emissions', &END
+&VALUE 
+&END
+
+&DEFN action='ident', title='quad-5',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Fuselage', &END
+&VALUE
+     title='Quadcopter Fuselage, 5 occupants',
+     notes='Same size as previous 6 occupant fuselage, but remove one occupant from front row and use space for baggage. The front occupant thus could be a pilot or a passenger (if uncrewed)',
+     SET_length=1,	SET_nose=1,	SET_aft=1,
+     Length_fus=21.,	Length_nose=11.,	Length_aft=10.,
+        fRef_fus=0.5,	Width_fus=6.43,	Height_fus=6.75,
+     SET_Swet=1, Swet=354., Sproj=140., fSwet=0.487, fSproj=0.78,  ! 5/6 occupant fuselage; Swet=354, Sproj=140. fSwet and fSproj for SET_SWet=4
+   ! aerodynamics
+     AoA_zl=0.,	AoA_max=35.,	SS_max=35.,
+     SET_lift=2,	dCLda=0.,
+     SET_moment=2,	CM0=0.,	dCMda=0.,
+     SET_side=2,	dCYdb=0.,
+     SET_yaw=2,	CN0=0.,	dCNdb=0.,
+     SET_drag=2,	SET_Dfit=2,	SET_Drb=2,	SET_Vdrag=2,	SET_Sdrag=2,
+     CD=0.0045,                                        ! low drag fuselage (helicopter .0060, HECTR .0035)
+     CD_fit=0.,	CD_rb=0.,0.,	CDV=0.,	CDS=0.,
+     MODEL_drag=0,	AoA_Dmin=0.,	Kdrag=15.,	AoA_tran=25.,
+   ! weight
+     fWbody_crash=0.15,
+&END
+
+&DEFN action='ident', title='Landing skids',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='LandingGear', &END
+&VALUE
+     title='Quadcopter Landing Gear',
+     KIND_LG=0, ! fixed
+   ! drag
+     DoQ=0.35,
+   ! weight
+     nLG=4,	fWLG_crash=0.15,	fWLG_ret=0.,	fWLG_basic=0.0035,  
+&END
+
+&DEFN action='ident', title='coll-flap-550fps-3blade',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Rotor 1', &END
+&VALUE
+     title='Quadcopter Front-Right Rotor collective-control, flapping',
+     notes = 'see RVLT Toolchain Workshop presentations by Wayne Johnson for performance calibration and design choices (May 2021)',
+     diskload=3.5,	CWs=.09, ! design conditions
+     Vtip_ref=550.,
+        INPUT_Vtip=2,	fRPM_cruise=1.,	fRPM_man=1.,	fRPM_oei=1.,	fRPM_xmsn=1.,
+     SET_limit_rs=2,	fPlimit_rs=1.,
+     radius=12.,	sigma=0.05,	rotate=1,	nblade=3,
+     SET_chord=2,	SET_twist=1,	taper=0.95,	twistL=-16., ! update taper and twist
+     KIND_hub=1,	flapfreq=1.03,	gamma=4.,	precone=0.,	delta3=45.,
+     dclda=5.7,	tiploss=.97,	xroot=0.15,	thick=0.09,
+     incid_hub=-3.,	cant_hub=0.,
+   ! geometry
+     ang_multicopter=45.,	len_multicopter=1.9092, ! x/R=y/R=1.35
+   ! control
+     KIND_control=4,	T_coll=1.,-.5,-.5,1., ! coll,latcyc,lngcyc,pedal
+ ! flapping rotor model (nblade=3,sigma=.0673,twist=-16,taper=.95,flapfreq=1.03)
+ ! May 2021
+     MODEL_Ftpp=2,	MODEL_Fpro=2,
+   ! induced power
+     Ki_hover=1.22,	Ki_climb=1.14,	Ki_prop=1.75,	Ki_edge=3.2,	Ki_min=1.05,
+     CTs_Hind=.09,	kh1=2.1,	kh2=-11.,	CTs_Pind=.09,	kp1=2.1,	kp2=-11.,	CTs_Tind=.09,	kt1=2.1,	kt2=-11.,
+     mu_edge=0.4,	ke1=-0.5,	ke2=0.,	ke3=1.,	Xe=3.7,	mu_prop=1.,	ka1=0.,	ka2=0.,	ka3=0.,
+   ! profile power
+     MODEL_basic=2,
+     CTs_Dmin=0.,	d0_hel=.0063,	d0_prop=.0063,	d1_hel=.0,	d1_prop=.0,	d2_hel=.26,	d2_prop=.26,
+     dprop=0.,	Xprop=2.,	CTs_sep=.10,	dsep=5.,	Xsep=3.,	df1=0.,	df2=.02,	Xf=3.,
+     MODEL_stall=1,	nstall=12,
+        mu_stall=0.,.05,.10,.15,.20,.25,.30,.35,.40,.50,.60,.80,
+        CTs_stall=.17,.14,.12,.11,.10,.095,.09,.085,.082,.08,.08,.08,
+     fstall=1.,	dstall1=1.,	dstall2=100.,	Xstall1=2.,	Xstall2=3.,
+     MODEL_comp=1,	Mdd0=.82,	Mddcl=0.,	dm1=.056,	dm2=0.416,	Xm=2.,
+   ! Multirotor interference
+     xh_multi=4*0.,	xp_multi=4*0.,	xf_multi=4*0.,	xh_multi(1)=1.,	xp_multi(1)=1.,	xf_multi(1)=1.,
+   ! drag
+     SET_Spylon=2,	kSwet_pylon=0.9,
+     SET_Dhub=2,	SET_Vhub=2,	SET_Dpylon=2,	SET_Vpylon=2,
+     ! support arm DCD=CD*length*chord/A=CD*(length/R)^2*(chord/length)/pi=.1*1.2^2/15/pi=.003
+     CD_hub=0.0045,	CDV_hub=0.0045, ! hub include support arm drag; CD=.0015 for faired hub
+     CD_pylon=0.015,	CDV_pylon=0.015, ! low drag pylon
+   ! weight
+     Usupt=2.,
+     Plimit_rs = 300.,       ! Neeed an initial value
+	T_coll(1,1)  =1.0,-0.5,-0.5,1.0,
+	
+T_lngcyc(1,1)=0.0,0.0 ,0.0 ,0.0,
+	T_latcyc(1,1)=0.0,0.0 ,0.0 ,0.0,
+	T_incid(1,1) =0.0,0.0 ,0.0 ,0.0,
+	T_cant(1,1)  =0.0,0.0 ,0.0 ,0.0,
+	T_diam(1,1)  =0.0,0.0 ,0.0 ,0.0,
+	T_fgear(1,1) =0.0,0.0 ,0.0 ,0.0,
+	T_Freact(1,1)=0.0,0.0 ,0.0 ,0.0,
+	kPropulsion=1,
+&END
+
+&DEFN action='ident', title='coll-flap-(2)',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Rotor 2', action='copy', source=1, &END
+
+&DEFN quant='Rotor 2', &END
+&VALUE title='Quadcopter Front-Left Rotor',
+     rotate=-1,
+     ang_multicopter=-45.,
+     xh_multi=4*0.,	xp_multi=4*0.,	xf_multi=4*0.,	xh_multi(2)=1.,	xp_multi(2)=1.,	xf_multi(2)=1.,
+     T_coll=1.,.5,-.5,-1.,
+     KIND_xmsn=0,
+
+	T_coll(1,1)  =1.0,0.5,-0.5,-1.0,
+	T_lngcyc(1,1)=0.0,0.0,0.0 ,0.0 ,
+	T_latcyc(1,1)=0.0,0.0,0.0 ,0.0 ,
+	T_incid(1,1) =0.0,0.0,0.0 ,0.0 ,
+	T_cant(1,1)  =0.0,0.0,0.0 ,0.0 ,
+	T_diam(1,1)  =0.0,0.0,0.0 ,0.0 ,
+	T_fgear(1,1) =0.0,0.0,0.0 ,0.0 ,
+	T_Freact(1,1)=0.0,0.0,0.0 ,0.0 ,
+	kPropulsion=1,
+&END
+
+&DEFN action='ident', title='coll-flap-(3)',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Rotor 3', action='copy', source=1, &END
+
+&DEFN quant='Rotor 3', &END
+&VALUE title='Quadcopter Rear-Right Rotor',
+     rotate=-1,
+     ang_multicopter=135.,
+     xh_multi=4*0.,	xp_multi=4*0.,	xf_multi=4*0.,	xh_multi(3)=1.,	xp_multi(3)=1.,	xf_multi(3)=1.,	xf_multi(1)=.40, ! update twin rotor perf
+     T_coll=1.,-.5,.5,-1.,
+     KIND_xmsn=0,
+
+	T_coll(1,1)  =1.0,-0.5,0.5,-1.0,
+	T_lngcyc(1,1)=0.0,0.0 ,0.0,0.0 ,
+	T_latcyc(1,1)=0.0,0.0 ,0.0,0.0 ,
+	T_incid(1,1) =0.0,0.0 ,0.0,0.0 ,
+	T_cant(1,1)  =0.0,0.0 ,0.0,0.0 ,
+	T_diam(1,1)  =0.0,0.0 ,0.0,0.0 ,
+	T_fgear(1,1) =0.0,0.0 ,0.0,0.0 ,
+	T_Freact(1,1)=0.0,0.0 ,0.0,0.0 ,
+	kPropulsion=1,
+&END
+
+&DEFN action='ident', title='coll-flap-(4)',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Rotor 4', action='copy', source=1, &END
+
+&DEFN quant='Rotor 4', &END
+&VALUE title='Quadcopter Rear-Left Rotor',
+     rotate=1,
+     ang_multicopter=-135.,
+     xh_multi=4*0.,	xp_multi=4*0.,	xf_multi=4*0.,	xh_multi(4)=1.,	xp_multi(4)=1.,	xf_multi(4)=1.,	xf_multi(2)=.40, ! update twin rotor perf
+     T_coll=1.,.5,.5,1.,
+     KIND_xmsn=0,
+
+	T_coll(1,1)  =1.0,0.5,0.5,1.0,
+	T_lngcyc(1,1)=0.0,0.0,0.0,0.0,
+	T_latcyc(1,1)=0.0,0.0,0.0,0.0,
+	T_incid(1,1) =0.0,0.0,0.0,0.0,
+	T_cant(1,1)  =0.0,0.0,0.0,0.0,
+	T_diam(1,1)  =0.0,0.0,0.0,0.0,
+	T_fgear(1,1) =0.0,0.0,0.0,0.0,
+	T_Freact(1,1)=0.0,0.0,0.0,0.0,
+	kPropulsion=1,
+&END
+
+&DEFN action='ident', title='Jet-A',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='FuelTank', &END
+&VALUE
+     title='Quadcopter Fuel Tank',
+     Wfuel_cap=200.,	fuel_density=6.5,
+   ! aux tanks
+     Waux_cap=1000.,	DoQ_auxtank=0.,	fWauxtank=0.1,
+   ! weight
+     ntank_int=2,	nplumb=2,	Ktoler=2.0,
+     K0_plumb=10.,	K1_plumb=.05,
+&END
+
+&DEFN action='ident', title='xshaft',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Propulsion', &END
+&VALUE
+     title='Quadcopter Propulsion',
+   ! losses
+     MODEL_Xloss=1,
+     fPloss_xmsn=0.02,	Ploss_windage=0.0,
+     Pacc_0=20.,	Pacc_d=0.,	Pacc_n=0.,	fPacc_ECU=0.,	fPacc_IRfan=0.,
+   ! geometry
+     SET_length=2,	fLength_ds=0.9,
+   ! torque limit
+     Plimit_ds=400.,	fPlimit_ds=1.0,
+   ! weight
+   ! multicopter: ngearbox=nRotor,ndriveshaft=nRotor-1,fShaft=.1,fTorque=.6,fPower=.6,
+     ngearbox=5,	ndriveshaft=4,	fShaft=0.10,
+     fTorque=.25,	fPower=.03, ! four main rotors, high speed drive shafts
+	T_DN(1,1)=0.0,0.0,0.0,0.0,
+&END
+
+&DEFN action='ident', title='Generic-500hp-turboshaft',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='EngineModel', &END
+&VALUE title = 'Turboshaft Engine Math Model Data (GEN500)',
+      notes = 'Generic 500 hp Engine',
+      ident = 'GEN500',
+ ! Engine Ratings
+      nrate = 4,
+      rating = 'MCP  ', 'IRP  ', 'MRP  ', 'CRP  ',
+ ! Weight
+      Kwt0_eng =       0.000,
+      Kwt1_eng =       0.340,
+      Kwt2_eng =       0.000,
+      Xwt_eng  =      0.0000,
+ ! Reference
+      P0_ref     =      500.,      600.,      635.,      665.,
+      SP0_ref    =      116.,      136.,      143.,      149.,
+      Pmech_ref  =      750.,      750.,      750.,      750.,
+      sfc0C_ref  =     0.54,
+      SF0C_ref   =      5.9,
+      Nspec_ref  =   35600.,
+      Nopt0C_ref =   35600.,
+ ! Scaling, MF_ref=4.3
+      MF_limit    =      9.,
+      SP0C_limit  =    125.,
+      sfc0C_limit =    0.48,
+      KNspec      =  73910.,
+ ! Optimum Power Turbine Speed (linear)
+      MODEL_OptN = 1,
+      KNoptA =     1.,
+      KNoptB =     0.,
+      XNeta  =     2.,
+ ! Single Set of Input Parameters
+      INPUT_param = 1,
+ ! Power Available
+      INPUT_lin = 1,
+    ! specific power
+      Nspa =  1,  1,  1,  1,
+      Kspa0(1,1) =       3.80,   0.00,   0.00,   0.00,   0.00,  ! MCP  
+      Kspa0(1,2) =       3.20,   0.00,   0.00,   0.00,   0.00,  ! IRP  
+      Kspa0(1,3) =       3.00,   0.00,   0.00,   0.00,   0.00,  ! MRP  
+      Kspa0(1,4) =       2.80,   0.00,   0.00,   0.00,   0.00,  ! CRP  
+      Kspa1(1,1) =      -2.80,   0.00,   0.00,   0.00,   0.00,  ! MCP  
+      Kspa1(1,2) =      -2.20,   0.00,   0.00,   0.00,   0.00,  ! IRP  
+      Kspa1(1,3) =      -2.00,   0.00,   0.00,   0.00,   0.00,  ! MRP  
+      Kspa1(1,4) =      -1.80,   0.00,   0.00,   0.00,   0.00,  ! CRP  
+      Xspa0(1,1) =      -0.22,   0.00,   0.00,   0.00,   0.00,  ! MCP  
+      Xspa0(1,2) =      -0.22,   0.00,   0.00,   0.00,   0.00,  ! IRP  
+      Xspa0(1,3) =      -0.22,   0.00,   0.00,   0.00,   0.00,  ! MRP  
+      Xspa0(1,4) =      -0.22,   0.00,   0.00,   0.00,   0.00,  ! CRP  
+      Xspa1(1,1) =       0.00,   0.00,   0.00,   0.00,   0.00,  ! MCP  
+      Xspa1(1,2) =       0.00,   0.00,   0.00,   0.00,   0.00,  ! IRP  
+      Xspa1(1,3) =       0.00,   0.00,   0.00,   0.00,   0.00,  ! MRP  
+      Xspa1(1,4) =       0.00,   0.00,   0.00,   0.00,   0.00,  ! CRP  
+    ! mass flow
+      Nmfa =  2,  2,  2,  2,
+      Kmfa0(1,1) =       0.30,   0.70,   0.00,   0.00,   0.00,  ! MCP  
+      Kmfa0(1,2) =       0.29,   0.45,   0.00,   0.00,   0.00,  ! IRP  
+      Kmfa0(1,3) =       0.28,   0.35,   0.00,   0.00,   0.00,  ! MRP  
+      Kmfa0(1,4) =       0.27,   0.30,   0.00,   0.00,   0.00,  ! CRP  
+      Kmfa1(1,1) =      -0.30,  -0.70,   0.00,   0.00,   0.00,  ! MCP  
+      Kmfa1(1,2) =      -0.29,  -0.45,   0.00,   0.00,   0.00,  ! IRP  
+      Kmfa1(1,3) =      -0.28,  -0.35,   0.00,   0.00,   0.00,  ! MRP  
+      Kmfa1(1,4) =      -0.27,  -0.30,   0.00,   0.00,   0.00,  ! CRP  
+      Xmfa0(1,1) =       1.05,   1.10,   0.00,   0.00,   0.00,  ! MCP  
+      Xmfa0(1,2) =       1.05,   1.10,   0.00,   0.00,   0.00,  ! IRP  
+      Xmfa0(1,3) =       1.05,   1.10,   0.00,   0.00,   0.00,  ! MRP  
+      Xmfa0(1,4) =       1.05,   1.10,   0.00,   0.00,   0.00,  ! CRP  
+      Xmfa1(1,1) =       0.00,  -0.01,   0.00,   0.00,   0.00,  ! MCP  
+      Xmfa1(1,2) =       0.00,  -0.01,   0.00,   0.00,   0.00,  ! IRP  
+      Xmfa1(1,3) =       0.00,  -0.01,   0.00,   0.00,   0.00,  ! MRP  
+      Xmfa1(1,4) =       0.00,  -0.01,   0.00,   0.00,   0.00,  ! CRP  
+ ! Performance at Power Required
+    ! fuel flow         mass flow         gross jet thrust  net jet thrust
+      Kffq0 =   0.20,   Kmfq0 =   0.60,   Kfgq0 =   0.20,   Kfgr0 =   0.80,
+      Kffq1 =   0.80,   Kmfq1 =   0.78,   Kfgq1 =   0.80,   Kfgr1 =   0.60,
+      Kffq2 =   0.00,   Kmfq2 =  -0.48,   Kfgq2 =   0.00,   Kfgr2 =   0.00,
+      Kffq3 =   0.00,   Kmfq3 =   0.10,   Kfgq3 =   0.00,   Kfgr3 =   0.00,
+      Xffq  =   1.30,   Xmfq  =   3.50,   Xfgq  =   2.00,
+&END
+
+
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+             !------------------------------------------------------------------------------
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          &DEFN action='ident', title='EngineGroup',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='EngineGroup', &END
+&VALUE
+     title='Quadcopter Engine Group',
+     nEngine=2,	nEngine_main=1,
+     IDENT_engine='GEN500',
+     Peng=500.,	rating_to='MRP',
+     SET_Swet=2,	kSwet=0.8,
+   ! torque limit
+     SET_limit_es=2,	fPlimit_es=2.0,
+   ! installation
+     eta_d=0.99,
+     Kffd=1.05,	fPloss_inlet=.007,	fPloss_ps=0.,
+     fPloss_exh=.02,	fMF_auxair=.01,	eta_auxair=.75,
+     fPloss_exh_IRon=.02,	fMF_auxair_IRon=.01,	eta_auxair_IRon=.75,
+   ! drag
+     SET_drag=2,	SET_Vdrag=2,
+     CD=0.,	CDV=0.,
+   ! weight
+     fWpylon=0.,	fWair=0.45,
+     Kwt0_exh=0.,	Kwt1_exh=0.01,
+     MODEL_lub=1,
+     Plimit_es=500.,          ! Need an initial value 	T_amp(1,1)  =0.0,0.0,0.0,0.0,
+	
+T_mode(1,1) =0.0,0.0,0.0,0.0,
+	T_incid(1,1)=0.0,0.0,0.0,0.0,
+	T_yaw(1,1)  =0.0,0.0,0.0,0.0,
+	T_fgear(1,1)=0.0,0.0,0.0,0.0,
+	kPropulsion=1,
+	kFuelTank=1,
+	&END
+
+&DEFN action='ident', title='N-turbo-xshaft-flap-coll',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='TechFactors', &END
+&VALUE TECH_cost_af=1.,	TECH_cost_maint=1.,
+   ! flight control
+   ! TECH_RWfc_b=0.0001,TECH_RWfc_mb=0.0001,TECH_RWfc_nb=0.0001,TECH_RWhyd=0.0001, ! fixed pitch; use small non-zero to keep output in the results for comparison
+   ! TECH_RWfc_b=0.459,TECH_RWfc_mb=0.712,TECH_RWfc_nb=1.1,TECH_RWhyd=0.712, ! with cyclic
+     TECH_RWfc_b=0.300,	TECH_RWfc_mb=0.500,	TECH_RWfc_nb=0.9,	TECH_RWhyd=0.500, ! only collective
+     TECH_FWfc_nb=1.,	TECH_FWfc_mb=1.,	TECH_FWhyd=1.,
+   ! anti-icing
+     TECH_DIelect=1.,	TECH_DIsys=1.,
+   ! fuselage
+     TECH_body=0.759,	TECH_mar=1.,	TECH_press=1.,	TECH_crash=0.9,	TECH_ftfold=1.,	TECH_fwfold=1.,
+     TECH_LG=1.,	TECH_LGret=1.,	TECH_LGcrash=1.,
+   ! rotor profile power
+     TECH_drag=1.,1.,1.,1.,
+   ! rotor
+     TECH_blade=4*0.916,	TECH_hub=4*0.759,	TECH_spin=4*1.,	TECH_rfold=4*1.,	TECH_tr=4*1.,	TECH_aux=4*1.,
+   ! fuel tank
+     TECH_tank=0.839,	TECH_plumb=0.655,
+   ! drive system TDA Phase II
+     TECH_gb=4*0.738,	TECH_rs=4*0.738,	TECH_ds=4*0.69,	TECH_rb=4*1.,
+   ! engine group
+     TECH_cowl=4*0.503,	TECH_pylon=4*0.85,	TECH_supt=4*1.104,	TECH_air=4*1.104,	TECH_exh=4*1.,	TECH_acc=4*0.816,
+&END
+
+&DEFN action='ident', title='GEOM-turbo-xshaft',
+	created='09:22:00 18-Jul-2024', &END
+
+&DEFN quant='Geometry', &END
+&VALUE loc_fuselage%FIX_geom='xyz',
+   ! fixed geometry (INPUT_geom=1); SL +aft, BL +right, WL +up
+     loc_fuselage%SL=0.,	loc_fuselage%BL=0.,	loc_fuselage%WL=0.,
+   ! scaled geometry (INPUT_geom=2); x +aft, y +right, z +up
+     loc_cg%XoL          = 0.00,	loc_cg%YoL          = 0.00,	loc_cg%ZoL          = 0.00,
+     loc_fuselage%XoL    = 0.00,	loc_fuselage%YoL    = 0.00,	loc_fuselage%ZoL    = 0.00,
+     loc_gear%XoL        = 0.00,	loc_gear%YoL        = 0.00,	loc_gear%ZoL        =-0.20,
+     loc_rotor(1)%XoL    = 0.00,	loc_rotor(1)%YoL    = 0.00,	loc_rotor(1)%ZoL    = 0.25, ! SET_geom=multirotor: center
+     loc_rotor(2)%XoL    = 0.00,	loc_rotor(2)%YoL    = 0.00,	loc_rotor(2)%ZoL    = 0.25, ! SET_geom=multirotor: center
+     loc_rotor(3)%XoL    = 0.00,	loc_rotor(3)%YoL    = 0.00,	loc_rotor(3)%ZoL    = 0.60, ! SET_geom=multirotor: center
+     loc_rotor(4)%XoL    = 0.00,	loc_rotor(4)%YoL    = 0.00,	loc_rotor(4)%ZoL    = 0.60, ! SET_geom=multirotor: center
+     loc_pylon(1)%XoL    = 0.00,	loc_pylon(1)%YoL    = 0.00,	loc_pylon(1)%ZoL    = 0.00, ! SET_geom=multirotor: pylon relative hub
+     loc_pylon(2)%XoL    = 0.00,	loc_pylon(2)%YoL    = 0.00,	loc_pylon(2)%ZoL    = 0.00, ! SET_geom=multirotor: pylon relative hub
+     loc_pylon(3)%XoL    = 0.00,	loc_pylon(3)%YoL    = 0.00,	loc_pylon(3)%ZoL    = 0.00, ! SET_geom=multirotor: pylon relative hub
+     loc_pylon(4)%XoL    = 0.00,	loc_pylon(4)%YoL    = 0.00,	loc_pylon(4)%ZoL    = 0.00, ! SET_geom=multirotor: pylon relative hub
+     loc_auxtank(1,1)%XoL= 0.00,	loc_auxtank(1,1)%YoL= 0.00,	loc_auxtank(1,1)%ZoL= 0.00,
+     loc_engine(1)%XoL   = 0.50,	loc_engine(1)%YoL   = 0.00,	loc_engine(1)%ZoL   =-0.50, ! Twin turboshafts in rear cabin
+&END
+
+&DEFN action='ident', title='2023-sizing',
+	created='08:28:00 15-Apr-2024', &END
+
+&DEFN quant='Size', &END
+&VALUE
+ title='UAM-Update Sizing 2023',
+ SIZE_perf=16*'engine',SET_rotor=8*'DL+Vtip+CWs',
+ FIX_DGW=0,FIX_WE=0,SET_SDGW='f(DGW)',
+ SET_tank=3*'miss',SET_WMTO='perf',SET_limit_ds=8*'Preq',
+ nFltCond = 3, ! Auto-generated value
+ nMission = 1, ! Auto-generated value
+&END
+
+
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+             !------------------------------------------------------------------------------
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          &DEFN action='ident', title='6kISA-WMTO',
+	created='11:02:00 29-Nov-2023', &END
+
+&DEFN quant='SizeCondition 1', &END
+&VALUE
+    title='MTOW condition, 6k/ISA hover',label='MTOW',
+    SET_atmos='std',altitude=6000.,
+    dSLcg=-0.8,
+    SET_GW='max-f(P)',SET_UL='fuel',Npass=5,fPav=.75,
+    rating=16*'MRP',fPower=16*1.,
+    coll=5.,pedal=0.,pitch=0.,STATE_trim='symm',
+    DESIGN_GW=0,DESIGN_xmsn=1,DESIGN_wmto=1,
+&END
+
+
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+             !------------------------------------------------------------------------------
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          &DEFN action='ident', title='10kISA-CruiseClimb',
+	created='11:02:00 29-Nov-2023', &END
+
+&DEFN quant='SizeCondition 2', &END
+&VALUE
+    title='cruise climb, 500 fpm, 10k/ISA Vbr',label='climb',
+    SET_atmos='std',altitude=10000.,
+    dSLcg=-0.8,
+    SET_GW='source',SET_UL='fuel',Npass=5,
+    KIND_source=1,kSource=1,kSegment=5,
+    rating=16*'MRP',fPower=16*1.,
+    Vkts=100.,ROC=500.,
+    SET_max=1,max_quant='range',max_var='speed',
+    coll=5.,pedal=0.,pitch=0.,STATE_trim='symm',
+    DESIGN_GW=0,DESIGN_xmsn=1,DESIGN_wmto=0,
+    trace_trim=1,
+    trace_fly=1,
+    relax_trim=0.1,
+    &END
+
+&DEFN action='ident', title='WMTO-at-least-DGW-1',
+	created='08:39:00 15-Apr-2024', &END
+
+&DEFN quant='SizeCondition 3', &END
+&VALUE
+    title='MTOW condition, at least DGW from mission 1',label='MTO>=D1',
+    SET_atmos='std',altitude=6000.,
+    dSLcg=-0.8,
+    SET_GW='source',KIND_source = 1, kSource = 1, kSegment = 1,
+    SET_UL='fuel',Npass=5,fPav=.75,
+    rating=16*'MRP',fPower=16*1.,
+    coll=5.,pedal=0.,pitch=0.,STATE_trim='symm',
+    DESIGN_GW=0,DESIGN_xmsn=1,DESIGN_wmto=1,
+&END
+
+&DEFN action='ident', title='SizeMission-internal-reserve-5occupant',
+	created='04:14:00 14-Aug-2024', &END
+
+&DEFN quant='SizeMission', &END
+&VALUE
+
+    title='design mission, 5 passenger payload, 75nm range, 6k/ISA',	label='design',
+    SET_GW='pay+miss',	SET_UL='pay+miss',	Npass=5,
+	nSeg = 19, ! Auto-generated value
+	fReserve=0., ! Reserve is 20 minutes, not greater of 10% or 20 minutes. Expect that 20 minutes reserve will be more restrictive.
+    DESIGN_GW=1,	DESIGN_xmsn=1,	DESIGN_tank=1, 
+
+
+kind         = 'time' , 'climb', 'time', 'climb', 'dist' , 'time', 'time', 'climb', 'time' , 'time' , 'climb', 'time', 'climb', 'dist' , 'time' , 'time', 'time', 'climb', 'time' ,
+dist         = 0.     , 0.     , 0.    , 0.     , 37.5   , 0.    , 0.    , 0.     , 0.     , 0.     , 0.     , 0.    , 0.     , 37.5   , 0.     , 0.    , 0.    , 0.     , 0.     ,
+time         = .25    , 0.     , .16667, 0.     , 0.     , .16666, .5    , 0.     , .25    , .25    , 0.     , .16667, 0.     , 0.     , 20.    , .16666, .5    , 0.     , .25    ,
+reserve      = 0      , 0      , 0     , 0      , 0      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 0      , 0      , 1      , 0     , 0     , 0      , 0      ,
+adjust       = 0      , 0      , 0     , 0      , 0      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 0      , 0      , 0      , 0     , 0     , 0      , 0      ,
+range_credit = 0      , 0      , 0     , 5      , 0      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 14     , 0      , 0      , 0     , 0     , 0      , 0      ,
+split        = 0      , 0      , 0     , 0      , 0      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 0      , 0      , 0      , 0     , 0     , 0      , 0      ,
+ignore       = 0      , 0      , 0     , 0      , 0      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 0      , 0      , 0      , 0     , 0     , 0      , 0      ,
+MaxGW        = 0      , 0      , 0     , 0      , 0      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 0      , 0      , 0      , 0     , 0     , 0      , 0      ,
+Vkts         = 0.     , 0.     , 0.    , 100.   , 100.   , 0.    , 0.    , 0.     , 0.     , 0.     , 0.     , 0.    , 100.   , 100.   , 60.    , 0.    , 0.    , 0.     , 0.     ,
+ROC          = 0.     , 100.   , 0.    , 900.   , 0.     , 0.    , 0.    , -100.  , 0.     , 0.     , 100.   , 0.    , 900.   , 0.     , 0.     , 0.    , 0.    , -100.  , 0.     ,
+SET_WIND     = 0      , 0      , 0     , 1      , 1      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 1      , 1      , 0      , 0     , 0     , 0      , 0      ,
+dWind        = 10.    , 10.    , 10.   , 10.    , 10.    , 10.   , 10.   , 10.    , 10.    , 10.    , 10.    , 10.   , 10.    , 10.    , 10.    , 10.   , 10.   , 10.    , 10.    ,
+SET_atmos    = 'std'  , 'std'  , 'std' , 'std'  , 'std'  , 'std' , 'std' , 'std'  , 'std'  , 'std'  , 'std'  , 'std' , 'std'  , 'std'  , 'std'  , 'std' , 'std' , 'std'  , 'std'  ,
+altitude     = 6000.  , 6000.  , 6050. , 6050.  , 10000. , 6050. , 6050. , 6050.  , 6000.  , 6000.  , 6000.  , 6050. , 6050.  , 10000. , 10000. , 6050. , 6050. , 6050.  , 6000.  ,
+dSLcg        = -0.8   , -0.8   , -0.8  , -0.8   , -0.8   , -0.8  , -0.8  , -0.8   , -0.8   , -0.8   , -0.8   , -0.8  , -0.8   , -0.8   , -0.8   , -0.8  , -0.8  , -0.8   , -0.8   ,
+rating(1,1)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,2)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,3)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,4)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,5)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,6)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,7)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,8)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,9)  = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,10) = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,11) = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,12) = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,13) = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,14) = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,15) = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+rating(1,16) = 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP'  , 'MRP' , 'MRP'  , 'MCP'  , 'MRP'  , 'MRP' , 'MRP' , 'MRP'  , 'MRP'  ,
+fPower(1,1)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,2)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,3)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,4)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,5)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,6)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,7)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,8)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,9)  = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,10) = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,11) = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,12) = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,13) = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,14) = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,15) = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+fPower(1,16) = .25    , .95    , .95   , .95    , .95    , .95   , .95   , .95    , .25    , .25    , .95    , .95   , .95    , .95    , .95    , .95   , .95   , .95    , .25    ,
+SET_max      = 0      , 0      , 0     , 1      , 1      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 1      , 1      , 1      , 0     , 0     , 0      , 0      , ! no best effort for climb because fails for low tip speed (rear rotor stall)
+max_quant    = ' '    , ' '    , ' '   , 'range', 'range', ' '   , ' '   , ' '    , ' '    , ' '    , ' '    , ' '   , 'range', 'range', 'end'  , ' '   , ' '   , ' '    , ' '    ,
+max_var      = ' '    , ' '    , ' '   , 'speed', 'speed', ' '   , ' '   , ' '    , ' '    , ' '    , ' '    , ' '   , 'speed', 'speed', 'speed', ' '   , ' '   , ' '    , ' '    ,
+coll         = 5.     , 5.     , 5.    , 5.     , 5.     , 5.    , 5.    , 5.     , 5.     , 5.     , 5.     , 5.    , 5.     , 5.     , 5.     , 5.    , 5.    , 5.     , 5.     ,
+pedal        = 0.     , 0.     , 0.    , 0.     , 0.     , 0.    , 0.    , 0.     , 0.     , 0.     , 0.     , 0.    , 0.     , 0.     , 0.     , 0.    , 0.    , 0.     , 0.     ,
+pitch        = 0.     , 0.     , 0.    , 0.     , 0.     , 0.    , 0.    , 0.     , 0.     , 0.     , 0.     , 0.    , 0.     , 0.     , 0.     , 0.    , 0.    , 0.     , 0.     ,
+STATE_trim   = 'power', 'symm' , 'symm', 'symm' , 'symm' , 'symm', 'symm', 'symm' , 'power', 'power', 'symm' , 'symm', 'symm' , 'symm' , 'symm' , 'symm', 'symm', 'symm' , 'power',
+roll         = 0.     , 0.     , 0.    , 0.     , 0.     , 0.    , 0.    , 0.     , 0.     , 0.     , 0.     , 0.    , 0.     , 0.     , 0.     , 0.    , 0.    , 0.     , 0.     ,
+maxinc_fly   = 0.     , 0.     , 0.    , 0.     , 0.     , 0.    , 0.    , 0.     , 0.     , 0.     , 0.     , 0.    , 0.     , 0.     , 0.     , 0.    , 0.    , 0.     , 0.     ,
+trace_trim   = 0      , 0      , 0     , 0      , 0      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 0      , 0      , 0      , 0     , 0     , 0      , 0      ,
+relax_trim   = 0.     , 0.     , 0.    , 0.1    , 0.1    , 0.    , 0.    , 0.     , 0.     , 0.     , 0.     , 0.    , 0.1    , 0.1    , 0.     , 0.    , 0.    , 0.     , 0.     ,
+trace_fly    = 0      , 0      , 0     , 0      , 0      , 0     , 0     , 0      , 0      , 0      , 0      , 0     , 0      , 0      , 0      , 0     , 0     , 0      , 0      ,
+&END
+
+&DEFN action='endofcase', &END
+&DEFN action='endofjob', &END

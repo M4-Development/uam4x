@@ -16,7 +16,14 @@ from pathlib import Path
 
 DOCS_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = DOCS_ROOT.parent
+# Plugin registration decorators must not modify the registry during a docs build.
+os.environ['UAM4X_DISABLE_REGISTRY_WRITES'] = '1'
+os.environ['UAM4X_DISABLE_REGISTRY_LOAD'] = '1'
 sys.path.insert(0, str(PROJECT_ROOT))
+PLUGINS_ROOT = PROJECT_ROOT / 'plugins'
+for package in sorted(PLUGINS_ROOT.iterdir()):
+    if package.is_dir() and (package / 'setup.py').exists():
+        sys.path.insert(0, str(package))
 
 # -- Project information -----------------------------------------------------
 
@@ -113,6 +120,9 @@ autodoc_mock_imports = [
     'sklearn.metrics',
     'sklearn.model_selection',
     'sympy',
+    'rcotools',
+    'openvsp',
+    'PIL',
 ]
 
 # This value controls the behavior of sphinx-build -W during importing modules.

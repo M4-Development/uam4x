@@ -1,0 +1,253 @@
+Version: 30
+Date created: Mon Dec 6 16:20:41 2010
+Date modified: Thu Mar 28 11:37:44 2019
+Author:
+Last modifier:
+Description:
+Name:
+Version:
+Unit System: m-kg-s
+
+Blade concept: 1 # D spar
+Blade: Y
+Span: 1.2
+Rotation CCW: Y
+Number of cross sections: 2
+
+# Cross section 1
+Use as gap: N
+Inboard same as outboard: Y
+Copy inboard layer parameters from outboard: Y
+Link to previous: N
+Spanwise start: 0.054545494
+Spanwise stop: 0.227272893
+Airfoil inboard: 0012
+Airfoil outboard: 0012
+Chord start: 0.1077
+Chord stop: 0.1077
+Twist start angle: 11.13
+Twist stop angle: 8.36
+Sweep angle: 0
+Dihedral angle: 0
+Offset inboard: 0,0
+Offset outboard: 0,0
+Reference axis: 3 # user defined
+0.3073	0
+number of layers, top coating: 0
+number of layers, bottom coating: 0
+Erosion protection: 0
+number of layers, top overwrap: 0
+number of layers, bottom overwrap: 0
+Ballast concept: 1 # lumped mass
+0	0	0	0	0	0
+Main spar web location:	0.375	0.375
+Main spar web angle: 0
+Number of nodes in main spar web: 2
+number of layers, spar cap top: 41
+1	0	0.375	0	0.375	Steel	0.0001143	0	N
+2	0	0.375	0	0.375	Steel	0.0001143	0	N
+3	0	0.375	0	0.375	Steel	0.0001143	45	N
+4	0	0.375	0	0.375	Steel	0.000138	-45	N
+5	0	0.375	0	0.375	Steel	0.000138	90	N
+6	0	0.375	0	0.375	Steel	0.000138	90	N
+7	0	0.375	0	0.375	Steel	0.000138	-45	N
+8	0	0.375	0	0.375	Steel	0.000138	45	N
+9	0	0.375	0	0.375	Steel	0.000138	0	N
+10	0.02	0.375	0.02	0.375	Steel	0.000138	0	N
+11	0.02	0.375	0.02	0.375	Steel	0.000138	45	N
+12	0.02	0.375	0.02	0.375	Steel	0.000138	-45	N
+13	0.02	0.375	0.02	0.375	Steel	0.000138	90	N
+14	0.02	0.375	0.02	0.375	Steel	0.000138	0	N
+15	0.02	0.375	0.02	0.375	Steel	0.000138	45	N
+16	0.025	0.375	0.025	0.375	Steel	0.000138	-45	N
+17	0.025	0.375	0.025	0.375	Steel	0.000138	90	N
+18	0.0275	0.375	0.0275	0.375	Steel	0.000138	0	N
+19	0.0275	0.375	0.0275	0.375	Steel	0.000138	45	N
+20	0.0325	0.375	0.0325	0.375	Steel	0.000138	-45	N
+21	0.0325	0.375	0.0325	0.375	Steel	0.000138	90	N
+22	0.0375	0.375	0.0375	0.375	Steel	0.000138	0	N
+23	0.0375	0.375	0.0375	0.375	Steel	0.000138	45	N
+24	0.045	0.375	0.045	0.375	Steel	0.000138	-45	N
+25	0.045	0.375	0.045	0.375	Steel	0.000138	90	N
+26	0.05	0.375	0.05	0.375	Steel	0.000138	0	N
+27	0.05	0.375	0.05	0.375	Steel	0.000138	45	N
+28	0.06	0.375	0.06	0.375	Steel	0.000138	-45	N
+29	0.06	0.375	0.06	0.375	Steel	0.000138	90	N
+30	0.07	0.375	0.07	0.375	Steel	0.000138	0	N
+31	0.07	0.375	0.07	0.375	Steel	0.000138	45	N
+32	0.08	0.375	0.08	0.375	Steel	0.000138	-45	N
+33	0.08	0.375	0.08	0.375	Steel	0.000138	90	N
+34	0.092	0.375	0.092	0.375	Steel	0.000138	0	N
+35	0.092	0.375	0.092	0.375	Steel	0.000138	45	N
+36	0.11	0.375	0.11	0.375	Steel	0.000138	-45	N
+37	0.11	0.375	0.11	0.375	Steel	0.000138	90	N
+38	0.13	0.375	0.13	0.375	Steel	0.000138	0	N
+39	0.13	0.375	0.13	0.375	Steel	0.000138	45	N
+40	0.15	0.375	0.15	0.375	Steel	0.000138	-45	N
+41	0.15	0.375	0.15	0.375	Steel	0.000138	90	N
+number of layers, spar cap bottom: 41
+1	0	0.375	0	0.375	Steel	0.0001143	0	N
+2	0	0.375	0	0.375	Steel	0.0001143	0	N
+3	0	0.375	0	0.375	Steel	0.0001143	45	N
+4	0	0.375	0	0.375	Steel	0.000138	-45	N
+5	0	0.375	0	0.375	Steel	0.000138	90	N
+6	0	0.375	0	0.375	Steel	0.000138	90	N
+7	0	0.375	0	0.375	Steel	0.000138	-45	N
+8	0	0.375	0	0.375	Steel	0.000138	45	N
+9	0	0.375	0	0.375	Steel	0.000138	0	N
+10	0.02	0.375	0.02	0.375	Steel	0.000138	0	N
+11	0.02	0.375	0.02	0.375	Steel	0.000138	45	N
+12	0.02	0.375	0.02	0.375	Steel	0.000138	-45	N
+13	0.02	0.375	0.02	0.375	Steel	0.000138	90	N
+14	0.02	0.375	0.02	0.375	Steel	0.000138	0	N
+15	0.02	0.375	0.02	0.375	Steel	0.000138	45	N
+16	0.025	0.375	0.025	0.375	Steel	0.000138	-45	N
+17	0.025	0.375	0.025	0.375	Steel	0.000138	90	N
+18	0.0275	0.375	0.0275	0.375	Steel	0.000138	0	N
+19	0.0275	0.375	0.0275	0.375	Steel	0.000138	45	N
+20	0.0325	0.375	0.0325	0.375	Steel	0.000138	-45	N
+21	0.0325	0.375	0.0325	0.375	Steel	0.000138	90	N
+22	0.0375	0.375	0.0375	0.375	Steel	0.000138	0	N
+23	0.0375	0.375	0.0375	0.375	Steel	0.000138	45	N
+24	0.045	0.375	0.045	0.375	Steel	0.000138	-45	N
+25	0.045	0.375	0.045	0.375	Steel	0.000138	90	N
+26	0.05	0.375	0.05	0.375	Steel	0.000138	0	N
+27	0.05	0.375	0.05	0.375	Steel	0.000138	45	N
+28	0.06	0.375	0.06	0.375	Steel	0.000138	-45	N
+29	0.06	0.375	0.06	0.375	Steel	0.000138	90	N
+30	0.07	0.375	0.07	0.375	Steel	0.000138	0	N
+31	0.07	0.375	0.07	0.375	Steel	0.000138	45	N
+32	0.08	0.375	0.08	0.375	Steel	0.000138	-45	N
+33	0.08	0.375	0.08	0.375	Steel	0.000138	90	N
+34	0.092	0.375	0.092	0.375	Steel	0.000138	0	N
+35	0.092	0.375	0.092	0.375	Steel	0.000138	45	N
+36	0.11	0.375	0.11	0.375	Steel	0.000138	-45	N
+37	0.11	0.375	0.11	0.375	Steel	0.000138	90	N
+38	0.13	0.375	0.13	0.375	Steel	0.000138	0	N
+39	0.13	0.375	0.13	0.375	Steel	0.000138	45	N
+40	0.15	0.375	0.15	0.375	Steel	0.000138	-45	N
+41	0.15	0.375	0.15	0.375	Steel	0.000138	90	N
+number of layers, main web: 9
+1	Steel	0.000138	0
+2	Steel	0.000138	45
+3	Steel	0.000138	-45
+4	Steel	0.000138	90
+5	Steel	0.000138	90
+6	Steel	0.000138	-45
+7	Steel	0.000138	45
+8	Steel	0.000138	0
+9	Steel	0.0001143	0
+number of additional spar webs: 0
+number of layers, TE top: 0
+number of layers, TE bottom: 0
+TE tab: 0
+number of TE fill sections: 0
+
+# Cross section 2
+Use as gap: N
+Inboard same as outboard: Y
+Copy inboard layer parameters from outboard: Y
+Link to previous: N
+Spanwise start: 0.227272893
+Spanwise stop: 1
+Airfoil inboard: 0012
+Airfoil outboard: 0012
+Chord start: 0.1077
+Chord stop: 0.1077
+Twist start angle: 8.36
+Twist stop angle: -3.2
+Sweep angle: 0
+Dihedral angle: 0
+Offset inboard: 0,0
+Offset outboard: 0,0
+Reference axis: 3 # user defined
+0.3073	0
+number of layers, top coating: 0
+number of layers, bottom coating: 0
+Erosion protection: 0
+number of layers, top overwrap: 1
+1	0	1	0	1	Steel	0.0001143	0	N
+number of layers, bottom overwrap: 1
+1	0	1	0	1	Steel	0.0001143	0	N
+Ballast concept: 1 # lumped mass
+0	0	0.1326	0	0	0.1326
+Main spar web location:	0.375	0.375
+Main spar web angle: 0
+Number of nodes in main spar web: 10
+number of layers, spar cap top: 8
+1	0	0.0455	0	0.0455	Steel	0.0002286	0	N
+2	0.0455	0.375	0.0455	0.375	Steel	0.000203	45	N
+3	0	0.375	0	0.375	Steel	0.0001143	0	N
+4	0.0455	0.375	0.0455	0.375	Steel	0.000203	-45	N
+5	0	0.375	0	0.375	Steel	0.0001143	0	N
+6	0.3	0.375	0.3	0.375	Steel	0.0001143	0	N
+7	0.3	0.375	0.3	0.375	Steel	0.0001143	0	N
+8	0.3	0.375	0.3	0.375	Steel	0.0001143	0	N
+number of layers, spar cap bottom: 8
+1	0	0.0455	0	0.0455	Steel	0.0002286	0	N
+2	0.0455	0.375	0.0455	0.375	Steel	0.000203	45	N
+3	0	0.375	0	0.375	Steel	0.0001143	0	N
+4	0.0455	0.375	0.0455	0.375	Steel	0.000203	-45	N
+5	0	0.375	0	0.375	Steel	0.0001143	0	N
+6	0.3	0.375	0.3	0.375	Steel	0.0001143	0	N
+7	0.3	0.375	0.3	0.375	Steel	0.0001143	0	N
+8	0.3	0.375	0.3	0.375	Steel	0.0001143	0	N
+number of layers, main web: 3
+1	Steel	0.0001143	0
+2	Steel	0.0001143	0
+3	Steel	0.0001143	0
+number of additional spar webs: 0
+number of layers, TE top: 0
+number of layers, TE bottom: 0
+TE tab: 0
+number of TE fill sections: 0
+
+# Blade_AM Parameters
+Blade_AM unit system: m-kg-s
+Number of blades: 4
+Number of azimuths: 144
+Number of harmonics: 5
+Blade_AM model: RCAS
+
+# RCAS Parameters
+Wind: 0 0 0
+Starting node ID: 0
+Ending node ID: 0
+Starting node pos: 0
+Starting node y: 0
+Starting node z: 0
+Multiblade: N
+Number of modes: 10
+Analysis mode: 0
+Origin offset X: 0 0 0 0
+Origin offset Y: 0 0 0 0
+Origin offset Z: 0 0 0 0
+Rotation axis: 3 3 3 3
+Rotation angle: 0 -90 -180 -270
+RCAS template file:
+RCAS source file:
+RCAS use remote machine: N
+
+# Stress/Strain Recovery
+Stress: N
+Strain: N
+Tecplot output: N
+Rainflow counting: N
+
+# Design Study Parameters
+Work directory: C:/temp
+Design study: type=DOE driver=Full-Factorial num_levels=2
+
+# Design Variables
+Number of design variables: 0
+
+# Objective Function
+Objective function:
+
+# Constraints
+Number of constraints: 0
+
+# Responses
+Number of responses: 0
+
+Columns: 0 1 2 3 4 5 6 7 8 9 10 11 12 13

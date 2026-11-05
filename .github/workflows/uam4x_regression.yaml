@@ -60,21 +60,6 @@ jobs:
       # ------------------------------------------------------------
       # Checkout example repos (prerelease)
       # ------------------------------------------------------------
-      - name: Checkout uam4x_multiobjective
-        uses: actions/checkout@v5
-        with:
-          repository: M4-Development/uam4x_multiobjective
-          ref: prerelease
-          path: uam4x_multiobjective
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Checkout uam4x_quad
-        uses: actions/checkout@v5
-        with:
-          repository: M4-Development/uam4x_quad
-          ref: prerelease
-          path: uam4x_quad
-          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout uam4x_tiltrotor
         uses: actions/checkout@v5
@@ -83,56 +68,6 @@ jobs:
           ref: prerelease
           path: uam4x_tiltrotor
           token: ${{ steps.app-token.outputs.token }}
-
-      - name: Checkout uam4x_ixgen_demo
-        uses: actions/checkout@v5
-        with:
-          repository: M4-Development/uam4x_ixgen_demo
-          ref: prerelease
-          path: uam4x_ixgen_demo
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Checkout uam4x_mixed_cantilever
-        uses: actions/checkout@v5
-        with:
-          repository: M4-Development/uam4x_mixed_cantilever
-          ref: prerelease
-          path: uam4x_mixed_cantilever
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Checkout uam4x_ishigami
-        uses: actions/checkout@v5
-        with:
-          repository: M4-Development/uam4x_ishigami
-          ref: prerelease
-          path: uam4x_ishigami
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Checkout uam4x_borehole_example
-        uses: actions/checkout@v5
-        with:
-          repository: M4-Development/uam4x_borehole_example
-          ref: prerelease
-          path: uam4x_borehole_example
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Checkout uam4x_aleatory_cantilever
-        uses: actions/checkout@v5
-        with:
-          repository: M4-Development/uam4x_aleatory_cantilever
-          ref: prerelease
-          path: uam4x_aleatory_cantilever
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Checkout uam4x_sellar_example
-        uses: actions/checkout@v5
-        with:
-          repository: M4-Development/uam4x_sellar_example
-          ref: prerelease
-          path: uam4x_sellar_example
-          token: ${{ steps.app-token.outputs.token }}
-
-
 
       # ------------------------------------------------------------
       # Verify conda + env
@@ -148,39 +83,39 @@ jobs:
           & $conda run -n uam4x python -m pip --version
 
       # ------------------------------------------------------------
-      # Install shared deps ONCE (uam4x + plugins)
+      # Install the framework and its bundled public plugins first.
       # ------------------------------------------------------------
-      - name: Install uam4x_plugins (editable)
+      - name: Install uam4x and public plugins (editable)
         run: |
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+          $uam4x_dir = Join-Path $PWD "uam4x"
+          if (!(Test-Path $uam4x_dir)) { throw "uam4x dir not found: $uam4x_dir" }
 
+          # Old standalone public plugin installs can shadow the bundled packages.
+          & $conda run -n uam4x python -m pip uninstall -y uam4x-general uam4x-ndarc uam4x-openvsp uam4x-ixgen
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Push-Location $uam4x_dir
+          & $conda run -n uam4x python -m pip install -e .
+          $installExitCode = $LASTEXITCODE
+          Pop-Location
+          if ($installExitCode -ne 0) { exit $installExitCode }
+
+      # Install private integrations from their separate checkout.
+      # ------------------------------------------------------------
+      - name: Install private uam4x plugins (editable)
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
           $plugins_dir = Join-Path $PWD "uam4x_plugins"
           if (!(Test-Path $plugins_dir)) { throw "uam4x_plugins dir not found: $plugins_dir" }
 
           Push-Location $plugins_dir
-          & $conda run -n uam4x python -m pip install -r requirements.txt
+          & $conda run -n uam4x python -m pip install -e camradII -e m4ss
+          $installExitCode = $LASTEXITCODE
           Pop-Location
-
-      - name: Install uam4x (editable)
-        run: |
-          $ErrorActionPreference = "Stop"
-          #set location of conda executable
-          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
-
-          #path of dir on vm
-          $uam4x_dir = Join-Path $PWD "uam4x"
-          #check if path exists
-          if (!(Test-Path $uam4x_dir)) { throw "uam4x dir not found: $uam4x_dir" }
-
-          #temp change of directory into desired directory for install
-          Push-Location $uam4x_dir
-          & $conda run -n uam4x python -m pip install -e .
-          #then return to main workspace
-          Pop-Location
-
-          # quick sanity
-          & $conda run -n uam4x python -c "import uam4x; import inspect; print('uam4x OK:', uam4x.__file__); print('has Plugin:', hasattr(uam4x, 'Plugin'))"
+          if ($installExitCode -ne 0) { exit $installExitCode }
 
       # ------------------------------------------------------------
       # CRITICAL: force plugin imports to resolve against the installed uam4x
@@ -194,6 +129,18 @@ jobs:
           "PYTHONPATH=$uam4x_pkg_root" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # ------------------------------------------------------------
+      # Check that imports resolve to the checked-out plugin sources.
+      # ------------------------------------------------------------
+      - name: Verify plugin import paths
+        run: |
+          $ErrorActionPreference = "Stop"
+          $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
+          $uam4x_dir = Join-Path $PWD "uam4x"
+          $plugins_dir = Join-Path $PWD "uam4x_plugins"
+          & $conda run -n uam4x python -c "import importlib.util, pathlib, sys; names = ('uam4x', 'uam4x_general', 'uam4x_ndarc', 'uam4x_openvsp', 'uam4x_ixgen', 'uam4x_camradII', 'uam4x_m4ss'); specs = {name: importlib.util.find_spec(name) for name in names}; assert all(specs.values()), specs; paths = {name: pathlib.Path(spec.origin or next(iter(spec.submodule_search_locations))).resolve() for name, spec in specs.items()}; public = pathlib.Path(sys.argv[1]).resolve(); private = pathlib.Path(sys.argv[2]).resolve(); assert all(paths[name].is_relative_to(public) for name in names[:5]), paths; assert all(paths[name].is_relative_to(private) for name in names[5:]), paths; print(paths)" $uam4x_dir $plugins_dir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # ------------------------------------------------------------
       # Run regressions SEQUENTIALLY
       # ------------------------------------------------------------
       - name: Run multiobjective regression test
@@ -203,9 +150,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
 
+          Push-Location (Join-Path $PWD "uam4x")
           & $conda run -n uam4x python -u -m pytest `
-            "uam4x_multiobjective\tests\test_multiobjective.py" `
-            -s -rA
+            "examples\multi_objective\tests\test_multiobjective.py" `
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
+          Pop-Location
+          exit $testExitCode
 
       - name: Run quad regression test
         id: test_quad
@@ -214,12 +165,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
 
-          # run from repo root so relative imports like "from branching_script import ..." work reliably
-          Push-Location (Join-Path $PWD "uam4x_quad")
+          Push-Location (Join-Path $PWD "uam4x")
           & $conda run -n uam4x python -u -m pytest `
-            "tests\test_quadrotor.py" `
-            -s -rA
+            "examples\uam4x_quad\tests\test_quadrotor.py" `
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
           Pop-Location
+          exit $testExitCode
 
       - name: Run tiltrotor regression test
         id: test_tiltrotor
@@ -232,8 +184,10 @@ jobs:
           Push-Location (Join-Path $PWD "uam4x_tiltrotor")
           & $conda run -n uam4x python -u -m pytest `
             "tests\test_tiltrotor.py" `
-            -s -rA
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
           Pop-Location
+          exit $testExitCode
 
       - name: Run ixgen demo regression test
         id: test_ixgen
@@ -242,12 +196,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
 
-          # run from repo root so relative imports like "import custom" / "branching_script" work
-          Push-Location (Join-Path $PWD "uam4x_ixgen_demo")
+          Push-Location (Join-Path $PWD "uam4x")
           & $conda run -n uam4x python -u -m pytest `
-            "tests\test_ixgen.py" `
-            -s -rA
+            "examples\uam4x_ixgen_demo\tests\test_ixgen.py" `
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
           Pop-Location
+          exit $testExitCode
 
 
       - name: Run mixed cantilever demo regression test
@@ -257,12 +212,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
 
-          # run from repo root so relative imports like "import custom" / "branching_script" work
-          Push-Location (Join-Path $PWD "uam4x_mixed_cantilever")
+          Push-Location (Join-Path $PWD "uam4x")
           & $conda run -n uam4x python -u -m pytest `
-            "tests\test_mixed_cantilever.py" `
-            -s -rA
+            "examples\mixed_cantilever\tests\test_mixed_cantilever.py" `
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
           Pop-Location
+          exit $testExitCode
 
 
       - name: Run ishigami regression test
@@ -272,12 +228,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
 
-          # run from repo root so relative imports like "import custom" / "branching_script" work
-          Push-Location (Join-Path $PWD "uam4x_ishigami")
+          Push-Location (Join-Path $PWD "uam4x")
           & $conda run -n uam4x python -u -m pytest `
-            "tests\test_ishigami.py" `
-            -s -rA
+            "examples\ishigami_problem\tests\test_ishigami.py" `
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
           Pop-Location
+          exit $testExitCode
 
 
       - name: Run borehole example regression test
@@ -292,12 +249,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
 
-          # run from repo root so relative imports like "import custom" / "branching_script" work
-          Push-Location (Join-Path $PWD "uam4x_borehole_example")
+          Push-Location (Join-Path $PWD "uam4x")
           & $conda run -n uam4x python -u -m pytest `
-            "tests\test_borehole.py" `
-            -s -rA
+            "examples\borehole_example\tests\test_borehole.py" `
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
           Pop-Location
+          exit $testExitCode
 
       - name: Run aleatory cantilever example regression test
         id: test_aleatory_cantilever
@@ -306,12 +264,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
 
-          # run from repo root so relative imports like "import custom" / "branching_script" work
-          Push-Location (Join-Path $PWD "uam4x_aleatory_cantilever")
+          Push-Location (Join-Path $PWD "uam4x")
           & $conda run -n uam4x python -u -m pytest `
-            "tests\test_aleatory_cantilever.py" `
-            -s -rA
+            "examples\aleatory_cantilever\tests\test_aleatory_cantilever.py" `
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
           Pop-Location
+          exit $testExitCode
 
       - name: Run sellar example regression test
         id: test_sellar
@@ -320,12 +279,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $conda = "C:\Users\nlang\AppData\Local\anaconda3\condabin\conda.bat"
 
-          # run from repo root so relative imports like "import custom" / "branching_script" work
-          Push-Location (Join-Path $PWD "uam4x_sellar_example")
+          Push-Location (Join-Path $PWD "uam4x")
           & $conda run -n uam4x python -u -m pytest `
-            "tests\test_sellar_example.py" `
-            -s -rA
+            "examples\sellar_example\tests\test_sellar_example.py" `
+            -s -rA --no-cov
+          $testExitCode = $LASTEXITCODE
           Pop-Location
+          exit $testExitCode
 
       - name: Collect failures if needed
         if: always()
